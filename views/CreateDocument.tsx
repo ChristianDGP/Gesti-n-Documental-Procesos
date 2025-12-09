@@ -175,7 +175,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const macros = selectedProject && userHierarchy[selectedProject] ? Object.keys(userHierarchy[selectedProject]) : [];
   const processes = selectedMacro && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] 
     ? Object.keys(userHierarchy[selectedProject][selectedMacro]) : [];
-  const micros = selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess]
+  const micros: string[] = selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess]
     ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] || []) : [];
 
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
