@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/mockBackend';
 import { User, DocState } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, ChevronRight, Layers } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -22,7 +22,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedMicro, setSelectedMicro] = useState('');
 
   // File Upload State
-  const [file, setFile] = useState<File | null>(null);
+  // Initialize as undefined to match optional parameter signature in service
+  const [file, setFile] = useState<File | undefined>(undefined);
   const [fileError, setFileError] = useState<string[]>([]);
   const [isFileValid, setIsFileValid] = useState(false);
 
@@ -145,9 +146,12 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   // Helper to extract keys for dropdowns
   const projects = Object.keys(userHierarchy);
-  const macros = selectedProject ? Object.keys(userHierarchy[selectedProject] || {}) : [];
-  const processes = selectedMacro ? Object.keys(userHierarchy[selectedProject][selectedMacro] || {}) : [];
-  const micros = selectedProcess ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] || []) : [];
+  // Safely access properties using optional chaining or logical OR to prevent crashes if key doesn't exist yet
+  const macros = selectedProject && userHierarchy[selectedProject] ? Object.keys(userHierarchy[selectedProject]) : [];
+  const processes = selectedMacro && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] 
+    ? Object.keys(userHierarchy[selectedProject][selectedMacro]) : [];
+  const micros = selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess]
+    ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] || []) : [];
 
   return (
     <div className="max-w-4xl mx-auto pb-12">

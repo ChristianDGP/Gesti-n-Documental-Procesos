@@ -17,17 +17,20 @@ const initializeStorage = () => {
 
   if (!localStorage.getItem(STORAGE_KEYS.DOCS)) {
     const seedDocs: Document[] = [];
-    const adminUser = MOCK_USERS.find(u => u.role === UserRole.ADMIN)!;
+    const adminUser = MOCK_USERS.find(u => u.role === UserRole.ADMIN) || MOCK_USERS[0];
     
     // Process the INITIAL_DATA_LOAD matrix
     // Format: [Project, Macro, Process, Micro, Names]
     let counter = 1;
     
     INITIAL_DATA_LOAD.forEach(row => {
+        // Safety check to ensure row has data
+        if (!row || row.length < 5) return;
+
         const [project, macro, process, micro, namesStr] = row;
         
         // Handle multiple assignees (e.g., "Andrea/Javiera")
-        const rawNames = namesStr.split('/');
+        const rawNames = namesStr ? namesStr.split('/') : [];
         const assigneeIds: string[] = [];
         
         rawNames.forEach(name => {
@@ -101,7 +104,7 @@ export const HierarchyService = {
       if (!tree[doc.project][doc.macroprocess]) tree[doc.project][doc.macroprocess] = {};
       if (!tree[doc.project][doc.macroprocess][doc.process]) tree[doc.project][doc.macroprocess][doc.process] = [];
 
-      // Check if microprocess already added to avoid duplicates if multiple docs exist (shouldn't happen in seed but possible)
+      // Check if microprocess already added to avoid duplicates
       const existing = tree[doc.project][doc.macroprocess][doc.process].find((m: any) => m.name === doc.microprocess);
       if (!existing) {
         tree[doc.project][doc.macroprocess][doc.process].push({
