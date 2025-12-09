@@ -44,9 +44,6 @@ const initializeStorage = () => {
         const docId = `doc-init-${counter++}`;
         const primaryAssignee = assigneeIds[0];
         
-        // Find user object for primary assignee name display
-        const primaryUser = MOCK_USERS.find(u => u.id === primaryAssignee);
-
         seedDocs.push({
             id: docId,
             title: `${project} - ${micro}`,
@@ -85,6 +82,75 @@ const initializeStorage = () => {
 };
 
 initializeStorage();
+
+// --- SERVICES ---
+
+export const HierarchyService = {
+  /**
+   * Returns the full hierarchy tree based on current documents (which represent the matrix).
+   * Structure: Project -> Macro -> Process -> Micro -> Assignees
+   */
+  getFullHierarchy: async () => {
+    const docs = await DocumentService.getAll();
+    const tree: any = {};
+
+    docs.forEach(doc => {
+      if (!doc.project || !doc.macroprocess || !doc.process || !doc.microprocess) return;
+
+      if (!tree[doc.project]) tree[doc.project] = {};
+      if (!tree[doc.project][doc.macroprocess]) tree[doc.project][doc.macroprocess] = {};
+      if (!tree[doc.project][doc.macroprocess][doc.process]) tree[doc.project][doc.macroprocess][doc.process] = [];
+
+      // Check if microprocess already added to avoid duplicates if multiple docs exist (shouldn't happen in seed but possible)
+      const existing = tree[doc.project][doc.macroprocess][doc.process].find((m: any) => m.name === doc.microprocess);
+      if (!existing) {
+        tree[doc.project][doc.macroprocess][doc.process].push({
+          name: doc.microprocess,
+          docId: doc.id,
+          assignees: doc.assignees || []
+        });
+      }
+    });
+
+    return tree;
+  },
+
+  /**
+   * Returns a hierarchy tree filtered by the user's assignments.
+   * Used for "New Document" selectors.
+   */
+  getUserHierarchy: async (userId: string) => {
+    const docs = await DocumentService.getAll();
+    const tree: any = {};
+
+    docs.forEach(doc => {
+      // Filter: Must be assigned to user OR be the author
+      const isAssigned = doc.assignees && doc.assignees.includes(userId);
+      const isAuthor = doc.authorId === userId; // Allow author to select their own processes too
+
+      if ((isAssigned || isAuthor) && doc.project && doc.macroprocess && doc.process && doc.microprocess) {
+        if (!tree[doc.project]) tree[doc.project] = {};
+        if (!tree[doc.project][doc.macroprocess]) tree[doc.project][doc.macroprocess] = {};
+        if (!tree[doc.project][doc.macroprocess][doc.process]) tree[doc.project][doc.macroprocess][doc.process] = [];
+
+        const existing = tree[doc.project][doc.macroprocess][doc.process].find((m: string) => m === doc.microprocess);
+        if (!existing) {
+          tree[doc.project][doc.macroprocess][doc.process].push(doc.microprocess);
+        }
+      }
+    });
+
+    return tree;
+  },
+
+  /**
+   * Updates the assignment for a specific microprocess (represented by a doc).
+   * This mimics "Reassigning" the responsibility for a process.
+   */
+  updateMatrixAssignment: async (docId: string, newAnalystId: string, adminId: string) => {
+    await AssignmentService.assignDocument(docId, newAnalystId, adminId, 'Reasignación desde Matriz Administrativa');
+  }
+};
 
 export const UserService = {
   getAll: async (): Promise<User[]> => {
@@ -219,7 +285,8 @@ export const DocumentService = {
     initialState?: DocState,
     initialVersion?: string,
     initialProgress?: number,
-    file?: File
+    file?: File,
+    hierarchy?: { project: string, macro: string, process: string, micro: string }
   ): Promise<Document> => {
     
     const state = initialState || DocState.INITIATED;
@@ -242,7 +309,13 @@ export const DocumentService = {
       progress: progress,
       files: [],
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      
+      // Inject Hierarchy if provided
+      project: hierarchy?.project,
+      macroprocess: hierarchy?.macro,
+      process: hierarchy?.process,
+      microprocess: hierarchy?.micro
     };
 
     if (file) {

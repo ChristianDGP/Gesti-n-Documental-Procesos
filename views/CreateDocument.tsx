@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DocumentService } from '../services/mockBackend';
+import { DocumentService, HierarchyService } from '../services/mockBackend';
 import { User, DocState } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, ChevronRight, Layers } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -12,23 +12,58 @@ interface Props {
 const CreateDocument: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  
-  // State for the uploaded file and its validation
+  const [initializing, setInitializing] = useState(true);
+
+  // Hierarchy Selection State
+  const [userHierarchy, setUserHierarchy] = useState<any>({});
+  const [selectedProject, setSelectedProject] = useState('');
+  const [selectedMacro, setSelectedMacro] = useState('');
+  const [selectedProcess, setSelectedProcess] = useState('');
+  const [selectedMicro, setSelectedMicro] = useState('');
+
+  // File Upload State
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string[]>([]);
   const [isFileValid, setIsFileValid] = useState(false);
 
-  // Form State (Auto-filled but editable)
+  // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   
-  // Workflow State (Inferred)
+  // Inferred Workflow State
   const [detectedState, setDetectedState] = useState<DocState>(DocState.INITIATED);
   const [detectedVersion, setDetectedVersion] = useState('0.0');
   const [detectedProgress, setDetectedProgress] = useState(10);
-  const [detectedProject, setDetectedProject] = useState('');
 
-  // Helper to map parser string state to Enum
+  useEffect(() => {
+      loadHierarchy();
+  }, []);
+
+  const loadHierarchy = async () => {
+      const hierarchy = await HierarchyService.getUserHierarchy(user.id);
+      setUserHierarchy(hierarchy);
+      setInitializing(false);
+  };
+
+  // Reset downstream selections when upstream changes
+  const handleProjectChange = (val: string) => {
+      setSelectedProject(val);
+      setSelectedMacro('');
+      setSelectedProcess('');
+      setSelectedMicro('');
+  };
+
+  const handleMacroChange = (val: string) => {
+      setSelectedMacro(val);
+      setSelectedProcess('');
+      setSelectedMicro('');
+  };
+
+  const handleProcessChange = (val: string) => {
+      setSelectedProcess(val);
+      setSelectedMicro('');
+  };
+
   const mapParserStateToEnum = (parserState: string): DocState => {
       switch (parserState) {
           case 'Iniciado': return DocState.INITIATED;
@@ -48,30 +83,28 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           const selectedFile = e.target.files[0];
           setFile(selectedFile);
           
-          // Execute Parse Logic
           const result = parseDocumentFilename(selectedFile.name);
           
           if (result.valido) {
               setIsFileValid(true);
               setFileError([]);
               
-              // Auto-fill form data
+              // Only auto-fill title/description, rely on Selectors for hierarchy
               setTitle(result.descripcion || '');
+              setDescription(result.explicacion ? `${result.explicacion}` : '');
               
-              // If we have an explanation from the parser, use it as default description
-              // Otherwise, we keep it blank for the user to fill
-              setDescription(result.explicacion ? `${result.explicacion} (Proyecto: ${result.proyecto})` : '');
-              
-              // Set Internal State
               if (result.estado) setDetectedState(mapParserStateToEnum(result.estado));
               if (result.nomenclatura) setDetectedVersion(result.nomenclatura);
               if (result.porcentaje) setDetectedProgress(result.porcentaje);
-              if (result.proyecto) setDetectedProject(result.proyecto);
+
+              // Warn if file project doesn't match selected project
+              if (result.proyecto !== selectedProject) {
+                  setFileError([`Advertencia: El archivo indica proyecto "${result.proyecto}" pero has seleccionado "${selectedProject}".`]);
+              }
 
           } else {
               setIsFileValid(false);
               setFileError(result.errores);
-              // Reset inferred fields if invalid
               setTitle('');
               setDescription('');
           }
@@ -80,11 +113,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !description || !file || !isFileValid) return;
+    if (!title || !description || !file || !isFileValid || !selectedMicro) return;
 
     setLoading(true);
     try {
-      // Pass the inferred state and the file to creation service
       const doc = await DocumentService.create(
           title, 
           description, 
@@ -92,7 +124,13 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           detectedState,
           detectedVersion,
           detectedProgress,
-          file
+          file,
+          {
+              project: selectedProject,
+              macro: selectedMacro,
+              process: selectedProcess,
+              micro: selectedMicro
+          }
       );
       navigate(`/doc/${doc.id}`);
     } catch (error: any) {
@@ -103,119 +141,198 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
     }
   };
 
+  if (initializing) return <div className="p-8 text-center text-slate-500">Cargando permisos...</div>;
+
+  // Helper to extract keys for dropdowns
+  const projects = Object.keys(userHierarchy);
+  const macros = selectedProject ? Object.keys(userHierarchy[selectedProject] || {}) : [];
+  const processes = selectedMacro ? Object.keys(userHierarchy[selectedProject][selectedMacro] || {}) : [];
+  const micros = selectedProcess ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] || []) : [];
+
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-12">
         <button onClick={() => navigate(-1)} className="flex items-center text-slate-500 hover:text-slate-800 mb-6 text-sm">
             <ArrowLeft size={16} className="mr-1" />
             Volver
         </button>
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8">
-            <div className="mb-8">
+            <div className="mb-8 border-b border-slate-100 pb-4">
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Nueva Solicitud</h1>
                 <p className="text-slate-500">
-                    Sube tu archivo institucional para comenzar. El sistema detectará automáticamente la información del flujo.
+                   Selecciona el proceso asignado y sube la documentación correspondiente.
                 </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
                 
-                {/* 1. File Upload Area */}
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">1. Cargar Documento (Requerido)</label>
+                {/* Step 1: Hierarchy Selection */}
+                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                    <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
+                        <Layers size={18} className="text-indigo-600" />
+                        1. Selección de Proceso (Asignados)
+                    </h2>
                     
-                    <div className={`border-2 border-dashed rounded-xl p-8 transition-colors flex flex-col items-center justify-center text-center group relative
-                        ${isFileValid ? 'border-green-300 bg-green-50' : 
-                          fileError.length > 0 ? 'border-red-300 bg-red-50' : 
-                          'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'}`}>
-                        
-                        <input 
-                            type="file" 
-                            onChange={handleFileSelect}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Project */}
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Proyecto</label>
+                            <select 
+                                value={selectedProject}
+                                onChange={(e) => handleProjectChange(e.target.value)}
+                                className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                            >
+                                <option value="">-- Seleccionar --</option>
+                                {projects.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
 
-                        {file ? (
-                            isFileValid ? (
-                                <div className="text-green-700">
-                                    <FileCheck size={48} className="mx-auto mb-3" />
-                                    <p className="font-semibold text-lg">{file.name}</p>
-                                    <p className="text-sm mt-1">Archivo válido y procesado correctamente</p>
-                                </div>
-                            ) : (
-                                <div className="text-red-600">
-                                    <FileX size={48} className="mx-auto mb-3" />
-                                    <p className="font-semibold text-lg break-all">{file.name}</p>
-                                    <div className="mt-3 text-sm text-left bg-white/50 p-3 rounded border border-red-200 inline-block">
-                                        <p className="font-bold mb-1">Errores detectados:</p>
-                                        <ul className="list-disc pl-4 space-y-1">
-                                            {fileError.map((err, idx) => (
-                                                <li key={idx}>{err}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                    <p className="text-xs mt-3">Click para intentar con otro archivo</p>
-                                </div>
-                            )
-                        ) : (
-                            <div className="text-slate-500 group-hover:text-indigo-600">
-                                <Upload size={40} className="mx-auto mb-3" />
-                                <p className="font-medium">Arrastra tu archivo aquí o haz click para buscar</p>
-                                <p className="text-xs mt-2 text-slate-400">Formato: PROYECTO - Descripción Nomenclatura (Max 55 chars)</p>
-                            </div>
-                        )}
+                        {/* Macroprocess */}
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Macroproceso</label>
+                            <select 
+                                value={selectedMacro}
+                                onChange={(e) => handleMacroChange(e.target.value)}
+                                disabled={!selectedProject}
+                                className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            >
+                                <option value="">-- Seleccionar --</option>
+                                {macros.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Process */}
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Proceso</label>
+                            <select 
+                                value={selectedProcess}
+                                onChange={(e) => handleProcessChange(e.target.value)}
+                                disabled={!selectedMacro}
+                                className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            >
+                                <option value="">-- Seleccionar --</option>
+                                {processes.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
+
+                        {/* Microprocess */}
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Microproceso</label>
+                            <select 
+                                value={selectedMicro}
+                                onChange={(e) => setSelectedMicro(e.target.value)}
+                                disabled={!selectedProcess}
+                                className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-900"
+                            >
+                                <option value="">-- Seleccionar --</option>
+                                {micros.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                        </div>
                     </div>
+                    {projects.length === 0 && (
+                        <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 text-sm rounded border border-yellow-200 flex items-center gap-2">
+                            <AlertTriangle size={16} />
+                            No tienes procesos asignados actualmente. Contacta al administrador.
+                        </div>
+                    )}
                 </div>
 
-                {/* 2. Detected Metadata & Form Fields (Only visible if file is valid) */}
-                {isFileValid && (
-                    <div className="animate-fadeIn space-y-6 border-t border-slate-100 pt-6">
-                        <div className="flex items-center gap-3 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                {/* Step 2: File Upload (Only visible if Microprocess selected) */}
+                {selectedMicro && (
+                    <div className="animate-fadeIn">
+                         <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
+                            <Upload size={18} className="text-indigo-600" />
+                            2. Carga de Archivo
+                        </h2>
+
+                        <div className={`border-2 border-dashed rounded-xl p-8 transition-colors flex flex-col items-center justify-center text-center group relative
+                            ${isFileValid ? 'border-green-300 bg-green-50' : 
+                              fileError.length > 0 ? 'border-red-300 bg-red-50' : 
+                              'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'}`}>
+                            
+                            <input 
+                                type="file" 
+                                onChange={handleFileSelect}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
+
+                            {file ? (
+                                isFileValid ? (
+                                    <div className="text-green-700">
+                                        <FileCheck size={48} className="mx-auto mb-3" />
+                                        <p className="font-semibold text-lg">{file.name}</p>
+                                        <p className="text-sm mt-1">Archivo procesado correctamente</p>
+                                        {fileError.length > 0 && <p className="text-xs mt-1 text-orange-600">{fileError[0]}</p>}
+                                    </div>
+                                ) : (
+                                    <div className="text-red-600">
+                                        <FileX size={48} className="mx-auto mb-3" />
+                                        <p className="font-semibold text-lg">{file.name}</p>
+                                        <div className="mt-3 text-sm text-left bg-white/50 p-3 rounded border border-red-200 inline-block">
+                                            <ul className="list-disc pl-4 space-y-1">
+                                                {fileError.map((err, idx) => (
+                                                    <li key={idx}>{err}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                )
+                            ) : (
+                                <div className="text-slate-500 group-hover:text-indigo-600">
+                                    <Upload size={40} className="mx-auto mb-3" />
+                                    <p className="font-medium">Click para seleccionar archivo</p>
+                                    <p className="text-xs mt-2 text-slate-400">Formato: {selectedProject} - Descripción Nomenclatura</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Step 3: Confirmation Form */}
+                {isFileValid && selectedMicro && (
+                    <div className="animate-fadeIn border-t border-slate-100 pt-6">
+                         <div className="flex items-center gap-3 bg-blue-50 p-4 rounded-lg border border-blue-100 mb-6">
                             <Info size={20} className="text-blue-600 flex-shrink-0" />
-                            <div className="text-sm text-blue-800">
-                                <p className="font-semibold">Información detectada:</p>
-                                <ul className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
-                                    <li><span className="text-blue-500 text-xs uppercase">Proyecto</span><br/>{detectedProject}</li>
-                                    <li><span className="text-blue-500 text-xs uppercase">Versión</span><br/>{detectedVersion}</li>
-                                    <li><span className="text-blue-500 text-xs uppercase">Estado</span><br/>{mapParserStateToEnum(parseDocumentFilename(file!.name).estado || '').replace(/_/g, ' ')}</li>
-                                    <li><span className="text-blue-500 text-xs uppercase">Progreso</span><br/>{detectedProgress}%</li>
-                                </ul>
+                            <div className="text-sm text-blue-800 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                                <div><span className="text-blue-500 text-xs uppercase block">Estado</span>{mapParserStateToEnum(parseDocumentFilename(file!.name).estado || '').replace(/_/g, ' ')}</div>
+                                <div><span className="text-blue-500 text-xs uppercase block">Versión</span>{detectedVersion}</div>
+                                <div><span className="text-blue-500 text-xs uppercase block">Progreso</span>{detectedProgress}%</div>
                             </div>
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Título del Documento</label>
-                            <input 
-                                type="text" 
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-50"
-                                required
-                            />
-                            <p className="text-xs text-slate-400 mt-1">Extraído automáticamente del nombre del archivo.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Título</label>
+                                <input 
+                                    type="text" 
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    required
+                                />
+                            </div>
+                             <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
+                                <input 
+                                    type="text" 
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    required
+                                />
+                            </div>
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Descripción / Observación</label>
-                            <textarea 
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Describe el contenido..."
-                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all min-h-[100px]"
-                                required
-                            />
-                        </div>
-
-                        <div className="pt-4 flex justify-end">
+                        <div className="flex justify-end">
                             <button 
                                 type="submit" 
                                 disabled={loading}
                                 className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md font-medium"
                             >
-                                {loading ? 'Procesando...' : (
+                                {loading ? 'Creando...' : (
                                     <>
                                         <Save size={18} className="mr-2" />
-                                        Confirmar y Crear Solicitud
+                                        Crear Solicitud
                                     </>
                                 )}
                             </button>
