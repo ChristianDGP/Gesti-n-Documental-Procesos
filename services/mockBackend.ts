@@ -1,14 +1,16 @@
 
 import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog, AnalystWorkload, DocType, UserHierarchy, FullHierarchy, ProcessNode } from '../types';
-import { MOCK_USERS, STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP, DOCUMENT_STATUS_LOAD } from '../constants';
+import { MOCK_USERS, STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP, DOCUMENT_STATUS_LOAD, REQUIRED_DOCS_MATRIX } from '../constants';
 
 const STORAGE_KEYS = {
-  DOCS: 'sgd_docs_v2026_g',
-  HISTORY: 'sgd_history_v2026_g',
-  SESSION: 'sgd_session_v2026_g',
-  USERS: 'sgd_users_v2026_g',
-  ASSIGNMENTS: 'sgd_assignments_v2026_g',
-  MATRIX_OVERRIDES: 'sgd_matrix_overrides_v2026_g' // New key for persisting matrix changes
+  DOCS: 'sgd_docs_v2026_h',
+  HISTORY: 'sgd_history_v2026_h',
+  SESSION: 'sgd_session_v2026_h',
+  USERS: 'sgd_users_v2026_h',
+  ASSIGNMENTS: 'sgd_assignments_v2026_h',
+  MATRIX_OVERRIDES: 'sgd_matrix_overrides_v2026_h',
+  REQUIRED_TYPES: 'sgd_required_types_v2026_h',
+  CUSTOM_NODES: 'sgd_custom_nodes_v2026_h' // New key for user-created microprocesses
 };
 
 // ... (Helper functions determineStateFromVersion and mapCodeToDocType remain unchanged) ...
@@ -36,6 +38,26 @@ const mapCodeToDocType = (code: string): DocType | undefined => {
 const initializeStorage = () => {
   if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(MOCK_USERS));
+  }
+
+  // Initialize Required Types if empty
+  if (!localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES)) {
+      const requiredMap: Record<string, DocType[]> = {};
+      REQUIRED_DOCS_MATRIX.forEach(row => {
+          const [project, micro, asIs, fce, pm, toBe] = row;
+          const key = `${project}|${micro}`;
+          const types: DocType[] = [];
+          if (asIs === 1) types.push('AS IS');
+          if (fce === 1) types.push('FCE');
+          if (pm === 1) types.push('PM');
+          if (toBe === 1) types.push('TO BE');
+          requiredMap[key] = types;
+      });
+      localStorage.setItem(STORAGE_KEYS.REQUIRED_TYPES, JSON.stringify(requiredMap));
+  }
+  
+  if (!localStorage.getItem(STORAGE_KEYS.CUSTOM_NODES)) {
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_NODES, JSON.stringify([]));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.DOCS)) {
@@ -113,28 +135,16 @@ export const HierarchyService = {
   getFullHierarchy: async (): Promise<FullHierarchy> => {
     const tree: FullHierarchy = {};
     
-    // Load overrides
+    // Load local storage data
     const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
-    
-    // 1. Aggregate Document Types per Microprocess from DOCUMENT_STATUS_LOAD
-    const docTypesMap = new Map<string, Set<DocType>>();
-    DOCUMENT_STATUS_LOAD.forEach(row => {
-         if (!row || row.length < 5) return;
-         const [_, project, micro, typeCode] = row;
-         const key = `${project}|${micro}`;
-         const type = mapCodeToDocType(typeCode);
-         if (type) {
-             if (!docTypesMap.has(key)) docTypesMap.set(key, new Set());
-             docTypesMap.get(key)?.add(type);
-         }
-    });
+    const requiredTypesMap = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES) || '{}');
+    const customNodes = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_NODES) || '[]');
 
-    // 2. Build Tree
+    // 1. Process Static Initial Load
     INITIAL_DATA_LOAD.forEach(row => {
         if (!row || row.length < 5) return;
         const [project, macro, process, micro, namesStr] = row;
         
-        // Determine Assignees (Override > Initial)
         const matrixKey = `${project}|${micro}`;
         let assigneeIds: string[] = [];
 
@@ -154,20 +164,45 @@ export const HierarchyService = {
 
         const existing = tree[project][macro][process].find(m => m.name === micro);
         if (!existing) {
-             const types = docTypesMap.get(matrixKey);
+             const types = requiredTypesMap[matrixKey] || [];
              tree[project][macro][process].push({
                 name: micro,
-                docId: matrixKey, // Using Key as ID for matrix updates
+                docId: matrixKey,
                 assignees: assigneeIds,
-                requiredTypes: types ? Array.from(types) : []
+                requiredTypes: types
             });
         }
     });
+
+    // 2. Process Custom User-Created Nodes
+    customNodes.forEach((node: any) => {
+        const { project, macro, process, micro, assignees, requiredTypes } = node;
+        const matrixKey = `${project}|${micro}`;
+        
+        // Determine effective assignees (override check)
+        const finalAssignees = overrides[matrixKey] || assignees || [];
+        // Determine effective types
+        const finalTypes = requiredTypesMap[matrixKey] || requiredTypes || [];
+
+        if (!tree[project]) tree[project] = {};
+        if (!tree[project][macro]) tree[project][macro] = {};
+        if (!tree[project][macro][process]) tree[project][macro][process] = [];
+
+        const existing = tree[project][macro][process].find(m => m.name === micro);
+        if (!existing) {
+            tree[project][macro][process].push({
+                name: micro,
+                docId: matrixKey,
+                assignees: finalAssignees,
+                requiredTypes: finalTypes
+            });
+        }
+    });
+
     return tree;
   },
 
   getUserHierarchy: async (userId: string): Promise<UserHierarchy> => {
-    // Re-using logic to get full hierarchy first to respect overrides
     const fullTree = await HierarchyService.getFullHierarchy();
     const userTree: UserHierarchy = {};
 
@@ -189,15 +224,12 @@ export const HierarchyService = {
     return userTree;
   },
 
-  // Updates the "Responsible" list for a microprocess
   updateMatrixAssignment: async (matrixKey: string, newAssignees: string[], adminId: string) => {
     const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
     overrides[matrixKey] = newAssignees;
     localStorage.setItem(STORAGE_KEYS.MATRIX_OVERRIDES, JSON.stringify(overrides));
     
-    // Also update actual documents in storage to reflect this change for consistency?
-    // In a real app, this would be a separate relational update.
-    // For this mock, we will update the 'assignees' field of existing docs matching this key.
+    // Sync to existing documents
     const [project, micro] = matrixKey.split('|');
     const docs = await DocumentService.getAll();
     let updatedCount = 0;
@@ -213,6 +245,47 @@ export const HierarchyService = {
     if (updatedCount > 0) {
         localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(updatedDocs));
     }
+  },
+
+  toggleRequiredType: async (matrixKey: string, type: DocType) => {
+      const requiredTypesMap = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES) || '{}');
+      let currentTypes: DocType[] = requiredTypesMap[matrixKey] || [];
+      
+      if (currentTypes.includes(type)) {
+          currentTypes = currentTypes.filter(t => t !== type);
+      } else {
+          currentTypes.push(type);
+      }
+      
+      requiredTypesMap[matrixKey] = currentTypes;
+      localStorage.setItem(STORAGE_KEYS.REQUIRED_TYPES, JSON.stringify(requiredTypesMap));
+  },
+
+  addMicroprocess: async (project: string, macro: string, process: string, microName: string, assignees: string[], requiredTypes: DocType[]) => {
+      const customNodes = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_NODES) || '[]');
+      const matrixKey = `${project}|${microName}`;
+
+      // Basic duplicate check (simple)
+      const exists = customNodes.some((n: any) => n.project === project && n.micro === microName);
+      if (exists) throw new Error('El microproceso ya existe en este proyecto.');
+
+      const newNode = {
+          project, macro, process, micro: microName,
+          assignees, requiredTypes
+      };
+
+      customNodes.push(newNode);
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_NODES, JSON.stringify(customNodes));
+
+      // Persist required types to the separate map as well to ensure consistency with the toggle logic
+      const requiredTypesMap = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES) || '{}');
+      requiredTypesMap[matrixKey] = requiredTypes;
+      localStorage.setItem(STORAGE_KEYS.REQUIRED_TYPES, JSON.stringify(requiredTypesMap));
+
+      // Persist assignments to override map for consistency
+      const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
+      overrides[matrixKey] = assignees;
+      localStorage.setItem(STORAGE_KEYS.MATRIX_OVERRIDES, JSON.stringify(overrides));
   }
 };
 
