@@ -1,10 +1,10 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService } from '../services/mockBackend';
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { parseDocumentFilename } from '../utils/filenameParser';
+import { parseDocumentFilename, checkVersionRules } from '../utils/filenameParser';
 import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users, RotateCcw, Send } from 'lucide-react';
 
 interface Props {
@@ -20,6 +20,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Reference for hidden file input triggered by Action Buttons
+  const actionFileRef = useRef<HTMLInputElement>(null);
+  const [pendingAction, setPendingAction] = useState<'APPROVE' | 'REJECT' | null>(null);
 
   useEffect(() => {
     if (id) loadData(id);
@@ -41,127 +45,142 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             .filter(n => n) as string[];
         setAssigneeNames(names);
     }
-
     setLoading(false);
   };
 
+  // 1. Standard File Upload (Just adding attachments, no state change)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !doc) return;
     const file = e.target.files[0];
-
-    // --- INTEGRACIÓN: VALIDACIÓN DE NOMBRE DE ARCHIVO ---
+    
     const analisis = parseDocumentFilename(
-        file.name,
-        doc.project,
-        doc.microprocess,
-        doc.docType 
+        file.name, doc.project, doc.microprocess, doc.docType 
     );
 
     if (!analisis.valido) {
-      alert(`Error en nomenclatura de archivo:\n\n${analisis.errores.join('\n')}\n\nFormato requerido: PROYECTO - Microproceso - TIPO - Versión`);
+      alert(`Error en nomenclatura:\n${analisis.errores.join('\n')}`);
       e.target.value = '';
       return;
     }
 
-    const confirmar = window.confirm(
-      `Archivo Validado Correctamente:\n` +
-      `Versión detectada: ${analisis.nomenclatura || 'Desconocida'}\n` +
-      `¿Desea subir este archivo?`
-    );
-
-    if (!confirmar) {
+    if (!window.confirm(`Subir archivo: ${analisis.nomenclatura || 'Desconocida'}?`)) {
         e.target.value = '';
         return;
     }
     
     try {
       await DocumentService.uploadFile(doc.id, file, user);
-      await loadData(doc.id); // Reload to show file
-    } catch (err: any) {
-      alert(err.message);
-    }
+      await loadData(doc.id);
+    } catch (err: any) { alert(err.message); }
   };
 
-  const handleAction = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'REQUEST_APPROVAL') => {
-    if (!doc) return;
-    
-    // --- VALIDATION FOR REQUEST APPROVAL ---
-    if (action === 'REQUEST_APPROVAL') {
-        const v = doc.version.trim();
-        let valid = false;
-        
-        // Logic for Analyst Requesting Approval based on nomenclature
-        // 1. Internal Review (v0.n)
-        if (doc.state === DocState.IN_PROCESS && /^v0\.\d+$/.test(v)) {
-            valid = true;
-        }
-        // 2. Referent Review (v1.n.i)
-        else if (doc.state === DocState.INTERNAL_REVIEW && /^v1\.\d+\.\d+$/.test(v)) {
-             valid = true;
-        }
-        // 3. Control Review (v1.n.iAR)
-        else if (doc.state === DocState.SENT_TO_REFERENT && /^v1\.\d+\.\d+AR$/.test(v)) {
-            valid = true;
-        }
-        // Special case: v1.0 directly from Internal? The rules say v1.n.i for Referent review.
-        // Let's stick to the prompt strictness or allow if it matches the target state nomenclature logic
-        
-        if (!valid) {
-             alert('No se puede solicitar aprobación: La versión actual del documento no cumple con la nomenclatura requerida para la siguiente etapa.\n\n' + 
-                   'Requerido:\n' +
-                   '- Para Revisión Interna: v0.n\n' +
-                   '- Para Revisión Referente: v1.n.i\n' +
-                   '- Para Control Gestión: v1.n.iAR');
-             return;
-        }
-    }
+  // 2. Action Trigger (Check prerequisites)
+  const handleActionClick = (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'REQUEST_APPROVAL') => {
+      if (!doc) return;
 
-    if (action === 'REJECT' && !comment) {
-        alert('Debes agregar una observación para rechazar.');
-        return;
-    }
+      if (action === 'REQUEST_APPROVAL') {
+          // Analyst logic: Check CURRENT version compliance immediately
+          const validation = checkVersionRules(doc.version, '', 'REQUEST');
+          if (!validation.valid) {
+              alert(validation.error);
+              return;
+          }
+          if (!window.confirm('¿Solicitar aprobación para la versión actual?')) return;
+          executeTransition('REQUEST_APPROVAL', null, null);
+          return;
+      }
 
-    setActionLoading(true);
-    try {
-        await DocumentService.transitionState(doc.id, user, action, comment || (action === 'REQUEST_APPROVAL' ? 'Solicitud de Aprobación Enviada' : 'Cambio de estado'));
+      if (action === 'ADVANCE') {
+          executeTransition('ADVANCE', null, null);
+          return;
+      }
+
+      // For APPROVE or REJECT, we MUST open file dialog to select the response file
+      if (action === 'APPROVE' || action === 'REJECT') {
+          if (action === 'REJECT' && !comment) {
+              alert('Por favor agrega un comentario/observación antes de rechazar.');
+              return;
+          }
+          setPendingAction(action);
+          if (actionFileRef.current) actionFileRef.current.click();
+      }
+  };
+
+  // 3. Handle File Selection for Approve/Reject
+  const handleActionFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || !e.target.files[0] || !doc || !pendingAction) return;
+      const file = e.target.files[0];
+      
+      // Basic Syntax Check
+      const analisis = parseDocumentFilename(
+        file.name, doc.project, doc.microprocess, doc.docType 
+      );
+      if (!analisis.valido) {
+          alert(`El archivo seleccionado no cumple con la nomenclatura del proyecto:\n${analisis.errores.join('\n')}`);
+          e.target.value = '';
+          return;
+      }
+
+      const newVersion = analisis.nomenclatura || '';
+
+      // Business Logic Rule Check
+      const ruleCheck = checkVersionRules(doc.version, newVersion, pendingAction);
+      if (!ruleCheck.valid) {
+          alert(`Error de lógica de versiones para ${pendingAction}:\n\n${ruleCheck.error}`);
+          e.target.value = '';
+          return;
+      }
+
+      // All good, execute
+      if (window.confirm(`Confirma ${pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR'} subiendo el archivo versión ${newVersion}?`)) {
+          await executeTransition(pendingAction, file, newVersion);
+      }
+      
+      // Reset
+      e.target.value = '';
+      setPendingAction(null);
+  };
+
+  const executeTransition = async (action: any, file: File | null, customVersion: string | null) => {
+      if (!doc) return;
+      setActionLoading(true);
+      try {
+        await DocumentService.transitionState(
+            doc.id, user, action, 
+            comment || (action === 'REQUEST_APPROVAL' ? 'Solicitud de Aprobación Enviada' : 'Cambio de estado'),
+            file || undefined,
+            customVersion || undefined
+        );
         setComment('');
         await loadData(doc.id);
-    } catch (err: any) {
+      } catch (err: any) {
         alert('Error: ' + err.message);
-    } finally {
+      } finally {
         setActionLoading(false);
-    }
+      }
   };
 
   if (loading || !doc) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
 
   const config = STATE_CONFIG[doc.state];
-
-  // Permission Logic
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
 
   const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
-  
   const canAdvance = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
   
-  // New Logic: Request Approval Button
-  // Only Analyst can request, only if NOT already requested, and in valid states to move up
+  // Logic updated: Request Approval checks nomenclature internally
   const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && 
     (doc.state === DocState.IN_PROCESS || doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT);
 
   const canRestart = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.REJECTED;
   
-  // Approver logic (Coordinator / Admin)
   const canApprove = (
       (user.role === UserRole.COORDINATOR && doc.hasPendingRequest && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) ||
       (user.role === UserRole.ADMIN && doc.hasPendingRequest && doc.state === DocState.SENT_TO_CONTROL)
   );
 
-  const canReject = (
-      (user.role === UserRole.COORDINATOR && doc.hasPendingRequest && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) ||
-      (user.role === UserRole.ADMIN && doc.hasPendingRequest && doc.state === DocState.SENT_TO_CONTROL)
-  );
+  const canReject = canApprove; // Same permissions for reject
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -169,26 +188,22 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         <ArrowLeft size={16} className="mr-1" /> Volver al Dashboard
       </button>
 
+      {/* Hidden input for Approve/Reject Actions */}
+      <input 
+        type="file" 
+        ref={actionFileRef} 
+        className="hidden" 
+        onChange={handleActionFileSelected} 
+      />
+
       {/* Header Card */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
             <div>
                 <div className="flex items-center gap-2 mb-1">
-                    {doc.project && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-white">
-                            {doc.project}
-                        </span>
-                    )}
-                    {doc.docType && (
-                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">
-                            {doc.docType}
-                        </span>
-                    )}
-                    {doc.hasPendingRequest && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-500 text-white animate-pulse">
-                            Solicitud Pendiente
-                        </span>
-                    )}
+                    {doc.project && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-white">{doc.project}</span>}
+                    {doc.docType && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">{doc.docType}</span>}
+                    {doc.hasPendingRequest && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-500 text-white animate-pulse">Solicitud Pendiente</span>}
                 </div>
                 <h1 className="text-2xl font-bold text-slate-900">{doc.title}</h1>
                 <p className="text-slate-500 mt-1">{doc.description}</p>
@@ -199,51 +214,32 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             </div>
         </div>
 
-        {/* Process Hierarchy Metadata */}
+        {/* Process Metadata */}
         {doc.macroprocess && (
             <div className="mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div className="flex items-start gap-2">
                     <Layers size={18} className="text-slate-400 mt-1" />
-                    <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold">Macroproceso</p>
-                        <p className="text-sm text-slate-700">{doc.macroprocess}</p>
-                    </div>
+                    <div><p className="text-xs text-slate-400 uppercase font-bold">Macroproceso</p><p className="text-sm text-slate-700">{doc.macroprocess}</p></div>
                  </div>
                  <div className="flex items-start gap-2">
                     <Layers size={18} className="text-slate-400 mt-1" />
-                    <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold">Proceso</p>
-                        <p className="text-sm text-slate-700">{doc.process}</p>
-                    </div>
+                    <div><p className="text-xs text-slate-400 uppercase font-bold">Proceso</p><p className="text-sm text-slate-700">{doc.process}</p></div>
                  </div>
                  <div className="flex items-start gap-2 md:col-span-2">
                     <Layers size={18} className="text-slate-400 mt-1" />
-                    <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold">Microproceso</p>
-                        <p className="text-sm text-slate-700 font-medium">{doc.microprocess}</p>
-                    </div>
+                    <div><p className="text-xs text-slate-400 uppercase font-bold">Microproceso</p><p className="text-sm text-slate-700 font-medium">{doc.microprocess}</p></div>
                  </div>
             </div>
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border-t border-slate-100 pt-4">
             <div>
-                <p className="text-slate-500">Analistas Asignados</p>
-                {assigneeNames.length > 0 ? (
-                    <div className="flex flex-col">
-                        {assigneeNames.map((name, i) => (
-                             <p key={i} className="font-medium text-slate-800 flex items-center gap-1">
-                                <Users size={12} className="text-slate-400" /> {name}
-                             </p>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="font-medium text-slate-800">{doc.authorName}</p>
-                )}
+                <p className="text-slate-500">Analistas</p>
+                {assigneeNames.map((name, i) => <p key={i} className="font-medium text-slate-800">{name}</p>)}
             </div>
             <div>
                 <p className="text-slate-500">Versión Actual</p>
-                <p className="font-mono text-slate-800">{doc.version}</p>
+                <p className="font-mono text-slate-800 font-bold">{doc.version}</p>
             </div>
             <div>
                 <p className="text-slate-500">Progreso</p>
@@ -255,28 +251,18 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
             <div>
-                <p className="text-slate-500">Última actualización</p>
+                <p className="text-slate-500">Actualizado</p>
                 <p className="text-slate-800">{new Date(doc.updatedAt).toLocaleDateString()}</p>
             </div>
         </div>
       </div>
 
-      {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Left Column: Actions & Files */}
         <div className="md:col-span-2 space-y-6">
-            {/* Files Section */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
-                    <Paperclip size={18} className="mr-2 text-indigo-500" />
-                    Archivos Adjuntos
+                    <Paperclip size={18} className="mr-2 text-indigo-500" /> Archivos Adjuntos
                 </h3>
-                
-                {doc.files.length === 0 && (
-                    <p className="text-sm text-slate-400 italic mb-4">No hay archivos adjuntos.</p>
-                )}
-
                 <ul className="space-y-2 mb-4">
                     {doc.files.map(file => (
                         <li key={file.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm border border-slate-100">
@@ -284,141 +270,74 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 <FileText size={16} className="text-slate-400 mr-3 flex-shrink-0" />
                                 <span className="truncate font-medium text-slate-700">{file.name}</span>
                             </div>
-                            <span className="text-xs text-slate-400 ml-2 whitespace-nowrap">
-                                {(file.size / 1024).toFixed(1)} KB
-                            </span>
                         </li>
                     ))}
+                    {doc.files.length === 0 && <p className="text-sm text-slate-400 italic">No hay archivos.</p>}
                 </ul>
 
                 {canUpload && (
-                    <div className="space-y-3">
-                        <label className="block p-4 border-2 border-dashed border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer group">
-                            <span className="sr-only">Elegir archivo</span>
-                            <input 
-                                type="file" 
-                                onChange={handleFileUpload}
-                                className="hidden"
-                            />
-                            <div className="flex flex-col items-center text-center text-indigo-600 group-hover:text-indigo-700">
-                                <Upload size={24} className="mb-2" />
-                                <span className="text-sm font-medium">Click para subir archivo</span>
-                                <span className="text-xs text-slate-400 mt-1">Nomenclatura requerida (Max 55 caracteres)</span>
-                            </div>
-                        </label>
-                    </div>
+                    <label className="block p-4 border-2 border-dashed border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer text-center text-indigo-600">
+                        <input type="file" onChange={handleFileUpload} className="hidden" />
+                        <Upload size={24} className="mx-auto mb-2" />
+                        <span className="text-sm font-medium">Subir nueva versión</span>
+                    </label>
                 )}
             </div>
 
-            {/* Workflow Actions */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                  <h3 className="font-semibold text-slate-800 mb-4">Acciones de Flujo</h3>
-                 
                  <textarea 
-                    className="w-full p-3 border border-slate-300 rounded-lg text-sm mb-4 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full p-3 border border-slate-300 rounded-lg text-sm mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
                     rows={3}
-                    placeholder="Escribe una observación, comentario o razón de rechazo..."
+                    placeholder="Observaciones (requerido para rechazo)..."
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                  />
 
                  <div className="flex flex-wrap gap-3">
-                    {canAdvance && (
-                        <button 
-                            onClick={() => handleAction('ADVANCE')}
-                            disabled={actionLoading}
-                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
-                        >
-                            <ChevronRight size={16} className="mr-2" />
-                            Actualizar Versión (Trabajo en curso)
-                        </button>
-                    )}
-
                     {canRequestApproval && (
-                         <button 
-                            onClick={() => handleAction('REQUEST_APPROVAL')}
-                            disabled={actionLoading}
-                            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors shadow-sm"
-                        >
-                            <Send size={16} className="mr-2" />
-                            Solicitar Aprobación
+                         <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm">
+                            <Send size={16} className="mr-2" /> Solicitar Aprobación
                         </button>
                     )}
                     
                     {canRestart && (
-                         <button 
-                            onClick={() => handleAction('ADVANCE')}
-                            disabled={actionLoading}
-                            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-sm"
-                        >
-                            <RotateCcw size={16} className="mr-2" />
-                            Corregir / Reiniciar Flujo
+                         <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">
+                            <RotateCcw size={16} className="mr-2" /> Reiniciar Flujo
                         </button>
                     )}
 
                     {canApprove && (
-                        <button 
-                            onClick={() => handleAction('APPROVE')}
-                            disabled={actionLoading}
-                            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors"
-                        >
-                            <CheckCircle size={16} className="mr-2" />
-                            Aprobar Solicitud
+                        <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm">
+                            <CheckCircle size={16} className="mr-2" /> Aprobar (Subir Archivo)
                         </button>
                     )}
 
                     {canReject && (
-                        <button 
-                            onClick={() => handleAction('REJECT')}
-                            disabled={actionLoading}
-                            className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors border border-red-200"
-                        >
-                            <XCircle size={16} className="mr-2" />
-                            Rechazar Solicitud
+                        <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium border border-red-200">
+                            <XCircle size={16} className="mr-2" /> Rechazar (Subir Archivo)
                         </button>
                     )}
 
-                    {!canAdvance && !canApprove && !canReject && !canRestart && !canRequestApproval && doc.state !== DocState.APPROVED && (
-                        <div className="p-3 bg-yellow-50 text-yellow-800 rounded border border-yellow-200 text-sm flex gap-2">
-                             <Info size={16} />
-                             <span>Esperando acción de otro rol o solicitud pendiente.</span>
-                        </div>
-                    )}
-                    
-                    {doc.state === DocState.APPROVED && (
-                        <p className="text-sm text-green-600 font-medium flex items-center">
-                            <CheckCircle size={16} className="mr-2" />
-                            Documento finalizado exitosamente.
-                        </p>
-                    )}
+                    {doc.state === DocState.APPROVED && <p className="text-sm text-green-600 font-bold flex items-center"><CheckCircle size={16} className="mr-2"/> Proceso Finalizado</p>}
                  </div>
+                 {(canApprove || canReject) && <p className="text-xs text-slate-400 mt-2 italic">* Aprobar o Rechazar requerirá subir el archivo con la nueva versión correspondiente.</p>}
             </div>
         </div>
 
-        {/* Right Column: History */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-fit max-h-[600px] overflow-y-auto">
-            <h3 className="font-semibold text-slate-800 mb-4 sticky top-0 bg-white pb-2 border-b border-slate-100">Historial</h3>
-            <div className="relative pl-4 border-l-2 border-slate-100 space-y-6">
-                {history.map((h, i) => (
+            <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Historial</h3>
+            <div className="space-y-6 pl-4 border-l-2 border-slate-100 relative">
+                {history.map(h => (
                     <div key={h.id} className="relative">
                         <div className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-slate-300 border-2 border-white"></div>
                         <div className="text-xs text-slate-400 mb-0.5">{new Date(h.timestamp).toLocaleString()}</div>
-                        <p className="text-sm font-medium text-slate-800">{h.action} <span className="text-slate-400 font-normal">por {h.userName}</span></p>
-                        {h.comment && (
-                            <div className="mt-1 p-2 bg-slate-50 rounded text-xs text-slate-600 italic border border-slate-100">
-                                "{h.comment}"
-                            </div>
-                        )}
-                        <div className="mt-1 flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                            <span>{STATE_CONFIG[h.previousState]?.label.split('(')[0]}</span>
-                            <ChevronRight size={10} />
-                            <span className="text-indigo-600">{STATE_CONFIG[h.newState]?.label.split('(')[0]}</span>
-                        </div>
+                        <p className="text-sm font-medium text-slate-800">{h.action} <span className="font-normal text-slate-500">por {h.userName}</span></p>
+                        {h.comment && <div className="mt-1 p-2 bg-slate-50 rounded text-xs text-slate-600 italic border border-slate-100">"{h.comment}"</div>}
                     </div>
                 ))}
             </div>
         </div>
-
       </div>
     </div>
   );
