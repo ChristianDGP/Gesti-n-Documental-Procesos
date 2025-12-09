@@ -2,11 +2,11 @@ import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog,
 import { MOCK_USERS, STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP } from '../constants';
 
 const STORAGE_KEYS = {
-  DOCS: 'sga_docs_v2026_b',
-  HISTORY: 'sga_history_v2026_b',
-  SESSION: 'sga_session_v2026_b',
-  USERS: 'sga_users_v2026_b',
-  ASSIGNMENTS: 'sga_assignments_v2026_b'
+  DOCS: 'sgd_docs_v2026_b',
+  HISTORY: 'sgd_history_v2026_b',
+  SESSION: 'sgd_session_v2026_b',
+  USERS: 'sgd_users_v2026_b',
+  ASSIGNMENTS: 'sgd_assignments_v2026_b'
 };
 
 // Initialize LocalStorage with seed data if empty

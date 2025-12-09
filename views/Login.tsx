@@ -56,7 +56,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center mb-4 shadow-md">
                 <Lock color="white" size={32} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-800">Bienvenido a SGA</h1>
+            <h1 className="text-2xl font-bold text-slate-800">Bienvenido a SGD</h1>
             <p className="text-sm text-slate-500">Sistema de Gestión Documental</p>
         </div>
 

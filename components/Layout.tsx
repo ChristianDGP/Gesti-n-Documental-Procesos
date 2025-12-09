@@ -41,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-slate-800 flex justify-between items-center">
             <div>
-                <h1 className="text-xl font-bold tracking-tight">SGA</h1>
+                <h1 className="text-xl font-bold tracking-tight">SGD</h1>
                 <p className="text-xs text-slate-400">Gestión Documental</p>
             </div>
             <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400">
@@ -95,7 +95,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <button onClick={() => setIsSidebarOpen(true)} className="text-slate-600">
                 <Menu size={24} />
             </button>
-            <span className="font-semibold text-slate-800">SGA Mobile</span>
+            <span className="font-semibold text-slate-800">SGD Mobile</span>
             <div className="w-6" /> {/* Spacer */}
         </header>
 
