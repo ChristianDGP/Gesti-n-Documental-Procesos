@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/mockBackend';
-import { User, DocState } from '../types';
+import { User, DocState, DocType } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -20,6 +21,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedMacro, setSelectedMacro] = useState('');
   const [selectedProcess, setSelectedProcess] = useState('');
   const [selectedMicro, setSelectedMicro] = useState('');
+  const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
 
   // File Upload State
   const [file, setFile] = useState<File | undefined>(undefined);
@@ -51,17 +53,38 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       setSelectedMacro('');
       setSelectedProcess('');
       setSelectedMicro('');
+      resetFile();
   };
 
   const handleMacroChange = (val: string) => {
       setSelectedMacro(val);
       setSelectedProcess('');
       setSelectedMicro('');
+      resetFile();
   };
 
   const handleProcessChange = (val: string) => {
       setSelectedProcess(val);
       setSelectedMicro('');
+      resetFile();
+  };
+
+  const handleMicroChange = (val: string) => {
+      setSelectedMicro(val);
+      resetFile();
+  }
+
+  const handleTypeChange = (val: string) => {
+      setSelectedDocType(val as DocType);
+      resetFile();
+  }
+
+  const resetFile = () => {
+      setFile(undefined);
+      setFileError([]);
+      setIsFileValid(false);
+      setTitle('');
+      setDescription('');
   };
 
   const mapParserStateToEnum = (parserState: string): DocState => {
@@ -83,24 +106,27 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           const selectedFile = e.target.files[0];
           setFile(selectedFile);
           
-          const result = parseDocumentFilename(selectedFile.name);
+          // Validate with context!
+          const result = parseDocumentFilename(
+              selectedFile.name,
+              selectedProject,
+              selectedMicro,
+              selectedDocType || undefined
+          );
           
           if (result.valido) {
               setIsFileValid(true);
               setFileError([]);
               
               // Only auto-fill title/description, rely on Selectors for hierarchy
-              setTitle(result.descripcion || '');
-              setDescription(result.explicacion ? `${result.explicacion}` : '');
+              const cleanMicro = result.microproceso || selectedMicro;
+              const cleanType = result.tipo || selectedDocType;
+              setTitle(`${cleanMicro} - ${cleanType}`);
+              setDescription(`Informe ${cleanType} para microproceso ${cleanMicro}`);
               
               if (result.estado) setDetectedState(mapParserStateToEnum(result.estado));
               if (result.nomenclatura) setDetectedVersion(result.nomenclatura);
               if (result.porcentaje) setDetectedProgress(result.porcentaje);
-
-              // Warn if file project doesn't match selected project
-              if (result.proyecto !== selectedProject) {
-                  setFileError([`Advertencia: El archivo indica proyecto "${result.proyecto}" pero has seleccionado "${selectedProject}".`]);
-              }
 
           } else {
               setIsFileValid(false);
@@ -113,7 +139,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !description || !file || !isFileValid || !selectedMicro) return;
+    if (!title || !description || !file || !isFileValid || !selectedMicro || !selectedDocType) return;
 
     setLoading(true);
     try {
@@ -129,7 +155,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               project: selectedProject,
               macro: selectedMacro,
               process: selectedProcess,
-              micro: selectedMicro
+              micro: selectedMicro,
+              docType: selectedDocType
           }
       );
       navigate(`/doc/${doc.id}`);
@@ -145,12 +172,13 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   // Helper to extract keys for dropdowns
   const projects = Object.keys(userHierarchy);
-  // Safely access properties using optional chaining or logical OR to prevent crashes if key doesn't exist yet
   const macros = selectedProject && userHierarchy[selectedProject] ? Object.keys(userHierarchy[selectedProject]) : [];
   const processes = selectedMacro && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] 
     ? Object.keys(userHierarchy[selectedProject][selectedMacro]) : [];
   const micros = selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess]
     ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] || []) : [];
+
+  const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
@@ -163,7 +191,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
             <div className="mb-8 border-b border-slate-100 pb-4">
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Nueva Solicitud</h1>
                 <p className="text-slate-500">
-                   Selecciona el proceso asignado y sube la documentación correspondiente.
+                   Completa la ficha técnica y carga el archivo validado.
                 </p>
             </div>
 
@@ -173,7 +201,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                 <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
                     <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
                         <Layers size={18} className="text-indigo-600" />
-                        1. Selección de Proceso (Asignados)
+                        1. Definición del Proceso
                     </h2>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -223,7 +251,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Microproceso</label>
                             <select 
                                 value={selectedMicro}
-                                onChange={(e) => setSelectedMicro(e.target.value)}
+                                onChange={(e) => handleMicroChange(e.target.value)}
                                 disabled={!selectedProcess}
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-900"
                             >
@@ -231,7 +259,34 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 {micros.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                         </div>
+
+                        {/* Report Type */}
+                        <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-4">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Tipo de Informe</label>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {docTypes.map(type => (
+                                    <label key={type} className={`
+                                        cursor-pointer border rounded-lg p-3 text-center transition-all
+                                        ${selectedDocType === type 
+                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105' 
+                                            : 'bg-white border-slate-300 text-slate-600 hover:border-indigo-400'}
+                                    `}>
+                                        <input 
+                                            type="radio" 
+                                            name="docType" 
+                                            value={type} 
+                                            checked={selectedDocType === type}
+                                            onChange={(e) => handleTypeChange(e.target.value)}
+                                            className="hidden"
+                                            disabled={!selectedMicro}
+                                        />
+                                        <span className="text-sm font-medium">{type}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
                     </div>
+
                     {projects.length === 0 && (
                         <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 text-sm rounded border border-yellow-200 flex items-center gap-2">
                             <AlertTriangle size={16} />
@@ -240,13 +295,23 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                     )}
                 </div>
 
-                {/* Step 2: File Upload (Only visible if Microprocess selected) */}
-                {selectedMicro && (
+                {/* Step 2: File Upload */}
+                {selectedMicro && selectedDocType && (
                     <div className="animate-fadeIn">
                          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
                             <Upload size={18} className="text-indigo-600" />
                             2. Carga de Archivo
                         </h2>
+                        
+                        <div className="mb-4 p-3 bg-blue-50 text-blue-800 text-sm rounded border border-blue-100 flex items-start gap-2">
+                            <Info size={18} className="mt-0.5 flex-shrink-0" />
+                            <div>
+                                <p className="font-semibold">Nomenclatura Requerida:</p>
+                                <p className="font-mono mt-1 text-xs md:text-sm">
+                                    {selectedProject} - {selectedMicro} - {selectedDocType.replace(' ', '')} - [Versión]
+                                </p>
+                            </div>
+                        </div>
 
                         <div className={`border-2 border-dashed rounded-xl p-8 transition-colors flex flex-col items-center justify-center text-center group relative
                             ${isFileValid ? 'border-green-300 bg-green-50' : 
@@ -264,8 +329,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                     <div className="text-green-700">
                                         <FileCheck size={48} className="mx-auto mb-3" />
                                         <p className="font-semibold text-lg">{file.name}</p>
-                                        <p className="text-sm mt-1">Archivo procesado correctamente</p>
-                                        {fileError.length > 0 && <p className="text-xs mt-1 text-orange-600">{fileError[0]}</p>}
+                                        <p className="text-sm mt-1">Validación exitosa</p>
                                     </div>
                                 ) : (
                                     <div className="text-red-600">
@@ -284,7 +348,9 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 <div className="text-slate-500 group-hover:text-indigo-600">
                                     <Upload size={40} className="mx-auto mb-3" />
                                     <p className="font-medium">Click para seleccionar archivo</p>
-                                    <p className="text-xs mt-2 text-slate-400">Formato: {selectedProject} - Descripción Nomenclatura</p>
+                                    <p className="text-xs mt-2 text-slate-400">
+                                        El nombre del archivo debe coincidir con la selección
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -292,26 +358,26 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                 )}
 
                 {/* Step 3: Confirmation Form */}
-                {isFileValid && selectedMicro && (
+                {isFileValid && selectedMicro && selectedDocType && (
                     <div className="animate-fadeIn border-t border-slate-100 pt-6">
-                         <div className="flex items-center gap-3 bg-blue-50 p-4 rounded-lg border border-blue-100 mb-6">
-                            <Info size={20} className="text-blue-600 flex-shrink-0" />
-                            <div className="text-sm text-blue-800 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                                <div><span className="text-blue-500 text-xs uppercase block">Estado</span>{mapParserStateToEnum(parseDocumentFilename(file!.name).estado || '').replace(/_/g, ' ')}</div>
-                                <div><span className="text-blue-500 text-xs uppercase block">Versión</span>{detectedVersion}</div>
-                                <div><span className="text-blue-500 text-xs uppercase block">Progreso</span>{detectedProgress}%</div>
+                         <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+                            <FileType size={20} className="text-slate-500 flex-shrink-0" />
+                            <div className="text-sm text-slate-700 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                                <div><span className="text-slate-400 text-xs uppercase block">Estado</span>{mapParserStateToEnum(parseDocumentFilename(file!.name).estado || '').replace(/_/g, ' ')}</div>
+                                <div><span className="text-slate-400 text-xs uppercase block">Versión</span>{detectedVersion}</div>
+                                <div><span className="text-slate-400 text-xs uppercase block">Progreso</span>{detectedProgress}%</div>
+                                <div><span className="text-slate-400 text-xs uppercase block">Tipo</span>{selectedDocType}</div>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Título</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Título del Documento</label>
                                 <input 
                                     type="text" 
                                     value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    required
+                                    readOnly
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-600 focus:outline-none cursor-not-allowed"
                                 />
                             </div>
                              <div>

@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   COORDINATOR = 'COORDINATOR',
@@ -26,6 +27,8 @@ export enum DocState {
   APPROVED = 'APPROVED',                 // v1.nACG - 100%
   REJECTED = 'REJECTED'                  // Workflow Loopback
 }
+
+export type DocType = 'AS IS' | 'FCE' | 'PM' | 'TO BE';
 
 export interface DocFile {
   id: string;
@@ -58,6 +61,7 @@ export interface Document {
   macroprocess?: string;
   process?: string;
   microprocess?: string;
+  docType?: DocType; // New field
 
   authorId: string;
   authorName: string;
@@ -94,7 +98,8 @@ export interface AnalystWorkload {
 export interface ParsedFilenameResult {
   valido: boolean;
   proyecto?: 'HPC' | 'HSR';
-  descripcion?: string;
+  microproceso?: string;
+  tipo?: string;
   nomenclatura?: string;
   estado?: string;
   porcentaje?: number;

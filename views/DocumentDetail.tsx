@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService } from '../services/mockBackend';
@@ -49,11 +50,17 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     const file = e.target.files[0];
 
     // --- INTEGRACIÓN: VALIDACIÓN DE NOMBRE DE ARCHIVO ---
-    const analisis = parseDocumentFilename(file.name);
+    // Usamos el parser con los datos del documento actual para validar consistencia
+    const analisis = parseDocumentFilename(
+        file.name,
+        doc.project,
+        doc.microprocess,
+        doc.docType // Si el documento ya tiene tipo asignado, lo validamos
+    );
 
     if (!analisis.valido) {
       // Mostrar errores
-      alert(`Error en nomenclatura de archivo:\n\n${analisis.errores.join('\n')}\n\nFormato requerido: PROYECTO - Descripción Nomenclatura\nEj: HPC - Presupuesto v1.0.docx`);
+      alert(`Error en nomenclatura de archivo:\n\n${analisis.errores.join('\n')}\n\nFormato requerido: PROYECTO - Microproceso - TIPO - Versión`);
       // Limpiar input
       e.target.value = '';
       return;
@@ -63,9 +70,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     const confirmar = window.confirm(
       `Archivo Validado Correctamente:\n` +
       `Proyecto: ${analisis.proyecto || 'Desconocido'}\n` +
-      `Nomenclatura: ${analisis.nomenclatura || 'Desconocida'}\n` +
-      `Estado Detectado: ${analisis.estado || 'Desconocido'}\n` +
-      `Progreso: ${analisis.porcentaje || 0}%\n\n` +
+      `Microproceso: ${analisis.microproceso || 'Desconocido'}\n` +
+      `Tipo: ${analisis.tipo || 'Desconocido'}\n` +
+      `Versión: ${analisis.nomenclatura || 'Desconocida'}\n\n` +
       `¿Desea subir este archivo?`
     );
 
@@ -144,8 +151,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             {doc.project}
                         </span>
                     )}
-                    {doc.microprocess && (
-                         <span className="text-xs text-slate-500 font-semibold uppercase">{doc.microprocess}</span>
+                    {doc.docType && (
+                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            {doc.docType}
+                        </span>
                     )}
                 </div>
                 <h1 className="text-2xl font-bold text-slate-900">{doc.title}</h1>
@@ -172,6 +181,13 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     <div>
                         <p className="text-xs text-slate-400 uppercase font-bold">Proceso</p>
                         <p className="text-sm text-slate-700">{doc.process}</p>
+                    </div>
+                 </div>
+                 <div className="flex items-start gap-2 md:col-span-2">
+                    <Layers size={18} className="text-slate-400 mt-1" />
+                    <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold">Microproceso</p>
+                        <p className="text-sm text-slate-700 font-medium">{doc.microprocess}</p>
                     </div>
                  </div>
             </div>
@@ -263,8 +279,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                              <Info size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
                              <div className="text-xs text-blue-800">
                                  <p className="font-semibold mb-1">Formato obligatorio:</p>
-                                 <code>PROY - Descripción Nomenclatura</code>
-                                 <p className="mt-1 text-blue-600">Ej: <b>HPC - Informe Mensual 0.1.docx</b></p>
+                                 <code>PROY - Microproceso - TIPO - Versión</code>
+                                 <p className="mt-1 text-blue-600">Ej: <b>HPC - Gestión de Proyectos - ASIS - v1.0.docx</b></p>
                              </div>
                         </div>
                     </div>

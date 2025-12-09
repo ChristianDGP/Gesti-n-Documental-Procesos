@@ -1,130 +1,159 @@
+
 import { ParsedFilenameResult } from '../types';
 
 /**
- * Parsea y valida el nombre de archivo según la norma institucional.
- * Formato esperado: Proyecto - Descripción Nomenclatura
- * Ejemplo: HPC - Manual de Usuario v1.0
+ * Parsea y valida el nombre de archivo según la norma institucional estricta.
+ * Formato esperado: PROYECTO - Microproceso - TIPO - Versión
+ * Ejemplo: HPC - Gestión de Proyectos - ASIS - v1.0
+ * 
+ * @param fullFilename Nombre completo del archivo (con extensión)
+ * @param expectedProject (Opcional) Proyecto seleccionado en el formulario para validar consistencia
+ * @param expectedMicro (Opcional) Microproceso seleccionado para validar consistencia
+ * @param expectedType (Opcional) Tipo de informe seleccionado (AS IS, TO BE, etc)
  */
-export const parseDocumentFilename = (fullFilename: string): ParsedFilenameResult => {
+export const parseDocumentFilename = (
+  fullFilename: string, 
+  expectedProject?: string,
+  expectedMicro?: string,
+  expectedType?: string
+): ParsedFilenameResult => {
   const result: ParsedFilenameResult = {
     valido: false,
     errores: []
   };
 
-  // 1. Validar longitud máxima (55 caracteres)
-  // Nota: Se valida el nombre completo incluyendo extensión, o solo el nombre base? 
-  // Según buenas prácticas de UX y el requerimiento, validamos el string completo 
-  // pero analizamos la estructura sin la extensión.
-  if (fullFilename.length > 55) {
-    result.errores.push(`El nombre del archivo excede los 55 caracteres (actual: ${fullFilename.length}).`);
-  }
-
-  // Separar nombre de extensión
+  // 1. Separar nombre de extensión
   const lastDotIndex = fullFilename.lastIndexOf('.');
   const filenameBase = lastDotIndex !== -1 ? fullFilename.substring(0, lastDotIndex) : fullFilename;
-  const extension = lastDotIndex !== -1 ? fullFilename.substring(lastDotIndex) : '';
+  
+  // 2. Validar longitud máxima (55 caracteres) del nombre base
+  if (filenameBase.length > 55) {
+    result.errores.push(`El nombre del archivo (sin extensión) excede los 55 caracteres (actual: ${filenameBase.length}).`);
+  }
 
-  // 2. Validar Estructura General: "PROYECTO - DESCRIPCION NOMENCLATURA"
-  // Debe contener " - "
+  // 3. Validar Estructura General por separador " - "
+  // Formato: [PROYECTO] - [MICROPROCESO] - [TIPO] - [VERSION]
   const parts = filenameBase.split(' - ');
-  if (parts.length !== 2) {
-    result.errores.push('El formato debe ser "Proyecto - Descripción Nomenclatura". Falta el separador " - " o hay más de uno.');
+
+  if (parts.length < 4) {
+    result.errores.push('El formato es incorrecto. Debe ser: "PROYECTO - Microproceso - TIPO - Versión". Faltan separadores " - ".');
     return result;
   }
 
-  const [proyecto, resto] = parts;
+  // Asignar partes (El microproceso podría contener guiones, pero el separador es " - ")
+  // Estrategia: 
+  // index 0: Proyecto
+  // index Last: Version
+  // index Last-1: Tipo
+  // index 1 to Last-2: Microproceso
+  
+  const proyecto = parts[0];
+  const version = parts[parts.length - 1];
+  const tipoCodigo = parts[parts.length - 2];
+  
+  // Reconstruir microproceso si se separó por error (aunque usamos ' - ' que es específico)
+  const microproceso = parts.slice(1, parts.length - 2).join(' - ');
 
-  // 3. Validar Proyecto
+  // 4. Validar Proyecto
   if (proyecto !== 'HPC' && proyecto !== 'HSR') {
     result.errores.push(`El proyecto "${proyecto}" no es válido. Debe ser "HPC" o "HSR".`);
-  } else {
-    result.proyecto = proyecto as 'HPC' | 'HSR';
+  } else if (expectedProject && proyecto !== expectedProject) {
+    result.errores.push(`Inconsistencia: El archivo es del proyecto "${proyecto}" pero seleccionaste "${expectedProject}".`);
+  }
+  result.proyecto = proyecto as 'HPC' | 'HSR';
+
+  // 5. Validar Microproceso
+  if (!microproceso || microproceso.trim() === '') {
+    result.errores.push('El nombre del microproceso no puede estar vacío.');
+  } else if (expectedMicro && microproceso !== expectedMicro) {
+    result.errores.push(`Inconsistencia: El archivo indica microproceso "${microproceso}" pero seleccionaste "${expectedMicro}".`);
+  }
+  result.microproceso = microproceso;
+
+  // 6. Validar Tipo de Informe
+  // Mapeo de UI a Filename
+  // AS IS -> ASIS
+  // TO BE -> TOBE
+  // FCE -> FCE
+  // PM -> PM
+  const mapTypeToCode: Record<string, string> = {
+      'AS IS': 'ASIS',
+      'TO BE': 'TOBE',
+      'FCE': 'FCE',
+      'PM': 'PM'
+  };
+
+  // Validar si el código en el archivo es válido en general
+  const validCodes = Object.values(mapTypeToCode);
+  if (!validCodes.includes(tipoCodigo)) {
+      result.errores.push(`El tipo de informe "${tipoCodigo}" no es válido. Debe ser: ASIS, TOBE, FCE o PM.`);
   }
 
-  // 4. Separar Descripción y Nomenclatura
-  // La nomenclatura es la última palabra después del último espacio.
-  const lastSpaceIndex = resto.lastIndexOf(' ');
-  if (lastSpaceIndex === -1) {
-    result.errores.push('No se encuentra separación entre Descripción y Nomenclatura.');
-    return result;
+  // Validar consistencia si se espera un tipo específico
+  if (expectedType) {
+      const expectedCode = mapTypeToCode[expectedType];
+      if (tipoCodigo !== expectedCode) {
+          result.errores.push(`Inconsistencia: El archivo es de tipo "${tipoCodigo}" pero seleccionaste "${expectedType}" (se esperaba "${expectedCode}").`);
+      }
   }
+  result.tipo = tipoCodigo;
 
-  const descripcion = resto.substring(0, lastSpaceIndex).trim();
-  const nomenclatura = resto.substring(lastSpaceIndex + 1).trim();
-
-  if (descripcion.length === 0) {
-    result.errores.push('La descripción no puede estar vacía.');
-  }
-  
-  result.descripcion = descripcion;
-  result.nomenclatura = nomenclatura;
-
-  // 5. Analizar Nomenclatura (Regex logic)
+  // 7. Analizar Versión (Nomenclatura)
+  result.nomenclatura = version;
   let matchFound = false;
 
-  // Regla 1: Documento - 0.0 (Iniciado)
-  if (/^0\.0$/.test(nomenclatura)) {
+  // Regla 1: 0.0 (Iniciado)
+  if (/^0\.0$/.test(version)) {
     result.estado = 'Iniciado';
     result.porcentaje = 10;
-    result.explicacion = 'Versión inicial del documento. Primera versión creada.';
+    result.explicacion = 'Versión inicial.';
     matchFound = true;
   }
-  // Regla 2: Documento - 0.n (En proceso)
-  // n debe ser entero > 0 (ej: 0.1, 0.2, 0.15)
-  else if (/^0\.[1-9]\d*$/.test(nomenclatura)) {
+  // Regla 2: 0.n (En proceso)
+  else if (/^0\.[1-9]\d*$/.test(version)) {
     result.estado = 'En proceso';
     result.porcentaje = 30;
-    result.explicacion = '"n" entero. Progreso desde la versión inicial.';
     matchFound = true;
   }
-  // Regla 3: Documento - v0.n (En revisión interna)
-  else if (/^v0\.\d+$/.test(nomenclatura)) {
+  // Regla 3: v0.n (En revisión interna)
+  else if (/^v0\.\d+$/.test(version)) {
     result.estado = 'En revisión interna';
     result.porcentaje = 60;
-    const n = parseInt(nomenclatura.split('.')[1], 10);
-    const tipoRevision = n % 2 !== 0 ? ' (Analista)' : ' (Jefatura)';
-    result.explicacion = `Versión para aprobar por jefatura.${tipoRevision}. Impares analistas, pares jefatura.`;
     matchFound = true;
   }
-  // Regla 4: Documento - v1.n (Enviado a referente)
-  else if (/^v1\.\d+$/.test(nomenclatura)) {
+  // Regla 4: v1.n (Enviado a referente)
+  else if (/^v1\.\d+$/.test(version)) {
     result.estado = 'Enviado a Referente';
     result.porcentaje = 80;
-    result.explicacion = 'Primera versión formal. "n" iteraciones previas.';
     matchFound = true;
   }
-  // Regla 5: Documento - v1.n.i (Revisión con referentes)
-  // v1.{n}.{i}
-  else if (/^v1\.\d+\.\d+$/.test(nomenclatura)) {
+  // Regla 5: v1.n.i (Revisión con referentes)
+  else if (/^v1\.\d+\.\d+$/.test(version)) {
     result.estado = 'Revisión con referentes';
-    result.porcentaje = 80; // Mantenemos 80% según sugerencia
-    result.explicacion = '"i" entero para iteraciones internas (luego de observaciones del referente).';
+    result.porcentaje = 80;
     matchFound = true;
   }
-  // Regla 6: Documento - v1.nAR (Enviado a Control de Gestión)
-  else if (/^v1\.\d+AR$/.test(nomenclatura)) {
+  // Regla 6: v1.nAR (Enviado a Control de Gestión)
+  else if (/^v1\.\d+AR$/.test(version)) {
     result.estado = 'Enviado a Control de Gestión';
     result.porcentaje = 90;
-    result.explicacion = '"AR": Aprobado por Referente.';
     matchFound = true;
   }
-  // Regla 7: Documento - v1.n.iAR (Revisión con control de gestión)
-  else if (/^v1\.\d+\.\d+AR$/.test(nomenclatura)) {
+  // Regla 7: v1.n.iAR (Revisión con control de gestión)
+  else if (/^v1\.\d+\.\d+AR$/.test(version)) {
     result.estado = 'Revisión con Control de Gestión';
-    result.porcentaje = 90; // Mantenemos 90% según sugerencia
-    result.explicacion = '"i" entero para iteraciones internas luego de observaciones de CG.';
+    result.porcentaje = 90;
     matchFound = true;
   }
-  // Regla 8: Documento - v1.nACG (Aprobado Control Gestión)
-  else if (/^v1\.\d+ACG$/.test(nomenclatura)) {
+  // Regla 8: v1.nACG (Aprobado Control Gestión)
+  else if (/^v1\.\d+ACG$/.test(version)) {
     result.estado = 'Aprobado Control Gestión';
     result.porcentaje = 100;
-    result.explicacion = '"ACG": versión aprobada oficialmente.';
     matchFound = true;
   }
 
   if (!matchFound) {
-    result.errores.push(`La nomenclatura "${nomenclatura}" no es reconocida o no cumple con el formato estándar (ej: 0.0, 0.1, v0.1, v1.0, v1.0AR, etc).`);
+    result.errores.push(`La versión "${version}" no cumple el formato estándar (ej: 0.0, 0.1, v1.0).`);
   }
 
   // Resultado final
