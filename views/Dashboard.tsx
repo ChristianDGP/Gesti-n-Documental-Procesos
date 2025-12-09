@@ -1,10 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService } from '../services/mockBackend';
-import { Document, User, UserRole, DocState } from '../types';
+import { DocumentService, HierarchyService } from '../services/mockBackend';
+import { Document, User, UserRole, DocState, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight } from 'lucide-react';
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface DashboardProps {
@@ -13,6 +13,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
+  const [requiredMap, setRequiredMap] = useState<Record<string, DocType[]>>({});
   const [loading, setLoading] = useState(true);
 
   // Filter States
@@ -22,13 +23,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [filterState, setFilterState] = useState('');
 
   useEffect(() => {
-    loadDocs();
+    loadData();
   }, []);
 
-  const loadDocs = async () => {
+  const loadData = async () => {
     setLoading(true);
-    const data = await DocumentService.getAll();
+    const [data, reqs] = await Promise.all([
+        DocumentService.getAll(),
+        HierarchyService.getRequiredTypesMap()
+    ]);
     setDocs(data);
+    setRequiredMap(reqs);
     setLoading(false);
   };
 
@@ -36,7 +41,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     e.preventDefault(); // Prevent navigation
     if (!window.confirm('¿Eliminar este documento permanentemente?')) return;
     await DocumentService.delete(id);
-    await loadDocs();
+    await loadData();
+  };
+
+  // Helper to determine if a doc is strictly required
+  const isDocRequired = (doc: Document): boolean => {
+      const key = `${doc.project}|${doc.microprocess}`;
+      const requiredTypes = requiredMap[key];
+      if (!requiredTypes) return false; // Default to false if not found in matrix? Or based on load?
+      return doc.docType ? requiredTypes.includes(doc.docType) : false;
   };
 
   const getFilteredDocs = () => {
@@ -70,27 +83,50 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const filteredDocs = getFilteredDocs();
 
-  // Extract unique values for dropdowns based on available docs (Cascading optional, here flat for simplicity)
+  // Extract unique values for dropdowns based on available docs
   const uniqueProjects = Array.from(new Set(docs.map(d => d.project).filter(Boolean))) as string[];
   const uniqueMacros = Array.from(new Set(docs.filter(d => !filterProject || d.project === filterProject).map(d => d.macroprocess).filter(Boolean))) as string[];
   const uniqueProcesses = Array.from(new Set(docs.filter(d => !filterMacro || d.macroprocess === filterMacro).map(d => d.process).filter(Boolean))) as string[];
   
-  // Calculate Stats (Global for the user, unaffected by temporary filters)
+  // Calculate Stats based STRICTLY on REQUIRED Documents
   const baseDocs = user.role === UserRole.ANALYST ? 
     docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id))) : 
     docs;
+  
+  const reqDocs = baseDocs.filter(d => isDocRequired(d));
 
   const stats = {
-    total: baseDocs.length,
-    pending: baseDocs.filter(d => d.state === DocState.INTERNAL_REVIEW || d.state === DocState.SENT_TO_REFERENT || d.state === DocState.SENT_TO_CONTROL).length,
-    approved: baseDocs.filter(d => d.state === DocState.APPROVED).length,
-    inProcess: baseDocs.filter(d => d.state === DocState.IN_PROCESS || d.state === DocState.INITIATED).length
+    // 1. Documentos Requeridos: N° Total de documentos asignados (que existen y son requeridos)
+    totalRequired: reqDocs.length,
+
+    // 2. En Proceso: Iniciado + En Proceso + En revisión interna
+    inProcess: reqDocs.filter(d => 
+        d.state === DocState.INITIATED || 
+        d.state === DocState.IN_PROCESS || 
+        d.state === DocState.INTERNAL_REVIEW
+    ).length,
+
+    // 3. Referente: Enviado a referente + Revisión con referente
+    referent: reqDocs.filter(d => 
+        d.state === DocState.SENT_TO_REFERENT || 
+        d.state === DocState.REFERENT_REVIEW
+    ).length,
+
+    // 4. Control de Gestión: Enviado a control + Revisión con control
+    control: reqDocs.filter(d => 
+        d.state === DocState.SENT_TO_CONTROL || 
+        d.state === DocState.CONTROL_REVIEW
+    ).length,
+
+    // 5. Terminados: Aprobado
+    finished: reqDocs.filter(d => d.state === DocState.APPROVED).length
   };
 
   const chartData = [
-    { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' },
-    { name: 'Pendientes', value: stats.pending, color: '#eab308' },
-    { name: 'Aprobados', value: stats.approved, color: '#22c55e' },
+    { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' }, // blue-500
+    { name: 'Referente', value: stats.referent, color: '#a855f7' }, // purple-500
+    { name: 'Control Gestión', value: stats.control, color: '#f97316' }, // orange-500
+    { name: 'Terminados', value: stats.finished, color: '#22c55e' }, // green-500
   ].filter(d => d.value > 0);
 
   const clearFilters = () => {
@@ -127,12 +163,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Total Documentos" value={stats.total} icon={FileText} color="bg-slate-100 text-slate-600" />
-        <StatCard title="En Proceso" value={stats.inProcess} icon={Clock} color="bg-blue-100 text-blue-600" />
-        <StatCard title="Pendiente Aprobación" value={stats.pending} icon={AlertTriangle} color="bg-yellow-100 text-yellow-600" />
-        <StatCard title="Aprobados" value={stats.approved} icon={CheckCircle} color="bg-green-100 text-green-600" />
+      {/* Stats Cards - Updated to new Requirements */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <StatCard title="Doc. Requeridos" value={stats.totalRequired} icon={BookOpen} color="bg-slate-100 text-slate-600" />
+        <StatCard title="En Proceso" value={stats.inProcess} icon={Activity} color="bg-blue-100 text-blue-600" />
+        <StatCard title="Referente" value={stats.referent} icon={Users} color="bg-purple-100 text-purple-600" />
+        <StatCard title="Control Gestión" value={stats.control} icon={ShieldCheck} color="bg-orange-100 text-orange-600" />
+        <StatCard title="Terminados" value={stats.finished} icon={CheckCircle} color="bg-green-100 text-green-600" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -210,75 +247,87 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         {filteredDocs.length === 0 ? (
                             <tr><td colSpan={7} className="p-8 text-center text-slate-400">No se encontraron documentos con los filtros aplicados.</td></tr>
                         ) : (
-                            filteredDocs.map(doc => (
-                                <tr key={doc.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                                    {/* COL 1: PROYECTO */}
-                                    <td className="px-4 py-3 font-bold text-slate-700">
-                                        {doc.project}
-                                    </td>
+                            filteredDocs.map(doc => {
+                                const isRequired = isDocRequired(doc);
+                                const rowClass = isRequired 
+                                    ? "border-b border-slate-50 hover:bg-slate-50 transition-colors" 
+                                    : "border-b border-slate-50 bg-slate-100/50 text-slate-400 hover:bg-slate-100 transition-colors";
 
-                                    {/* COL 2: Jerarquía */}
-                                    <td className="px-4 py-3 text-xs text-slate-600">
-                                        <div className="font-medium text-slate-700">{doc.macroprocess}</div>
-                                        <div className="text-slate-500">{doc.process}</div>
-                                    </td>
-
-                                    {/* COL 3: MICROPROCESO */}
-                                    <td className="px-4 py-3 font-medium text-slate-800">
-                                        {doc.microprocess || doc.title}
-                                    </td>
-
-                                    {/* COL 4: Documento (Tipo + Link) */}
-                                    <td className="px-4 py-3">
-                                        <div className="flex flex-col items-start gap-1">
-                                            {doc.docType && (
-                                                <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-indigo-100">
-                                                    {doc.docType}
-                                                </span>
-                                            )}
-                                            <Link to={`/doc/${doc.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline flex items-center">
-                                                Ver Detalle <ArrowRight size={12} className="ml-1" />
-                                            </Link>
-                                        </div>
-                                    </td>
-
-                                    {/* COL 5: Estado Actual */}
-                                    <td className="px-4 py-3">
-                                        <div className="flex flex-col items-start gap-1">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>
-                                                {STATE_CONFIG[doc.state].label.split('(')[0]}
-                                            </span>
-                                            <span className="text-xs font-mono text-slate-500 ml-1">
-                                                Ver: {doc.version} ({doc.progress}%)
-                                            </span>
-                                        </div>
-                                    </td>
-
-                                    {/* COL 6: Última Actividad */}
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center text-slate-600 gap-1.5">
-                                            <Calendar size={14} className="text-slate-400" />
-                                            <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
-                                        </div>
-                                        <div className="text-xs text-slate-400 pl-5">
-                                            {new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </div>
-                                    </td>
-
-                                    {/* Admin Actions */}
-                                    {user.role === UserRole.ADMIN && (
-                                        <td className="px-4 py-3 text-right">
-                                            <button 
-                                                onClick={(e) => handleDeleteDoc(doc.id, e)}
-                                                className="text-slate-400 hover:text-red-600 transition-colors p-1"
-                                                title="Eliminar Documento"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
+                                return (
+                                    <tr key={doc.id} className={rowClass}>
+                                        {/* COL 1: PROYECTO */}
+                                        <td className="px-4 py-3 font-bold">
+                                            {doc.project}
                                         </td>
-                                    )}
-                                </tr>
-                            ))
+
+                                        {/* COL 2: Jerarquía */}
+                                        <td className="px-4 py-3 text-xs">
+                                            <div className="font-medium">{doc.macroprocess}</div>
+                                            <div>{doc.process}</div>
+                                        </td>
+
+                                        {/* COL 3: MICROPROCESO */}
+                                        <td className="px-4 py-3 font-medium">
+                                            {doc.microprocess || doc.title}
+                                            {!isRequired && <div className="text-[10px] text-slate-400 font-normal mt-0.5">(No Requerido)</div>}
+                                        </td>
+
+                                        {/* COL 4: Documento (Tipo + Link) */}
+                                        <td className="px-4 py-3">
+                                            <div className="flex flex-col items-start gap-1">
+                                                {doc.docType && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                                        isRequired 
+                                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-100' 
+                                                        : 'bg-slate-200 text-slate-500 border-slate-300'
+                                                    }`}>
+                                                        {doc.docType}
+                                                    </span>
+                                                )}
+                                                <Link to={`/doc/${doc.id}`} className={`text-sm flex items-center hover:underline ${isRequired ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-500 hover:text-slate-700'}`}>
+                                                    Ver Detalle <ArrowRight size={12} className="ml-1" />
+                                                </Link>
+                                            </div>
+                                        </td>
+
+                                        {/* COL 5: Estado Actual */}
+                                        <td className="px-4 py-3">
+                                            <div className="flex flex-col items-start gap-1">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${isRequired ? STATE_CONFIG[doc.state].color : 'bg-slate-200 text-slate-500'}`}>
+                                                    {STATE_CONFIG[doc.state].label.split('(')[0]}
+                                                </span>
+                                                <span className="text-xs font-mono ml-1">
+                                                    Ver: {doc.version} ({doc.progress}%)
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        {/* COL 6: Última Actividad */}
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-1.5">
+                                                <Calendar size={14} className={isRequired ? "text-slate-400" : "text-slate-300"} />
+                                                <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
+                                            </div>
+                                            <div className="text-xs pl-5 opacity-70">
+                                                {new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </td>
+
+                                        {/* Admin Actions */}
+                                        {user.role === UserRole.ADMIN && (
+                                            <td className="px-4 py-3 text-right">
+                                                <button 
+                                                    onClick={(e) => handleDeleteDoc(doc.id, e)}
+                                                    className="text-slate-400 hover:text-red-600 transition-colors p-1"
+                                                    title="Eliminar Documento"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })
                         )}
                     </tbody>
                 </table>
@@ -288,7 +337,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         {/* Chart Column (Takes up 1 column) */}
         <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center justify-center min-h-[300px]">
-                <h2 className="font-semibold text-slate-800 w-full mb-4 text-center">Distribución General</h2>
+                <h2 className="font-semibold text-slate-800 w-full mb-4 text-center">Distribución Requerida</h2>
                 {chartData.length > 0 ? (
                     <div className="w-full h-64">
                         <ResponsiveContainer width="100%" height="100%">
@@ -312,7 +361,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         </ResponsiveContainer>
                     </div>
                 ) : (
-                    <p className="text-slate-400">No hay suficientes datos.</p>
+                    <p className="text-slate-400">No hay datos requeridos.</p>
                 )}
             </div>
 
@@ -320,19 +369,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-100">
                 <h3 className="font-bold text-indigo-900 mb-2">Resumen</h3>
                 <p className="text-sm text-indigo-700 mb-4">
-                    Visualizando {filteredDocs.length} de {docs.length} documentos.
+                    Visualizando {filteredDocs.length} documentos totales.
                 </p>
-                <ul className="text-sm space-y-1 text-indigo-800">
-                    <li className="flex justify-between">
-                        <span>Filtrados:</span>
-                        <span className="font-bold">{filteredDocs.length}</span>
+                <ul className="text-sm space-y-2 text-indigo-800">
+                    <li className="flex justify-between border-b border-indigo-200 pb-1">
+                        <span>Total Requeridos:</span>
+                        <span className="font-bold">{stats.totalRequired}</span>
                     </li>
-                    {hasFilters && (
-                         <li className="flex justify-between pt-2 border-t border-indigo-200 mt-2">
-                            <span>Filtros activos:</span>
-                            <span>Si</span>
-                        </li>
-                    )}
+                    <li className="flex justify-between border-b border-indigo-200 pb-1">
+                        <span>Terminados:</span>
+                        <span className="font-bold text-green-600">{stats.finished}</span>
+                    </li>
+                    <li className="flex justify-between text-xs pt-1 opacity-80">
+                        <span>No Requeridos:</span>
+                        <span>{baseDocs.length - reqDocs.length}</span>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -342,13 +393,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 };
 
 const StatCard = ({ title, value, icon: Icon, color }: any) => (
-    <div className={`bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4`}>
-        <div className={`p-3 rounded-lg ${color}`}>
-            <Icon size={24} />
+    <div className={`bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-3`}>
+        <div className={`p-2 rounded-lg ${color}`}>
+            <Icon size={20} />
         </div>
         <div>
-            <p className="text-slate-500 text-xs font-medium uppercase">{title}</p>
-            <p className="text-2xl font-bold text-slate-900">{value}</p>
+            <p className="text-slate-500 text-[10px] font-bold uppercase leading-tight">{title}</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight">{value}</p>
         </div>
     </div>
 );

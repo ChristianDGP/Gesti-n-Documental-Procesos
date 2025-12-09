@@ -223,6 +223,11 @@ export const HierarchyService = {
     });
     return userTree;
   },
+  
+  // New method exposed for Dashboard
+  getRequiredTypesMap: async (): Promise<Record<string, DocType[]>> => {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES) || '{}');
+  },
 
   updateMatrixAssignment: async (matrixKey: string, newAssignees: string[], adminId: string) => {
     const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
