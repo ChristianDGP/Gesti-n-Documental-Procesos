@@ -1,12 +1,12 @@
 import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog, AnalystWorkload } from '../types';
-import { MOCK_USERS, STATE_CONFIG } from '../constants';
+import { MOCK_USERS, STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP } from '../constants';
 
 const STORAGE_KEYS = {
-  DOCS: 'sga_docs_v2026',
-  HISTORY: 'sga_history_v2026',
-  SESSION: 'sga_session_v2026',
-  USERS: 'sga_users_v2026',
-  ASSIGNMENTS: 'sga_assignments_v2026'
+  DOCS: 'sga_docs_v2026_b',
+  HISTORY: 'sga_history_v2026_b',
+  SESSION: 'sga_session_v2026_b',
+  USERS: 'sga_users_v2026_b',
+  ASSIGNMENTS: 'sga_assignments_v2026_b'
 };
 
 // Initialize LocalStorage with seed data if empty
@@ -16,27 +16,63 @@ const initializeStorage = () => {
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.DOCS)) {
-    // Start empty or with minimal seed if desired, but user asked to reset data.
-    // Let's create one example doc assigned to the first analyst for demonstration.
-    const firstAnalyst = MOCK_USERS.find(u => u.role === UserRole.ANALYST);
     const seedDocs: Document[] = [];
+    const adminUser = MOCK_USERS.find(u => u.role === UserRole.ADMIN)!;
     
-    if (firstAnalyst) {
+    // Process the INITIAL_DATA_LOAD matrix
+    // Format: [Project, Macro, Process, Micro, Names]
+    let counter = 1;
+    
+    INITIAL_DATA_LOAD.forEach(row => {
+        const [project, macro, process, micro, namesStr] = row;
+        
+        // Handle multiple assignees (e.g., "Andrea/Javiera")
+        const rawNames = namesStr.split('/');
+        const assigneeIds: string[] = [];
+        
+        rawNames.forEach(name => {
+            const cleanName = name.trim();
+            if (NAME_TO_ID_MAP[cleanName]) {
+                assigneeIds.push(NAME_TO_ID_MAP[cleanName]);
+            }
+        });
+
+        // Ensure at least one ID found, otherwise default to admin or skip
+        if (assigneeIds.length === 0) return;
+
+        // Create a "Ficha" or initial document for this process
+        const docId = `doc-init-${counter++}`;
+        const primaryAssignee = assigneeIds[0];
+        
+        // Find user object for primary assignee name display
+        const primaryUser = MOCK_USERS.find(u => u.id === primaryAssignee);
+
         seedDocs.push({
-            id: 'doc-seed-1',
-            title: 'Ejemplo Inicial',
-            description: 'Documento de demostración tras reinicio de sistema.',
-            authorId: firstAnalyst.id,
-            authorName: firstAnalyst.name,
-            assignedTo: firstAnalyst.id,
-            state: DocState.IN_PROCESS,
-            version: '0.1',
-            progress: 30,
+            id: docId,
+            title: `${project} - ${micro}`,
+            description: `Documentación matriz para microproceso: ${micro} (${process}).`,
+            
+            // Hierarchy Metadata
+            project: project,
+            macroprocess: macro,
+            process: process,
+            microprocess: micro,
+
+            authorId: adminUser.id,
+            authorName: adminUser.name,
+            
+            assignedTo: primaryAssignee, // Legacy support
+            assignees: assigneeIds,      // Multi-assignee support
+            assignedByName: 'Sistema',
+            
+            state: DocState.INITIATED,
+            version: '0.0',
+            progress: 10,
             files: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
-    }
+    });
 
     localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(seedDocs));
   }
@@ -189,6 +225,9 @@ export const DocumentService = {
     const state = initialState || DocState.INITIATED;
     const version = initialVersion || '0.0';
     const progress = initialProgress !== undefined ? initialProgress : 10;
+    
+    // Implicit assignment logic for Analyst creating their own doc
+    const assigneeIds = author.role === UserRole.ANALYST ? [author.id] : [];
 
     const newDoc: Document = {
       id: `doc-${Date.now()}`,
@@ -196,8 +235,8 @@ export const DocumentService = {
       description,
       authorId: author.id,
       authorName: author.name,
-      // If the author is an Analyst, they are implicitly assigned to their own doc initially
-      assignedTo: author.role === UserRole.ANALYST ? author.id : undefined,
+      assignedTo: assigneeIds[0], // Legacy
+      assignees: assigneeIds,
       state: state,
       version: version,
       progress: progress,
@@ -353,7 +392,8 @@ export const AssignmentService = {
   // Get all documents that don't have an assignee
   getUnassignedDocs: async (): Promise<Document[]> => {
     const docs = await DocumentService.getAll();
-    return docs.filter(d => !d.assignedTo && d.state !== DocState.APPROVED && d.state !== DocState.REJECTED);
+    // Check if assignees array is empty
+    return docs.filter(d => (!d.assignees || d.assignees.length === 0) && d.state !== DocState.APPROVED && d.state !== DocState.REJECTED);
   },
 
   // Get current workload for all analysts
@@ -364,8 +404,9 @@ export const AssignmentService = {
     const assignments = JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS) || '[]');
 
     return analysts.map(analyst => {
-      const activeDocs = docs.filter(d => d.assignedTo === analyst.id && d.state !== DocState.APPROVED && d.state !== DocState.REJECTED).length;
-      const completedDocs = docs.filter(d => d.assignedTo === analyst.id && d.state === DocState.APPROVED).length;
+      // Check if analyst ID is in the assignees list
+      const activeDocs = docs.filter(d => d.assignees && d.assignees.includes(analyst.id) && d.state !== DocState.APPROVED && d.state !== DocState.REJECTED).length;
+      const completedDocs = docs.filter(d => d.assignees && d.assignees.includes(analyst.id) && d.state === DocState.APPROVED).length;
       
       // Find last assignment date
       const lastAssign = assignments
@@ -393,8 +434,15 @@ export const AssignmentService = {
     
     if (!analyst) throw new Error('Analista no encontrado');
 
-    // Update Document
-    docs[docIndex].assignedTo = analystId;
+    // Update Document - Replace or Add? Assuming manual assignment via this method sets/overrides the primary
+    // For now, let's append if not exists
+    const currentAssignees = docs[docIndex].assignees || [];
+    if (!currentAssignees.includes(analystId)) {
+        currentAssignees.push(analystId);
+    }
+
+    docs[docIndex].assignedTo = analystId; // Update legacy pointer to newest
+    docs[docIndex].assignees = currentAssignees;
     docs[docIndex].assignedByName = admin?.name || 'Administrador';
     docs[docIndex].updatedAt = new Date().toISOString();
     

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DocumentService, HistoryService } from '../services/mockBackend';
+import { DocumentService, HistoryService, UserService } from '../services/mockBackend';
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -15,6 +15,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
   const [doc, setDoc] = useState<Document | null>(null);
   const [history, setHistory] = useState<DocHistory[]>([]);
+  const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -31,6 +32,15 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     ]);
     setDoc(d);
     setHistory(h);
+
+    if (d && d.assignees && d.assignees.length > 0) {
+        const allUsers = await UserService.getAll();
+        const names = d.assignees
+            .map(aid => allUsers.find(u => u.id === aid)?.name)
+            .filter(n => n) as string[];
+        setAssigneeNames(names);
+    }
+
     setLoading(false);
   };
 
@@ -98,12 +108,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const config = STATE_CONFIG[doc.state];
 
   // Permission Logic for Actions
-  const canUpload = user.role === UserRole.ANALYST && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
+  // Check if current user is one of the assignees or the author
+  const isAssignee = doc.assignees && doc.assignees.includes(user.id);
+  const isAuthor = doc.authorId === user.id;
+
+  const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
   
-  const canAdvance = user.role === UserRole.ANALYST && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
+  const canAdvance = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
   
   const canApprove = (
-      (user.role === UserRole.ANALYST && doc.state === DocState.IN_PROCESS) || // Send to Internal Review
+      (user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.IN_PROCESS) || // Send to Internal Review
       (user.role === UserRole.COORDINATOR && doc.state === DocState.INTERNAL_REVIEW) ||
       (user.role === UserRole.COORDINATOR && doc.state === DocState.SENT_TO_REFERENT) ||
       (user.role === UserRole.ADMIN && doc.state === DocState.SENT_TO_CONTROL)
@@ -124,6 +138,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
             <div>
+                <div className="flex items-center gap-2 mb-1">
+                    {doc.project && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-white">
+                            {doc.project}
+                        </span>
+                    )}
+                    {doc.microprocess && (
+                         <span className="text-xs text-slate-500 font-semibold uppercase">{doc.microprocess}</span>
+                    )}
+                </div>
                 <h1 className="text-2xl font-bold text-slate-900">{doc.title}</h1>
                 <p className="text-slate-500 mt-1">{doc.description}</p>
             </div>
@@ -133,10 +157,40 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             </div>
         </div>
 
+        {/* Process Hierarchy Metadata */}
+        {doc.macroprocess && (
+            <div className="mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div className="flex items-start gap-2">
+                    <Layers size={18} className="text-slate-400 mt-1" />
+                    <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold">Macroproceso</p>
+                        <p className="text-sm text-slate-700">{doc.macroprocess}</p>
+                    </div>
+                 </div>
+                 <div className="flex items-start gap-2">
+                    <Layers size={18} className="text-slate-400 mt-1" />
+                    <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold">Proceso</p>
+                        <p className="text-sm text-slate-700">{doc.process}</p>
+                    </div>
+                 </div>
+            </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border-t border-slate-100 pt-4">
             <div>
-                <p className="text-slate-500">Autor</p>
-                <p className="font-medium text-slate-800">{doc.authorName}</p>
+                <p className="text-slate-500">Analistas Asignados</p>
+                {assigneeNames.length > 0 ? (
+                    <div className="flex flex-col">
+                        {assigneeNames.map((name, i) => (
+                             <p key={i} className="font-medium text-slate-800 flex items-center gap-1">
+                                <Users size={12} className="text-slate-400" /> {name}
+                             </p>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="font-medium text-slate-800">{doc.authorName}</p>
+                )}
             </div>
             <div>
                 <p className="text-slate-500">Versión</p>

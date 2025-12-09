@@ -40,7 +40,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     
     // Role based base filtering
     if (user.role === UserRole.ANALYST) {
-      filtered = docs.filter(d => d.authorId === user.id);
+      // Show if author OR if assigned (support multi-assignee)
+      filtered = docs.filter(d => 
+        d.authorId === user.id || 
+        (d.assignees && d.assignees.includes(user.id)) ||
+        d.assignedTo === user.id
+      );
     }
     // Coordinator & Admin see all (Admin can edit all, Coordinator can see to approve)
 
@@ -65,7 +70,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const filteredDocs = getFilteredDocs();
 
   // Calculate Stats (Global, not filtered by selection)
-  const baseDocs = user.role === UserRole.ANALYST ? docs.filter(d => d.authorId === user.id) : docs;
+  const baseDocs = user.role === UserRole.ANALYST ? 
+    docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id))) : 
+    docs;
+
   const stats = {
     total: baseDocs.length,
     pending: baseDocs.filter(d => d.state === DocState.INTERNAL_REVIEW || d.state === DocState.SENT_TO_REFERENT || d.state === DocState.SENT_TO_CONTROL).length,
@@ -177,7 +185,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                         <Link to={`/doc/${doc.id}`} className="font-medium text-indigo-600 hover:text-indigo-800 block">
                                             {doc.title}
                                         </Link>
-                                        <span className="text-xs text-slate-400">{doc.authorName}</span>
+                                        <div className="text-xs text-slate-400 flex flex-col">
+                                            {doc.project && <span className="font-semibold text-slate-500">{doc.project} - {doc.microprocess}</span>}
+                                            <span>{doc.authorName}</span>
+                                        </div>
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>

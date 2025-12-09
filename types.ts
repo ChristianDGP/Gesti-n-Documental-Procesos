@@ -52,10 +52,20 @@ export interface Document {
   id: string;
   title: string;
   description: string;
+  
+  // Hierarchy Metadata
+  project?: string;
+  macroprocess?: string;
+  process?: string;
+  microprocess?: string;
+
   authorId: string;
   authorName: string;
-  assignedTo?: string; // ID of the Analyst assigned
+  
+  assignedTo?: string; // Legacy/Primary Display
+  assignees: string[]; // Multi-user assignment support
   assignedByName?: string; // Name of Admin who assigned
+  
   state: DocState;
   version: string;
   progress: number;
