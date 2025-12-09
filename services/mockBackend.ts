@@ -7,7 +7,8 @@ const STORAGE_KEYS = {
   HISTORY: 'sgd_history_v2026_g',
   SESSION: 'sgd_session_v2026_g',
   USERS: 'sgd_users_v2026_g',
-  ASSIGNMENTS: 'sgd_assignments_v2026_g'
+  ASSIGNMENTS: 'sgd_assignments_v2026_g',
+  MATRIX_OVERRIDES: 'sgd_matrix_overrides_v2026_g' // New key for persisting matrix changes
 };
 
 // ... (Helper functions determineStateFromVersion and mapCodeToDocType remain unchanged) ...
@@ -41,6 +42,7 @@ const initializeStorage = () => {
     const seedDocs: Document[] = [];
     const adminUser = MOCK_USERS.find(u => u.role === UserRole.ADMIN) || MOCK_USERS[0];
     
+    // 1. Build Base Hierarchy Index from INITIAL_DATA_LOAD
     const hierarchyIndex = new Map<string, { macro: string, process: string, assignees: string[] }>();
     INITIAL_DATA_LOAD.forEach(row => {
         if (!row || row.length < 5) return;
@@ -55,6 +57,7 @@ const initializeStorage = () => {
         hierarchyIndex.set(key, { macro, process, assignees: assigneeIds });
     });
 
+    // 2. Generate Documents from DOCUMENT_STATUS_LOAD
     DOCUMENT_STATUS_LOAD.forEach(row => {
         if (!row || row.length < 5) return;
         const [origId, project, micro, typeCode, version] = row;
@@ -99,6 +102,9 @@ const initializeStorage = () => {
   if (!localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS)) {
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify([]));
   }
+  if (!localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES)) {
+    localStorage.setItem(STORAGE_KEYS.MATRIX_OVERRIDES, JSON.stringify({}));
+  }
 };
 
 initializeStorage();
@@ -106,15 +112,41 @@ initializeStorage();
 export const HierarchyService = {
   getFullHierarchy: async (): Promise<FullHierarchy> => {
     const tree: FullHierarchy = {};
+    
+    // Load overrides
+    const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
+    
+    // 1. Aggregate Document Types per Microprocess from DOCUMENT_STATUS_LOAD
+    const docTypesMap = new Map<string, Set<DocType>>();
+    DOCUMENT_STATUS_LOAD.forEach(row => {
+         if (!row || row.length < 5) return;
+         const [_, project, micro, typeCode] = row;
+         const key = `${project}|${micro}`;
+         const type = mapCodeToDocType(typeCode);
+         if (type) {
+             if (!docTypesMap.has(key)) docTypesMap.set(key, new Set());
+             docTypesMap.get(key)?.add(type);
+         }
+    });
+
+    // 2. Build Tree
     INITIAL_DATA_LOAD.forEach(row => {
         if (!row || row.length < 5) return;
         const [project, macro, process, micro, namesStr] = row;
-        const rawNames = namesStr ? namesStr.split('/') : [];
-        const assigneeIds: string[] = [];
-        rawNames.forEach(name => {
-             const cleanName = name.trim();
-             if (NAME_TO_ID_MAP[cleanName]) assigneeIds.push(NAME_TO_ID_MAP[cleanName]);
-        });
+        
+        // Determine Assignees (Override > Initial)
+        const matrixKey = `${project}|${micro}`;
+        let assigneeIds: string[] = [];
+
+        if (overrides[matrixKey]) {
+            assigneeIds = overrides[matrixKey];
+        } else {
+            const rawNames = namesStr ? namesStr.split('/') : [];
+            rawNames.forEach(name => {
+                const cleanName = name.trim();
+                if (NAME_TO_ID_MAP[cleanName]) assigneeIds.push(NAME_TO_ID_MAP[cleanName]);
+            });
+        }
 
         if (!tree[project]) tree[project] = {};
         if (!tree[project][macro]) tree[project][macro] = {};
@@ -122,10 +154,12 @@ export const HierarchyService = {
 
         const existing = tree[project][macro][process].find(m => m.name === micro);
         if (!existing) {
+             const types = docTypesMap.get(matrixKey);
              tree[project][macro][process].push({
                 name: micro,
-                docId: `matrix-${project}-${micro}`,
-                assignees: assigneeIds
+                docId: matrixKey, // Using Key as ID for matrix updates
+                assignees: assigneeIds,
+                requiredTypes: types ? Array.from(types) : []
             });
         }
     });
@@ -133,32 +167,52 @@ export const HierarchyService = {
   },
 
   getUserHierarchy: async (userId: string): Promise<UserHierarchy> => {
-    const tree: UserHierarchy = {};
-    INITIAL_DATA_LOAD.forEach(row => {
-        if (!row || row.length < 5) return;
-        const [project, macro, process, micro, namesStr] = row;
-        const rawNames = namesStr ? namesStr.split('/') : [];
-        const assigneeIds: string[] = [];
-        rawNames.forEach(name => {
-             const cleanName = name.trim();
-             if (NAME_TO_ID_MAP[cleanName]) assigneeIds.push(NAME_TO_ID_MAP[cleanName]);
-        });
+    // Re-using logic to get full hierarchy first to respect overrides
+    const fullTree = await HierarchyService.getFullHierarchy();
+    const userTree: UserHierarchy = {};
 
-        if (assigneeIds.includes(userId)) {
-             if (!tree[project]) tree[project] = {};
-            if (!tree[project][macro]) tree[project][macro] = {};
-            if (!tree[project][macro][process]) tree[project][macro][process] = [];
-            if (!tree[project][macro][process].includes(micro)) {
-                tree[project][macro][process].push(micro);
-            }
-        }
+    Object.keys(fullTree).forEach(project => {
+        Object.keys(fullTree[project]).forEach(macro => {
+            Object.keys(fullTree[project][macro]).forEach(process => {
+                const microNodes = fullTree[project][macro][process];
+                microNodes.forEach(node => {
+                    if (node.assignees.includes(userId)) {
+                        if (!userTree[project]) userTree[project] = {};
+                        if (!userTree[project][macro]) userTree[project][macro] = {};
+                        if (!userTree[project][macro][process]) userTree[project][macro][process] = [];
+                        userTree[project][macro][process].push(node.name);
+                    }
+                });
+            });
+        });
     });
-    return tree;
+    return userTree;
   },
 
-  updateMatrixAssignment: async (docId: string, newAnalystId: string, adminId: string) => {
-    console.log(`Updated matrix: ${docId} -> ${newAnalystId}`);
-    return;
+  // Updates the "Responsible" list for a microprocess
+  updateMatrixAssignment: async (matrixKey: string, newAssignees: string[], adminId: string) => {
+    const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
+    overrides[matrixKey] = newAssignees;
+    localStorage.setItem(STORAGE_KEYS.MATRIX_OVERRIDES, JSON.stringify(overrides));
+    
+    // Also update actual documents in storage to reflect this change for consistency?
+    // In a real app, this would be a separate relational update.
+    // For this mock, we will update the 'assignees' field of existing docs matching this key.
+    const [project, micro] = matrixKey.split('|');
+    const docs = await DocumentService.getAll();
+    let updatedCount = 0;
+    
+    const updatedDocs = docs.map(d => {
+        if (d.project === project && d.microprocess === micro) {
+            updatedCount++;
+            return { ...d, assignees: newAssignees };
+        }
+        return d;
+    });
+
+    if (updatedCount > 0) {
+        localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(updatedDocs));
+    }
   }
 };
 

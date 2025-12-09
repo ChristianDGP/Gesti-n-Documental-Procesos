@@ -120,8 +120,9 @@ export interface UserHierarchy {
 
 export interface ProcessNode {
   name: string;
-  docId: string;
+  docId: string; // This acts as the matrix ID
   assignees: string[];
+  requiredTypes: DocType[]; // List of types defined in initial load
 }
 
 export interface FullHierarchy {
