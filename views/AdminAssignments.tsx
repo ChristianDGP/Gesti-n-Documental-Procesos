@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HierarchyService, UserService } from '../services/mockBackend';
 import { Document, User, UserRole } from '../types';
 import { 
-  Users, FolderTree, Plus, Search, ChevronRight, ChevronDown, UserPlus, X 
+  FolderTree, Search, ChevronRight, ChevronDown, UserPlus, X 
 } from 'lucide-react';
 
 interface Props {
@@ -105,12 +105,6 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                     className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
             </div>
-            {/* 
-                NOTE: The "New Assignment" logic typically implies creating a new process entry OR 
-                assigning someone to an existing one. Since the requirement says "option to make a new assignment",
-                we provide a button that could open a blank modal, but for UX clarity in this tree view, 
-                it's better to assign directly on the nodes. 
-            */}
         </div>
       </div>
 

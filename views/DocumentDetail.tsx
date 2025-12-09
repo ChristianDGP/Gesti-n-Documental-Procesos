@@ -62,10 +62,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     // Opcional: Confirmar carga con datos detectados
     const confirmar = window.confirm(
       `Archivo Validado Correctamente:\n` +
-      `Proyecto: ${analisis.proyecto}\n` +
-      `Nomenclatura: ${analisis.nomenclatura}\n` +
-      `Estado Detectado: ${analisis.estado}\n` +
-      `Progreso: ${analisis.porcentaje}%\n\n` +
+      `Proyecto: ${analisis.proyecto || 'Desconocido'}\n` +
+      `Nomenclatura: ${analisis.nomenclatura || 'Desconocida'}\n` +
+      `Estado Detectado: ${analisis.estado || 'Desconocido'}\n` +
+      `Progreso: ${analisis.porcentaje || 0}%\n\n` +
       `¿Desea subir este archivo?`
     );
 

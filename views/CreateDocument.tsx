@@ -22,7 +22,6 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedMicro, setSelectedMicro] = useState('');
 
   // File Upload State
-  // Initialize as undefined to match optional parameter signature in service
   const [file, setFile] = useState<File | undefined>(undefined);
   const [fileError, setFileError] = useState<string[]>([]);
   const [isFileValid, setIsFileValid] = useState(false);
