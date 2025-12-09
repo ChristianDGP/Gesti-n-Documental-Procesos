@@ -17,10 +17,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   // Hierarchy Selection State with Strict Typing
   const [userHierarchy, setUserHierarchy] = useState<UserHierarchy>({});
-  const [selectedProject, setSelectedProject] = useState('');
-  const [selectedMacro, setSelectedMacro] = useState('');
-  const [selectedProcess, setSelectedProcess] = useState('');
-  const [selectedMicro, setSelectedMicro] = useState('');
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [selectedMacro, setSelectedMacro] = useState<string>('');
+  const [selectedProcess, setSelectedProcess] = useState<string>('');
+  const [selectedMicro, setSelectedMicro] = useState<string>('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
 
   // File Upload State
@@ -45,6 +45,29 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       const hierarchy = await HierarchyService.getUserHierarchy(user.id);
       setUserHierarchy(hierarchy);
       setInitializing(false);
+  };
+
+  // Helper functions for safe extraction of hierarchy arrays
+  // These explicitly return string[] to prevent implicit any errors in .map()
+  const getProjects = (): string[] => {
+      return Object.keys(userHierarchy);
+  };
+
+  const getMacros = (): string[] => {
+      if (!selectedProject || !userHierarchy[selectedProject]) return [];
+      return Object.keys(userHierarchy[selectedProject]);
+  };
+
+  const getProcesses = (): string[] => {
+      if (!selectedProject || !selectedMacro || !userHierarchy[selectedProject]?.[selectedMacro]) return [];
+      return Object.keys(userHierarchy[selectedProject][selectedMacro]);
+  };
+
+  const getMicros = (): string[] => {
+      if (!selectedProject || !selectedMacro || !selectedProcess) return [];
+      const processes = userHierarchy[selectedProject]?.[selectedMacro];
+      if (!processes) return [];
+      return processes[selectedProcess] || [];
   };
 
   // Reset downstream selections when upstream changes
@@ -170,21 +193,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   if (initializing) return <div className="p-8 text-center text-slate-500">Cargando permisos...</div>;
 
-  // Helper to extract keys for dropdowns with strict checks
-  const projects: string[] = Object.keys(userHierarchy);
-  
-  const macros: string[] = (selectedProject && userHierarchy[selectedProject]) 
-    ? Object.keys(userHierarchy[selectedProject]) 
-    : [];
-    
-  const processes: string[] = (selectedMacro && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro]) 
-    ? Object.keys(userHierarchy[selectedProject][selectedMacro]) 
-    : [];
-    
-  const micros: string[] = (selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess])
-    ? userHierarchy[selectedProject][selectedMacro][selectedProcess] || []
-    : [];
-
+  const projects = getProjects();
+  const macros = getMacros();
+  const processes = getProcesses();
+  const micros = getMicros();
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
 
   return (

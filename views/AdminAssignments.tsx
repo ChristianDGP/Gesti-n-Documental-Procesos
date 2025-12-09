@@ -135,58 +135,62 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                                 </h3>
                                 
                                 <div className="pl-4 space-y-4">
-                                    {Object.keys(hierarchy[projectKey][macroKey]).map(processKey => (
-                                        <div key={processKey} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
-                                            <h4 className="text-sm font-semibold text-indigo-700 mb-2 border-b border-slate-100 pb-1">
-                                                {processKey}
-                                            </h4>
-                                            
-                                            <div className="grid grid-cols-1 gap-2">
-                                                {hierarchy[projectKey][macroKey][processKey].map((microObj: ProcessNode) => {
-                                                    const isVisible = !searchTerm || 
-                                                        matchesSearch(projectKey) || 
-                                                        matchesSearch(macroKey) || 
-                                                        matchesSearch(processKey) || 
-                                                        matchesSearch(microObj.name) ||
-                                                        microObj.assignees.some((aid: string) => {
-                                                            const u = allUsers.find(u => u.id === aid);
-                                                            return u && matchesSearch(u.name);
-                                                        });
+                                    {Object.keys(hierarchy[projectKey][macroKey]).map(processKey => {
+                                        const microprocesses: ProcessNode[] = hierarchy[projectKey][macroKey][processKey];
+                                        
+                                        return (
+                                            <div key={processKey} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                                                <h4 className="text-sm font-semibold text-indigo-700 mb-2 border-b border-slate-100 pb-1">
+                                                    {processKey}
+                                                </h4>
+                                                
+                                                <div className="grid grid-cols-1 gap-2">
+                                                    {microprocesses.map((microObj: ProcessNode) => {
+                                                        const isVisible = !searchTerm || 
+                                                            matchesSearch(projectKey) || 
+                                                            matchesSearch(macroKey) || 
+                                                            matchesSearch(processKey) || 
+                                                            matchesSearch(microObj.name) ||
+                                                            microObj.assignees.some((aid: string) => {
+                                                                const u = allUsers.find(u => u.id === aid);
+                                                                return u && matchesSearch(u.name);
+                                                            });
 
-                                                    if (!isVisible) return null;
+                                                        if (!isVisible) return null;
 
-                                                    return (
-                                                        <div key={microObj.docId} className="flex flex-col sm:flex-row sm:items-center justify-between text-sm p-2 hover:bg-slate-50 rounded group">
-                                                            <div className="flex-1">
-                                                                <span className="font-medium text-slate-800">{microObj.name}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3 mt-2 sm:mt-0">
-                                                                <div className="flex -space-x-2">
-                                                                    {microObj.assignees.length > 0 ? microObj.assignees.map((aid: string) => {
-                                                                        const u = allUsers.find(user => user.id === aid);
-                                                                        return u ? (
-                                                                            <div key={u.id} className="w-6 h-6 rounded-full border border-white bg-slate-200 overflow-hidden" title={u.name}>
-                                                                                <img src={u.avatar} className="w-full h-full object-cover" />
-                                                                            </div>
-                                                                        ) : null;
-                                                                    }) : (
-                                                                        <span className="text-xs text-red-400 italic">Sin asignar</span>
-                                                                    )}
+                                                        return (
+                                                            <div key={microObj.docId} className="flex flex-col sm:flex-row sm:items-center justify-between text-sm p-2 hover:bg-slate-50 rounded group">
+                                                                <div className="flex-1">
+                                                                    <span className="font-medium text-slate-800">{microObj.name}</span>
                                                                 </div>
-                                                                <button 
-                                                                    onClick={() => handleOpenAssign(projectKey, macroKey, processKey, microObj)}
-                                                                    className="text-xs bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded flex items-center gap-1 transition-colors"
-                                                                >
-                                                                    <UserPlus size={14} />
-                                                                    Asignar
-                                                                </button>
+                                                                <div className="flex items-center gap-3 mt-2 sm:mt-0">
+                                                                    <div className="flex -space-x-2">
+                                                                        {microObj.assignees.length > 0 ? microObj.assignees.map((aid: string) => {
+                                                                            const u = allUsers.find(user => user.id === aid);
+                                                                            return u ? (
+                                                                                <div key={u.id} className="w-6 h-6 rounded-full border border-white bg-slate-200 overflow-hidden" title={u.name}>
+                                                                                    <img src={u.avatar} className="w-full h-full object-cover" />
+                                                                                </div>
+                                                                            ) : null;
+                                                                        }) : (
+                                                                            <span className="text-xs text-red-400 italic">Sin asignar</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <button 
+                                                                        onClick={() => handleOpenAssign(projectKey, macroKey, processKey, microObj)}
+                                                                        className="text-xs bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                                                                    >
+                                                                        <UserPlus size={14} />
+                                                                        Asignar
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))}
