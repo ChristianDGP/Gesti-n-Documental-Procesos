@@ -3,11 +3,11 @@ import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog,
 import { MOCK_USERS, STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP, DOCUMENT_STATUS_LOAD } from '../constants';
 
 const STORAGE_KEYS = {
-  DOCS: 'sgd_docs_v2026_d',
-  HISTORY: 'sgd_history_v2026_d',
-  SESSION: 'sgd_session_v2026_d',
-  USERS: 'sgd_users_v2026_d',
-  ASSIGNMENTS: 'sgd_assignments_v2026_d'
+  DOCS: 'sgd_docs_v2026_e',
+  HISTORY: 'sgd_history_v2026_e',
+  SESSION: 'sgd_session_v2026_e',
+  USERS: 'sgd_users_v2026_e',
+  ASSIGNMENTS: 'sgd_assignments_v2026_e'
 };
 
 // ... (Helper functions determineStateFromVersion and mapCodeToDocType remain unchanged) ...
@@ -224,6 +224,7 @@ export const AuthService = {
 export const DocumentService = {
   getAll: async (): Promise<Document[]> => {
     const docs = JSON.parse(localStorage.getItem(STORAGE_KEYS.DOCS) || '[]');
+    // Sort by UpdatedAt Descending ensures Dashboard always shows the most recent interaction at top
     return docs.sort((a: Document, b: Document) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   },
   getById: async (id: string): Promise<Document | null> => {
@@ -235,11 +236,16 @@ export const DocumentService = {
     const version = initialVersion || '0.0';
     const progress = initialProgress !== undefined ? initialProgress : 10;
     const assigneeIds = author.role === UserRole.ANALYST ? [author.id] : [];
+    
+    // Determine if this creation counts as a submission (Request)
+    const isSubmission = state === DocState.INTERNAL_REVIEW || state === DocState.SENT_TO_REFERENT || state === DocState.SENT_TO_CONTROL;
+
     const newDoc: Document = {
       id: `doc-${Date.now()}`,
       title, description, authorId: author.id, authorName: author.name,
       assignedTo: assigneeIds[0], assignees: assigneeIds,
-      state: state, version: version, progress: progress, hasPendingRequest: false,
+      state: state, version: version, progress: progress, 
+      hasPendingRequest: isSubmission, // Auto-flag if state implies submission
       files: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
     };
@@ -270,8 +276,8 @@ export const DocumentService = {
     const docIndex = docs.findIndex(d => d.id === docId);
     if (docIndex === -1) throw new Error('Documento no encontrado');
     
-    // Auto-update metadata based on filename
-    // Extract version part from "Project - Micro - Type - Version.ext"
+    // CRITICAL UPDATE: Auto-update metadata based on filename IMMEDIATELY
+    // This allows "Initial Load" documents to evolve (e.g., from 0.0 to 0.1) just by uploading a file
     const parts = file.name.replace(/\.[^/.]+$/, "").split(' - ');
     if (parts.length >= 4) {
         const newVersion = parts[parts.length - 1];
@@ -280,6 +286,7 @@ export const DocumentService = {
             docs[docIndex].version = newVersion;
             docs[docIndex].state = state;
             docs[docIndex].progress = progress;
+            // Note: We do NOT set hasPendingRequest here yet. That happens on explicit "Request Approval" action.
         }
     }
 
@@ -298,7 +305,6 @@ export const DocumentService = {
     let newVersion = doc.version;
     let hasPending = doc.hasPendingRequest;
 
-    // Handle File Upload if provided during transition (Critical for Approvals/Rejections)
     if (file) {
         const newFile: DocFile = {
             id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
@@ -307,41 +313,32 @@ export const DocumentService = {
         doc.files.push(newFile);
     }
     
-    // If a custom version is provided (validated by UI), use it.
     if (customVersion) {
         newVersion = customVersion;
+        const { state: derivedState } = determineStateFromVersion(customVersion);
+        newState = derivedState; 
     }
 
     switch (action) {
       case 'REQUEST_APPROVAL':
         hasPending = true;
-        // Logic to satisfy requirement: "me refiere pasar del estado 'En proceso' a 'Revisión Interna'"
-        if (doc.state === DocState.IN_PROCESS) {
+        // Logic: Move from In Process (30%) or Initiated (10%) to Internal Review (60%)
+        if (doc.state === DocState.IN_PROCESS || doc.state === DocState.INITIATED || doc.state === DocState.REJECTED) {
              newState = DocState.INTERNAL_REVIEW;
-             // We generally trust the user uploaded the correct 'v0.n' file before requesting, 
-             // or checkVersionRules validated the current version string.
+             // Progress will be updated below based on STATE_CONFIG
         }
         break;
 
       case 'ADVANCE':
         hasPending = false;
         if (!customVersion) {
-            // Logic only if not file-driven
             if (doc.state === DocState.INITIATED) { newState = DocState.IN_PROCESS; newVersion = '0.1'; }
+            if (doc.state === DocState.REJECTED) { newState = DocState.IN_PROCESS; } // Restart
         }
         break;
 
       case 'APPROVE':
         hasPending = false;
-        if (doc.state === DocState.IN_PROCESS && user.role === UserRole.ANALYST) {
-           newState = DocState.INTERNAL_REVIEW;
-        } else if (doc.state === DocState.INTERNAL_REVIEW && user.role === UserRole.COORDINATOR) {
-           newState = DocState.SENT_TO_REFERENT;
-        } else if (doc.state === DocState.SENT_TO_REFERENT && user.role === UserRole.COORDINATOR) {
-            newState = DocState.SENT_TO_CONTROL;
-        } else if (doc.state === DocState.SENT_TO_CONTROL && user.role === UserRole.ADMIN) {
-            newState = DocState.APPROVED;
-        }
         break;
       
       case 'REJECT':
@@ -351,8 +348,7 @@ export const DocumentService = {
         break;
     }
 
-    // Recalculate progress based on new state or version logic
-    // If state didn't change (e.g. manual update), keep progress
+    // Recalculate progress based on new state config
     const progress = STATE_CONFIG[newState]?.progress || doc.progress;
 
     docs[docIndex] = {
