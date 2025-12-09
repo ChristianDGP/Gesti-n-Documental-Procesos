@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { DocumentService } from '../services/mockBackend';
 import { Document, User, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox } from 'lucide-react';
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface DashboardProps {
@@ -197,8 +197,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <table className="w-full text-sm text-left">
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                         <tr>
-                            <th className="px-4 py-3">Documento / Microproceso</th>
+                            <th className="px-4 py-3">PROYECTO</th>
                             <th className="px-4 py-3">Jerarquía (Macro / Proceso)</th>
+                            <th className="px-4 py-3">MICROPROCESO</th>
+                            <th className="px-4 py-3">Documento</th>
                             <th className="px-4 py-3">Estado Actual</th>
                             <th className="px-4 py-3">Última Actividad</th>
                             {user.role === UserRole.ADMIN && <th className="px-4 py-3 text-right">Admin</th>}
@@ -206,29 +208,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     </thead>
                     <tbody>
                         {filteredDocs.length === 0 ? (
-                            <tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron documentos con los filtros aplicados.</td></tr>
+                            <tr><td colSpan={7} className="p-8 text-center text-slate-400">No se encontraron documentos con los filtros aplicados.</td></tr>
                         ) : (
                             filteredDocs.map(doc => (
                                 <tr key={doc.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                    {/* COL 1: PROYECTO */}
+                                    <td className="px-4 py-3 font-bold text-slate-700">
+                                        {doc.project}
+                                    </td>
+
+                                    {/* COL 2: Jerarquía */}
+                                    <td className="px-4 py-3 text-xs text-slate-600">
+                                        <div className="font-medium text-slate-700">{doc.macroprocess}</div>
+                                        <div className="text-slate-500">{doc.process}</div>
+                                    </td>
+
+                                    {/* COL 3: MICROPROCESO */}
+                                    <td className="px-4 py-3 font-medium text-slate-800">
+                                        {doc.microprocess || doc.title}
+                                    </td>
+
+                                    {/* COL 4: Documento (Tipo + Link) */}
                                     <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
-                                                {doc.project}
-                                            </span>
+                                        <div className="flex flex-col items-start gap-1">
                                             {doc.docType && (
                                                 <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded border border-indigo-100">
                                                     {doc.docType}
                                                 </span>
                                             )}
+                                            <Link to={`/doc/${doc.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline flex items-center">
+                                                Ver Detalle <ArrowRight size={12} className="ml-1" />
+                                            </Link>
                                         </div>
-                                        <Link to={`/doc/${doc.id}`} className="font-medium text-indigo-600 hover:text-indigo-800 block">
-                                            {doc.microprocess || doc.title}
-                                        </Link>
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-slate-600">
-                                        <div className="font-medium text-slate-700">{doc.macroprocess}</div>
-                                        <div className="text-slate-500">{doc.process}</div>
-                                    </td>
+
+                                    {/* COL 5: Estado Actual */}
                                     <td className="px-4 py-3">
                                         <div className="flex flex-col items-start gap-1">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>
@@ -239,6 +253,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                             </span>
                                         </div>
                                     </td>
+
+                                    {/* COL 6: Última Actividad */}
                                     <td className="px-4 py-3">
                                         <div className="flex items-center text-slate-600 gap-1.5">
                                             <Calendar size={14} className="text-slate-400" />
@@ -248,6 +264,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                             {new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </div>
                                     </td>
+
+                                    {/* Admin Actions */}
                                     {user.role === UserRole.ADMIN && (
                                         <td className="px-4 py-3 text-right">
                                             <button 
