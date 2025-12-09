@@ -170,13 +170,20 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   if (initializing) return <div className="p-8 text-center text-slate-500">Cargando permisos...</div>;
 
-  // Helper to extract keys for dropdowns
-  const projects = Object.keys(userHierarchy);
-  const macros = selectedProject && userHierarchy[selectedProject] ? Object.keys(userHierarchy[selectedProject]) : [];
-  const processes = selectedMacro && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] 
-    ? Object.keys(userHierarchy[selectedProject][selectedMacro]) : [];
-  const micros: string[] = selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess]
-    ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] || []) : [];
+  // Helper to extract keys for dropdowns - EXPLICITLY TYPED
+  const projects: string[] = Object.keys(userHierarchy);
+  
+  const macros: string[] = (selectedProject && userHierarchy[selectedProject]) 
+    ? Object.keys(userHierarchy[selectedProject]) 
+    : [];
+    
+  const processes: string[] = (selectedMacro && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro]) 
+    ? Object.keys(userHierarchy[selectedProject][selectedMacro]) 
+    : [];
+    
+  const micros: string[] = (selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess])
+    ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] as string[]) || []
+    : [];
 
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
 
@@ -214,7 +221,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="">-- Seleccionar --</option>
-                                {projects.map(p => <option key={p} value={p}>{p}</option>)}
+                                {projects.map((p: string) => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
 
@@ -228,7 +235,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="">-- Seleccionar --</option>
-                                {macros.map(m => <option key={m} value={m}>{m}</option>)}
+                                {macros.map((m: string) => <option key={m} value={m}>{m}</option>)}
                             </select>
                         </div>
 
@@ -242,7 +249,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="">-- Seleccionar --</option>
-                                {processes.map(p => <option key={p} value={p}>{p}</option>)}
+                                {processes.map((p: string) => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
 
