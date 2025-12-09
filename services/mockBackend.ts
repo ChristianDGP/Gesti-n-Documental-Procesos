@@ -2,11 +2,11 @@ import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog,
 import { MOCK_USERS, STATE_CONFIG } from '../constants';
 
 const STORAGE_KEYS = {
-  DOCS: 'sga_docs',
-  HISTORY: 'sga_history',
-  SESSION: 'sga_session',
-  USERS: 'sga_users',
-  ASSIGNMENTS: 'sga_assignments'
+  DOCS: 'sga_docs_v2026',
+  HISTORY: 'sga_history_v2026',
+  SESSION: 'sga_session_v2026',
+  USERS: 'sga_users_v2026',
+  ASSIGNMENTS: 'sga_assignments_v2026'
 };
 
 // Initialize LocalStorage with seed data if empty
@@ -16,21 +16,28 @@ const initializeStorage = () => {
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.DOCS)) {
-    const seedDocs: Document[] = [
-      {
-        id: 'doc-1',
-        title: 'Presupuesto 2024',
-        description: 'Borrador inicial del presupuesto anual.',
-        authorId: 'u1',
-        authorName: 'Ana Analista',
-        state: DocState.IN_PROCESS,
-        version: '0.2',
-        progress: 30,
-        files: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ];
+    // Start empty or with minimal seed if desired, but user asked to reset data.
+    // Let's create one example doc assigned to the first analyst for demonstration.
+    const firstAnalyst = MOCK_USERS.find(u => u.role === UserRole.ANALYST);
+    const seedDocs: Document[] = [];
+    
+    if (firstAnalyst) {
+        seedDocs.push({
+            id: 'doc-seed-1',
+            title: 'Ejemplo Inicial',
+            description: 'Documento de demostración tras reinicio de sistema.',
+            authorId: firstAnalyst.id,
+            authorName: firstAnalyst.name,
+            assignedTo: firstAnalyst.id,
+            state: DocState.IN_PROCESS,
+            version: '0.1',
+            progress: 30,
+            files: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+    }
+
     localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(seedDocs));
   }
   if (!localStorage.getItem(STORAGE_KEYS.HISTORY)) {

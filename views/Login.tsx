@@ -41,8 +41,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       } else {
         const u = MOCK_USERS.find(user => user.role === userType);
         if (u) {
-            setUsername(u.email);
-            setPassword('123456');
+            setUsername(u.nickname || u.email);
+            setPassword(u.password || 'dgp2026');
         }
       }
       setError(null);
@@ -138,13 +138,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     onClick={() => fillCredentials('ANALYST')}
                     className="bg-white border border-slate-300 hover:border-indigo-400 hover:text-indigo-600 px-3 py-1.5 rounded-full transition-colors shadow-sm"
                 >
-                    Analista (Email / 123456)
-                </button>
-                <button 
-                    onClick={() => fillCredentials('COORDINATOR')}
-                    className="bg-white border border-slate-300 hover:border-indigo-400 hover:text-indigo-600 px-3 py-1.5 rounded-full transition-colors shadow-sm"
-                >
-                    Coordinador (Email / 123456)
+                    Analista (Procesos)
                 </button>
             </div>
         </div>

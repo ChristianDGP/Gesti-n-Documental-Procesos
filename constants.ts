@@ -16,33 +16,93 @@ export const STATE_CONFIG: Record<DocState, { label: string; color: string; prog
 // Mock Users for Simulation
 export const MOCK_USERS = [
   {
-    id: 'u1',
-    email: 'ana.analista@empresa.com',
-    name: 'Ana Analista',
-    nickname: 'ana',
-    role: UserRole.ANALYST,
-    avatar: 'https://picsum.photos/id/101/200/200',
-    organization: 'Finanzas',
-    password: '123456'
-  },
-  {
-    id: 'u2',
-    email: 'carlos.coordinador@empresa.com',
-    name: 'Carlos Coordinador',
-    nickname: 'carlos',
-    role: UserRole.COORDINATOR,
-    avatar: 'https://picsum.photos/id/102/200/200',
-    organization: 'Finanzas',
-    password: '123456'
-  },
-  {
-    id: 'u3',
+    id: 'admin',
     email: 'admin@empresa.com',
-    name: 'Admin General',
+    name: 'Administrador General',
     nickname: 'admin',
     role: UserRole.ADMIN,
-    avatar: 'https://picsum.photos/id/103/200/200',
-    organization: 'IT',
+    avatar: 'https://ui-avatars.com/api/?name=Admin&background=333&color=fff',
+    organization: 'Dirección',
     password: 'admin'
+  },
+  {
+    id: 'u-arebolledo',
+    email: 'arebolledo@empresa.com',
+    name: 'Alejandra Rebolledo',
+    nickname: 'arebolledo',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Alejandra+Rebolledo&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
+  },
+  {
+    id: 'u-aorellana',
+    email: 'aorellana@empresa.com',
+    name: 'Andrea Orellana',
+    nickname: 'aorellana',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Andrea+Orellana&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
+  },
+  {
+    id: 'u-bsiebold',
+    email: 'bsiebold@empresa.com',
+    name: 'Barbara Siebold',
+    nickname: 'bsiebold',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Barbara+Siebold&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
+  },
+  {
+    id: 'u-cvalenzuela',
+    email: 'cvalenzuela@empresa.com',
+    name: 'Carolina Valenzuela',
+    nickname: 'cvalenzuela',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Carolina+Valenzuela&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
+  },
+  {
+    id: 'u-caraya',
+    email: 'caraya@empresa.com',
+    name: 'Christian Araya',
+    nickname: 'caraya',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Christian+Araya&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
+  },
+  {
+    id: 'u-csalvo',
+    email: 'csalvo@empresa.com',
+    name: 'Christian Salvo',
+    nickname: 'csalvo',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Christian+Salvo&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
+  },
+  {
+    id: 'u-jcalquin',
+    email: 'jcalquin@empresa.com',
+    name: 'Javiera Calquin',
+    nickname: 'jcalquin',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Javiera+Calquin&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
+  },
+  {
+    id: 'u-mcofre',
+    email: 'mcofre@empresa.com',
+    name: 'Maximiliano Cofre',
+    nickname: 'mcofre',
+    role: UserRole.ANALYST,
+    avatar: 'https://ui-avatars.com/api/?name=Maximiliano+Cofre&background=random',
+    organization: 'Procesos',
+    password: 'dgp2026'
   }
 ];
