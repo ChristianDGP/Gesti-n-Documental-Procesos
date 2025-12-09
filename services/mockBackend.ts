@@ -269,6 +269,20 @@ export const DocumentService = {
     const docs = await DocumentService.getAll();
     const docIndex = docs.findIndex(d => d.id === docId);
     if (docIndex === -1) throw new Error('Documento no encontrado');
+    
+    // Auto-update metadata based on filename
+    // Extract version part from "Project - Micro - Type - Version.ext"
+    const parts = file.name.replace(/\.[^/.]+$/, "").split(' - ');
+    if (parts.length >= 4) {
+        const newVersion = parts[parts.length - 1];
+        if (newVersion) {
+            const { state, progress } = determineStateFromVersion(newVersion);
+            docs[docIndex].version = newVersion;
+            docs[docIndex].state = state;
+            docs[docIndex].progress = progress;
+        }
+    }
+
     docs[docIndex].files.push(newFile);
     docs[docIndex].updatedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(docs));
@@ -301,6 +315,12 @@ export const DocumentService = {
     switch (action) {
       case 'REQUEST_APPROVAL':
         hasPending = true;
+        // Logic to satisfy requirement: "me refiere pasar del estado 'En proceso' a 'Revisión Interna'"
+        if (doc.state === DocState.IN_PROCESS) {
+             newState = DocState.INTERNAL_REVIEW;
+             // We generally trust the user uploaded the correct 'v0.n' file before requesting, 
+             // or checkVersionRules validated the current version string.
+        }
         break;
 
       case 'ADVANCE':
