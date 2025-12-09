@@ -3,11 +3,11 @@ import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog,
 import { MOCK_USERS, STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP, DOCUMENT_STATUS_LOAD } from '../constants';
 
 const STORAGE_KEYS = {
-  DOCS: 'sgd_docs_v2026_e',
-  HISTORY: 'sgd_history_v2026_e',
-  SESSION: 'sgd_session_v2026_e',
-  USERS: 'sgd_users_v2026_e',
-  ASSIGNMENTS: 'sgd_assignments_v2026_e'
+  DOCS: 'sgd_docs_v2026_g',
+  HISTORY: 'sgd_history_v2026_g',
+  SESSION: 'sgd_session_v2026_g',
+  USERS: 'sgd_users_v2026_g',
+  ASSIGNMENTS: 'sgd_assignments_v2026_g'
 };
 
 // ... (Helper functions determineStateFromVersion and mapCodeToDocType remain unchanged) ...
@@ -238,6 +238,7 @@ export const DocumentService = {
     const assigneeIds = author.role === UserRole.ANALYST ? [author.id] : [];
     
     // Determine if this creation counts as a submission (Request)
+    // CRITICAL FIX: Ensure 'INTERNAL_REVIEW' etc. trigger this flag
     const isSubmission = state === DocState.INTERNAL_REVIEW || state === DocState.SENT_TO_REFERENT || state === DocState.SENT_TO_CONTROL;
 
     const newDoc: Document = {
@@ -276,8 +277,7 @@ export const DocumentService = {
     const docIndex = docs.findIndex(d => d.id === docId);
     if (docIndex === -1) throw new Error('Documento no encontrado');
     
-    // CRITICAL UPDATE: Auto-update metadata based on filename IMMEDIATELY
-    // This allows "Initial Load" documents to evolve (e.g., from 0.0 to 0.1) just by uploading a file
+    // Auto-update metadata based on filename IMMEDIATELY
     const parts = file.name.replace(/\.[^/.]+$/, "").split(' - ');
     if (parts.length >= 4) {
         const newVersion = parts[parts.length - 1];
@@ -286,7 +286,6 @@ export const DocumentService = {
             docs[docIndex].version = newVersion;
             docs[docIndex].state = state;
             docs[docIndex].progress = progress;
-            // Note: We do NOT set hasPendingRequest here yet. That happens on explicit "Request Approval" action.
         }
     }
 
@@ -313,10 +312,15 @@ export const DocumentService = {
         doc.files.push(newFile);
     }
     
+    // Explicit logic for version handling from Approve/Reject uploads
     if (customVersion) {
         newVersion = customVersion;
-        const { state: derivedState } = determineStateFromVersion(customVersion);
-        newState = derivedState; 
+        // If it's a rejection, we update version but state is FORCED to REJECTED below
+        // If it's an approval, we derive state from version here:
+        if (action === 'APPROVE') {
+            const { state: derivedState } = determineStateFromVersion(customVersion);
+            newState = derivedState;
+        }
     }
 
     switch (action) {
@@ -325,20 +329,23 @@ export const DocumentService = {
         // Logic: Move from In Process (30%) or Initiated (10%) to Internal Review (60%)
         if (doc.state === DocState.IN_PROCESS || doc.state === DocState.INITIATED || doc.state === DocState.REJECTED) {
              newState = DocState.INTERNAL_REVIEW;
-             // Progress will be updated below based on STATE_CONFIG
         }
         break;
 
       case 'ADVANCE':
         hasPending = false;
-        if (!customVersion) {
-            if (doc.state === DocState.INITIATED) { newState = DocState.IN_PROCESS; newVersion = '0.1'; }
-            if (doc.state === DocState.REJECTED) { newState = DocState.IN_PROCESS; } // Restart
-        }
+        if (doc.state === DocState.REJECTED) { newState = DocState.IN_PROCESS; } // Restart
         break;
 
       case 'APPROVE':
         hasPending = false;
+        // newState is already set via determineStateFromVersion above if file was provided
+        // If logic is purely manual without file change (fallback):
+        if (!customVersion) {
+             if (doc.state === DocState.INTERNAL_REVIEW) newState = DocState.SENT_TO_REFERENT;
+             else if (doc.state === DocState.SENT_TO_REFERENT) newState = DocState.SENT_TO_CONTROL;
+             else if (doc.state === DocState.SENT_TO_CONTROL) newState = DocState.APPROVED;
+        }
         break;
       
       case 'REJECT':

@@ -113,13 +113,13 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const mapParserStateToEnum = (parserState: string): DocState => {
       switch (parserState) {
           case 'Iniciado': return DocState.INITIATED;
-          case 'En proceso': return DocState.IN_PROCESS;
+          case 'En Proceso': return DocState.IN_PROCESS;
           case 'En revisión interna': return DocState.INTERNAL_REVIEW;
           case 'Enviado a Referente': return DocState.SENT_TO_REFERENT;
           case 'Revisión con referentes': return DocState.REFERENT_REVIEW;
           case 'Enviado a Control de Gestión': return DocState.SENT_TO_CONTROL;
           case 'Revisión con Control de Gestión': return DocState.CONTROL_REVIEW;
-          case 'Aprobado Control Gestión': return DocState.APPROVED;
+          case 'Aprobado': return DocState.APPROVED;
           default: return DocState.INITIATED;
       }
   };
@@ -193,10 +193,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   if (initializing) return <div className="p-8 text-center text-slate-500">Cargando permisos...</div>;
 
-  const projects = getProjects();
-  const macros = getMacros();
-  const processes = getProcesses();
-  const micros = getMicros();
+  const projects = getProjects() as string[];
+  const macros = getMacros() as string[];
+  const processes = getProcesses() as string[];
+  const micros = getMicros() as string[];
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
 
   return (
@@ -275,7 +275,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-900"
                             >
                                 <option value="">-- Seleccionar --</option>
-                                {(micros as string[]).map((m) => <option key={m} value={m}>{m}</option>)}
+                                {micros.map((m) => <option key={m} value={m}>{m}</option>)}
                             </select>
                         </div>
 

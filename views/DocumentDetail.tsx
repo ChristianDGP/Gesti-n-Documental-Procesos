@@ -79,12 +79,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       if (!doc) return;
 
       if (action === 'REQUEST_APPROVAL') {
-          // Analyst logic: Check CURRENT version compliance immediately
-          const validation = checkVersionRules(doc.version, '', 'REQUEST');
-          if (!validation.valid) {
-              alert(validation.error);
-              return;
-          }
           if (!window.confirm('¿Solicitar aprobación para la versión actual?')) return;
           executeTransition('REQUEST_APPROVAL', null, null);
           return;
@@ -123,7 +117,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
       const newVersion = analisis.nomenclatura || '';
 
-      // Business Logic Rule Check
+      // Check Rules
       const ruleCheck = checkVersionRules(doc.version, newVersion, pendingAction);
       if (!ruleCheck.valid) {
           alert(`Error de lógica de versiones para ${pendingAction}:\n\n${ruleCheck.error}`);
@@ -167,7 +161,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAuthor = doc.authorId === user.id;
 
   const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
-  const canAdvance = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
   
   // Logic updated: Request Approval checks nomenclature internally
   const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && 
