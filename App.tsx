@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -7,6 +8,7 @@ import CreateDocument from './views/CreateDocument';
 import DocumentDetail from './views/DocumentDetail';
 import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
+import Buffer from './views/Buffer';
 import { AuthService } from './services/mockBackend';
 import { User, UserRole } from './types';
 
@@ -51,6 +53,7 @@ const App: React.FC = () => {
               <Layout user={user} onLogout={handleLogout}>
                 <Routes>
                   <Route path="/" element={<Dashboard user={user} />} />
+                  <Route path="/inbox" element={<Buffer user={user} />} />
                   <Route path="/new" element={<CreateDocument user={user} />} />
                   <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
                   <Route 
@@ -59,7 +62,7 @@ const App: React.FC = () => {
                   />
                   <Route 
                     path="/admin/assignments" 
-                    element={user.role === UserRole.ADMIN ? <AdminAssignments user={user} /> : <Navigate to="/" />} 
+                    element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminAssignments user={user} /> : <Navigate to="/" />} 
                   />
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>

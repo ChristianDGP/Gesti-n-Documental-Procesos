@@ -137,6 +137,7 @@ const initializeStorage = () => {
             state: state,
             version: version,
             progress: progress,
+            hasPendingRequest: false, // Initial Load assumes no pending requests unless implied, but for buffer logic start false
             files: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -406,6 +407,7 @@ export const DocumentService = {
       state: state,
       version: version,
       progress: progress,
+      hasPendingRequest: false, // Default false
       files: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -473,7 +475,7 @@ export const DocumentService = {
     return newFile;
   },
 
-  transitionState: async (docId: string, user: User, action: 'ADVANCE' | 'REJECT' | 'APPROVE', comment: string): Promise<Document> => {
+  transitionState: async (docId: string, user: User, action: 'ADVANCE' | 'REJECT' | 'APPROVE' | 'REQUEST_APPROVAL', comment: string): Promise<Document> => {
     const docs = await DocumentService.getAll();
     const docIndex = docs.findIndex(d => d.id === docId);
     if (docIndex === -1) throw new Error('Documento no encontrado');
@@ -482,19 +484,31 @@ export const DocumentService = {
     const previousState = doc.state;
     let newState = doc.state;
     let newVersion = doc.version;
+    let hasPending = doc.hasPendingRequest;
     
     switch (action) {
+      case 'REQUEST_APPROVAL':
+        // Just flag for buffer
+        hasPending = true;
+        break;
+
       case 'ADVANCE':
+        hasPending = false; // Reset if they are just advancing version
         if (doc.state === DocState.INITIATED) {
            newState = DocState.IN_PROCESS;
            newVersion = '0.1';
         } else if (doc.state === DocState.IN_PROCESS) {
            const currentDecimal = parseInt(doc.version.split('.')[1]);
            newVersion = `0.${currentDecimal + 1}`;
+        } else if (doc.state === DocState.REJECTED) {
+           // Allow restart from rejected
+           newState = DocState.IN_PROCESS;
+           // Keep version but back in process
         }
         break;
 
       case 'APPROVE':
+        hasPending = false; // Cleared from buffer
         if (doc.state === DocState.IN_PROCESS && user.role === UserRole.ANALYST) {
            newState = DocState.INTERNAL_REVIEW;
            newVersion = `v${doc.version}`;
@@ -511,12 +525,9 @@ export const DocumentService = {
         break;
       
       case 'REJECT':
-        if (previousState === DocState.INTERNAL_REVIEW) {
-           newState = DocState.IN_PROCESS;
-           comment = `RECHAZADO: ${comment}`;
-        } else {
-           newState = DocState.REJECTED;
-        }
+        hasPending = false; // Cleared from buffer
+        newState = DocState.REJECTED;
+        comment = `RECHAZADO: ${comment}`;
         break;
     }
 
@@ -527,6 +538,7 @@ export const DocumentService = {
       state: newState,
       version: newVersion,
       progress: progress,
+      hasPendingRequest: hasPending,
       updatedAt: new Date().toISOString()
     };
 

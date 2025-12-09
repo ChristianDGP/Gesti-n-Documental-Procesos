@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService } from '../services/mockBa
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users, RotateCcw, Send } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -50,29 +50,22 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     const file = e.target.files[0];
 
     // --- INTEGRACIÓN: VALIDACIÓN DE NOMBRE DE ARCHIVO ---
-    // Usamos el parser con los datos del documento actual para validar consistencia
     const analisis = parseDocumentFilename(
         file.name,
         doc.project,
         doc.microprocess,
-        doc.docType // Si el documento ya tiene tipo asignado, lo validamos
+        doc.docType 
     );
 
     if (!analisis.valido) {
-      // Mostrar errores
       alert(`Error en nomenclatura de archivo:\n\n${analisis.errores.join('\n')}\n\nFormato requerido: PROYECTO - Microproceso - TIPO - Versión`);
-      // Limpiar input
       e.target.value = '';
       return;
     }
 
-    // Opcional: Confirmar carga con datos detectados
     const confirmar = window.confirm(
       `Archivo Validado Correctamente:\n` +
-      `Proyecto: ${analisis.proyecto || 'Desconocido'}\n` +
-      `Microproceso: ${analisis.microproceso || 'Desconocido'}\n` +
-      `Tipo: ${analisis.tipo || 'Desconocido'}\n` +
-      `Versión: ${analisis.nomenclatura || 'Desconocida'}\n\n` +
+      `Versión detectada: ${analisis.nomenclatura || 'Desconocida'}\n` +
       `¿Desea subir este archivo?`
     );
 
@@ -80,7 +73,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         e.target.value = '';
         return;
     }
-    // ----------------------------------------------------
     
     try {
       await DocumentService.uploadFile(doc.id, file, user);
@@ -90,9 +82,40 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     }
   };
 
-  const handleAction = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT') => {
+  const handleAction = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'REQUEST_APPROVAL') => {
     if (!doc) return;
-    // Basic validation: Require comment for rejections
+    
+    // --- VALIDATION FOR REQUEST APPROVAL ---
+    if (action === 'REQUEST_APPROVAL') {
+        const v = doc.version.trim();
+        let valid = false;
+        
+        // Logic for Analyst Requesting Approval based on nomenclature
+        // 1. Internal Review (v0.n)
+        if (doc.state === DocState.IN_PROCESS && /^v0\.\d+$/.test(v)) {
+            valid = true;
+        }
+        // 2. Referent Review (v1.n.i)
+        else if (doc.state === DocState.INTERNAL_REVIEW && /^v1\.\d+\.\d+$/.test(v)) {
+             valid = true;
+        }
+        // 3. Control Review (v1.n.iAR)
+        else if (doc.state === DocState.SENT_TO_REFERENT && /^v1\.\d+\.\d+AR$/.test(v)) {
+            valid = true;
+        }
+        // Special case: v1.0 directly from Internal? The rules say v1.n.i for Referent review.
+        // Let's stick to the prompt strictness or allow if it matches the target state nomenclature logic
+        
+        if (!valid) {
+             alert('No se puede solicitar aprobación: La versión actual del documento no cumple con la nomenclatura requerida para la siguiente etapa.\n\n' + 
+                   'Requerido:\n' +
+                   '- Para Revisión Interna: v0.n\n' +
+                   '- Para Revisión Referente: v1.n.i\n' +
+                   '- Para Control Gestión: v1.n.iAR');
+             return;
+        }
+    }
+
     if (action === 'REJECT' && !comment) {
         alert('Debes agregar una observación para rechazar.');
         return;
@@ -100,7 +123,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
     setActionLoading(true);
     try {
-        await DocumentService.transitionState(doc.id, user, action, comment || 'Cambio de estado');
+        await DocumentService.transitionState(doc.id, user, action, comment || (action === 'REQUEST_APPROVAL' ? 'Solicitud de Aprobación Enviada' : 'Cambio de estado'));
         setComment('');
         await loadData(doc.id);
     } catch (err: any) {
@@ -114,25 +137,30 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const config = STATE_CONFIG[doc.state];
 
-  // Permission Logic for Actions
-  // Check if current user is one of the assignees or the author
+  // Permission Logic
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
 
-  const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
+  const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
   
   const canAdvance = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS);
   
+  // New Logic: Request Approval Button
+  // Only Analyst can request, only if NOT already requested, and in valid states to move up
+  const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && 
+    (doc.state === DocState.IN_PROCESS || doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT);
+
+  const canRestart = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.REJECTED;
+  
+  // Approver logic (Coordinator / Admin)
   const canApprove = (
-      (user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.IN_PROCESS) || // Send to Internal Review
-      (user.role === UserRole.COORDINATOR && doc.state === DocState.INTERNAL_REVIEW) ||
-      (user.role === UserRole.COORDINATOR && doc.state === DocState.SENT_TO_REFERENT) ||
-      (user.role === UserRole.ADMIN && doc.state === DocState.SENT_TO_CONTROL)
+      (user.role === UserRole.COORDINATOR && doc.hasPendingRequest && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) ||
+      (user.role === UserRole.ADMIN && doc.hasPendingRequest && doc.state === DocState.SENT_TO_CONTROL)
   );
 
   const canReject = (
-      (user.role === UserRole.COORDINATOR && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) ||
-      (user.role === UserRole.ADMIN && doc.state === DocState.SENT_TO_CONTROL)
+      (user.role === UserRole.COORDINATOR && doc.hasPendingRequest && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) ||
+      (user.role === UserRole.ADMIN && doc.hasPendingRequest && doc.state === DocState.SENT_TO_CONTROL)
   );
 
   return (
@@ -154,6 +182,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     {doc.docType && (
                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">
                             {doc.docType}
+                        </span>
+                    )}
+                    {doc.hasPendingRequest && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-500 text-white animate-pulse">
+                            Solicitud Pendiente
                         </span>
                     )}
                 </div>
@@ -209,7 +242,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 )}
             </div>
             <div>
-                <p className="text-slate-500">Versión</p>
+                <p className="text-slate-500">Versión Actual</p>
                 <p className="font-mono text-slate-800">{doc.version}</p>
             </div>
             <div>
@@ -273,16 +306,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 <span className="text-xs text-slate-400 mt-1">Nomenclatura requerida (Max 55 caracteres)</span>
                             </div>
                         </label>
-                        
-                        {/* Info Tooltip about Nomenclature */}
-                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex gap-2">
-                             <Info size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-                             <div className="text-xs text-blue-800">
-                                 <p className="font-semibold mb-1">Formato obligatorio:</p>
-                                 <code>PROY - Microproceso - TIPO - Versión</code>
-                                 <p className="mt-1 text-blue-600">Ej: <b>HPC - Gestión de Proyectos - ASIS - v1.0.docx</b></p>
-                             </div>
-                        </div>
                     </div>
                 )}
             </div>
@@ -307,7 +330,29 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition-colors"
                         >
                             <ChevronRight size={16} className="mr-2" />
-                            Avanzar Versión (0.n)
+                            Actualizar Versión (Trabajo en curso)
+                        </button>
+                    )}
+
+                    {canRequestApproval && (
+                         <button 
+                            onClick={() => handleAction('REQUEST_APPROVAL')}
+                            disabled={actionLoading}
+                            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors shadow-sm"
+                        >
+                            <Send size={16} className="mr-2" />
+                            Solicitar Aprobación
+                        </button>
+                    )}
+                    
+                    {canRestart && (
+                         <button 
+                            onClick={() => handleAction('ADVANCE')}
+                            disabled={actionLoading}
+                            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors shadow-sm"
+                        >
+                            <RotateCcw size={16} className="mr-2" />
+                            Corregir / Reiniciar Flujo
                         </button>
                     )}
 
@@ -318,7 +363,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-colors"
                         >
                             <CheckCircle size={16} className="mr-2" />
-                            {user.role === UserRole.ANALYST ? 'Enviar a Revisión' : 'Aprobar y Avanzar'}
+                            Aprobar Solicitud
                         </button>
                     )}
 
@@ -329,12 +374,15 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors border border-red-200"
                         >
                             <XCircle size={16} className="mr-2" />
-                            Rechazar / Observar
+                            Rechazar Solicitud
                         </button>
                     )}
 
-                    {!canAdvance && !canApprove && !canReject && doc.state !== DocState.APPROVED && (
-                        <p className="text-sm text-slate-500 italic">No hay acciones disponibles para tu rol en este estado.</p>
+                    {!canAdvance && !canApprove && !canReject && !canRestart && !canRequestApproval && doc.state !== DocState.APPROVED && (
+                        <div className="p-3 bg-yellow-50 text-yellow-800 rounded border border-yellow-200 text-sm flex gap-2">
+                             <Info size={16} />
+                             <span>Esperando acción de otro rol o solicitud pendiente.</span>
+                        </div>
                     )}
                     
                     {doc.state === DocState.APPROVED && (

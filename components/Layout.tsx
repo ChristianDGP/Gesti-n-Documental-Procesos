@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface LayoutProps {
@@ -51,13 +52,18 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
           <nav className="flex-1 px-4 py-6 space-y-2">
             <NavItem to="/" icon={BarChart2} label="Dashboard" />
+            <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" />
             <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
             
-            {/* Admin Links */}
+            {/* Assignments for Coordinator and Admin */}
+            {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
+                 <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
+            )}
+            
+            {/* Admin Only */}
             {user.role === UserRole.ADMIN && (
               <>
                 <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Administración</div>
-                <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
                 <NavItem to="/admin/users" icon={Users} label="Usuarios" />
               </>
             )}

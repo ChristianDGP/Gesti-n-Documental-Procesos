@@ -73,6 +73,8 @@ export interface Document {
   state: DocState;
   version: string;
   progress: number;
+  hasPendingRequest?: boolean; // Flag for Buffer visibility
+
   files: DocFile[];
   createdAt: string;
   updatedAt: string;
