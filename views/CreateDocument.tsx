@@ -256,7 +256,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 className="w-full p-2.5 border border-slate-300 rounded-lg bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-900"
                             >
                                 <option value="">-- Seleccionar --</option>
-                                {micros.map(m => <option key={m} value={m}>{m}</option>)}
+                                {micros.map((m: string) => <option key={m} value={m}>{m}</option>)}
                             </select>
                         </div>
 
