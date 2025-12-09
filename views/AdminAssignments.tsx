@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { HierarchyService, UserService } from '../services/mockBackend';
-import { Document, User, UserRole } from '../types';
+import { Document, User, UserRole, FullHierarchy, ProcessNode } from '../types';
 import { 
   FolderTree, Search, ChevronRight, ChevronDown, UserPlus, X 
 } from 'lucide-react';
@@ -10,7 +11,7 @@ interface Props {
 }
 
 const AdminAssignments: React.FC<Props> = ({ user }) => {
-  const [hierarchy, setHierarchy] = useState<any>({});
+  const [hierarchy, setHierarchy] = useState<FullHierarchy>({});
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,7 +46,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   };
 
   const handleOpenAssign = (
-      proj?: string, macro?: string, proc?: string, microObj?: any
+      proj?: string, macro?: string, proc?: string, microObj?: ProcessNode
   ) => {
       setModalProject(proj || '');
       setModalMacro(macro || '');
@@ -141,7 +142,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                                             </h4>
                                             
                                             <div className="grid grid-cols-1 gap-2">
-                                                {hierarchy[projectKey][macroKey][processKey].map((microObj: any) => {
+                                                {hierarchy[projectKey][macroKey][processKey].map((microObj: ProcessNode) => {
                                                     const isVisible = !searchTerm || 
                                                         matchesSearch(projectKey) || 
                                                         matchesSearch(macroKey) || 

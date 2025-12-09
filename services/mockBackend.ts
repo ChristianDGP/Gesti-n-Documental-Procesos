@@ -1,5 +1,5 @@
 
-import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog, AnalystWorkload, DocType } from '../types';
+import { User, Document, DocState, DocHistory, UserRole, DocFile, AssignmentLog, AnalystWorkload, DocType, UserHierarchy, FullHierarchy, ProcessNode } from '../types';
 import { MOCK_USERS, STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP, DOCUMENT_STATUS_LOAD } from '../constants';
 
 const STORAGE_KEYS = {
@@ -163,13 +163,13 @@ export const HierarchyService = {
    * Returns the full hierarchy tree based on current documents (which represent the matrix).
    * Structure: Project -> Macro -> Process -> Micro -> Assignees
    */
-  getFullHierarchy: async () => {
+  getFullHierarchy: async (): Promise<FullHierarchy> => {
     // We need to look at INITIAL_DATA_LOAD for the structure source of truth, 
     // because docs might not exist for every process yet if we only load from DOCS.
     // However, the previous implementation used docs. Let's merge both concepts.
     // For the matrix view, we want to see the THEORETICAL matrix.
     
-    const tree: any = {};
+    const tree: FullHierarchy = {};
 
     INITIAL_DATA_LOAD.forEach(row => {
         if (!row || row.length < 5) return;
@@ -187,7 +187,7 @@ export const HierarchyService = {
         if (!tree[project][macro][process]) tree[project][macro][process] = [];
 
         // Check duplicates
-        const existing = tree[project][macro][process].find((m: any) => m.name === micro);
+        const existing = tree[project][macro][process].find(m => m.name === micro);
         if (!existing) {
              // We need a docId for the "Assign" button to work in the UI. 
              // We can find an existing doc for this micro or make a dummy ID if none exists yet.
@@ -207,9 +207,9 @@ export const HierarchyService = {
    * Returns a hierarchy tree filtered by the user's assignments.
    * Used for "New Document" selectors.
    */
-  getUserHierarchy: async (userId: string) => {
+  getUserHierarchy: async (userId: string): Promise<UserHierarchy> => {
     // This should strictly return what the user is assigned to in INITIAL_DATA_LOAD
-    const tree: any = {};
+    const tree: UserHierarchy = {};
 
     INITIAL_DATA_LOAD.forEach(row => {
         if (!row || row.length < 5) return;

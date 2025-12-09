@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/mockBackend';
-import { User, DocState, DocType } from '../types';
+import { User, DocState, DocType, UserHierarchy } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
 import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType } from 'lucide-react';
 
@@ -15,8 +15,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
 
-  // Hierarchy Selection State
-  const [userHierarchy, setUserHierarchy] = useState<any>({});
+  // Hierarchy Selection State with Strict Typing
+  const [userHierarchy, setUserHierarchy] = useState<UserHierarchy>({});
   const [selectedProject, setSelectedProject] = useState('');
   const [selectedMacro, setSelectedMacro] = useState('');
   const [selectedProcess, setSelectedProcess] = useState('');
@@ -170,7 +170,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   if (initializing) return <div className="p-8 text-center text-slate-500">Cargando permisos...</div>;
 
-  // Helper to extract keys for dropdowns - EXPLICITLY TYPED
+  // Helper to extract keys for dropdowns with strict checks
   const projects: string[] = Object.keys(userHierarchy);
   
   const macros: string[] = (selectedProject && userHierarchy[selectedProject]) 
@@ -182,7 +182,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
     : [];
     
   const micros: string[] = (selectedProcess && userHierarchy[selectedProject] && userHierarchy[selectedProject][selectedMacro] && userHierarchy[selectedProject][selectedMacro][selectedProcess])
-    ? (userHierarchy[selectedProject][selectedMacro][selectedProcess] as string[]) || []
+    ? userHierarchy[selectedProject][selectedMacro][selectedProcess] || []
     : [];
 
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];

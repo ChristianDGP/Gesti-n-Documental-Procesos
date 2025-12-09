@@ -109,6 +109,29 @@ export interface ParsedFilenameResult {
   errores: string[];
 }
 
+// Hierarchy Types for strict typing
+export interface UserHierarchy {
+  [project: string]: {
+    [macro: string]: {
+      [process: string]: string[]; // Array of microprocess names
+    };
+  };
+}
+
+export interface ProcessNode {
+  name: string;
+  docId: string;
+  assignees: string[];
+}
+
+export interface FullHierarchy {
+  [project: string]: {
+    [macro: string]: {
+      [process: string]: ProcessNode[]; // Array of nodes with metadata
+    };
+  };
+}
+
 // Response for mock API
 export interface ApiResponse<T> {
   success: boolean;
