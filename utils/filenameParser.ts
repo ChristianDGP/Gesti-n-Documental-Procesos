@@ -21,9 +21,9 @@ export const parseDocumentFilename = (
   const lastDotIndex = fullFilename.lastIndexOf('.');
   const filenameBase = lastDotIndex !== -1 ? fullFilename.substring(0, lastDotIndex) : fullFilename;
   
-  // 2. Validar longitud máxima (55 caracteres)
-  if (filenameBase.length > 55) {
-    result.errores.push(`El nombre del archivo excede 55 caracteres.`);
+  // 2. Validar longitud máxima (80 caracteres)
+  if (filenameBase.length > 80) {
+    result.errores.push(`El nombre del archivo excede 80 caracteres.`);
   }
 
   // 3. Validar Estructura General
