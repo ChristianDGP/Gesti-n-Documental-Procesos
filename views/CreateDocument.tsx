@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/mockBackend';
 import { User, DocState, DocType, UserHierarchy } from '../types';
@@ -27,6 +27,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [file, setFile] = useState<File | undefined>(undefined);
   const [fileError, setFileError] = useState<string[]>([]);
   const [isFileValid, setIsFileValid] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -108,6 +109,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       setIsFileValid(false);
       setTitle('');
       setDescription('');
+      // Critical: Clear the input value so selecting the same file again triggers onChange
+      if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+      }
   };
 
   const mapParserStateToEnum = (parserState: string): DocState => {
@@ -339,6 +344,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                             
                             <input 
                                 type="file" 
+                                ref={fileInputRef}
                                 onChange={handleFileSelect}
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             />

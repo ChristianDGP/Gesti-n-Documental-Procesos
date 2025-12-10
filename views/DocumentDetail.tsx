@@ -72,6 +72,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       await DocumentService.uploadFile(doc.id, file, user);
       await loadData(doc.id);
     } catch (err: any) { alert(err.message); }
+    finally {
+        e.target.value = '';
+    }
   };
 
   // 2. Action Trigger (Check prerequisites)
