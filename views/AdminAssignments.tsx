@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { HierarchyService, UserService } from '../services/mockBackend';
 import { User, UserRole, FullHierarchy, ProcessNode, DocType } from '../types';
 import { 
-  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Trash2, FileText, CheckSquare, Square, Save, Layers
+  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Trash2, FileText, CheckSquare, Square, Save, Layers, Filter
 } from 'lucide-react';
 
 interface Props {
@@ -14,7 +14,14 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [hierarchy, setHierarchy] = useState<FullHierarchy>({});
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filters State
+  const [filterProject, setFilterProject] = useState('');
+  const [filterMacro, setFilterMacro] = useState('');
+  const [filterProcess, setFilterProcess] = useState('');
+  const [filterMicro, setFilterMicro] = useState(''); // Text Search
+  const [filterAnalyst, setFilterAnalyst] = useState('');
+
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({ 'HPC': true, 'HSR': true });
 
   // Edit Assignment Modal State
@@ -52,6 +59,16 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
   const toggleProject = (proj: string) => {
     setExpandedProjects(prev => ({ ...prev, [proj]: !prev[proj] }));
+  };
+
+  const handleDelete = async (project: string, micro: string) => {
+      if(!window.confirm(`¿Estás seguro de que deseas eliminar el microproceso "${micro}" de la matriz?\nEsta acción es irreversible en esta vista.`)) return;
+      try {
+          await HierarchyService.deleteMicroprocess(project, micro);
+          await loadData();
+      } catch (e: any) {
+          alert(e.message);
+      }
   };
 
   // --- Handlers for EDIT Modal ---
@@ -152,24 +169,55 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const getCreateMacros = () => newProject && hierarchy[newProject] ? Object.keys(hierarchy[newProject]) : [];
   const getCreateProcesses = () => newProject && newMacro && hierarchy[newProject]?.[newMacro] ? Object.keys(hierarchy[newProject][newMacro]) : [];
 
+  // --- Filters Helpers ---
+  const getAvailableMacros = () => {
+      const macros = new Set<string>();
+      Object.keys(hierarchy).forEach(proj => {
+          if (filterProject && proj !== filterProject) return;
+          Object.keys(hierarchy[proj]).forEach(m => macros.add(m));
+      });
+      return Array.from(macros).sort();
+  };
+
+  const getAvailableProcesses = () => {
+      const processes = new Set<string>();
+      Object.keys(hierarchy).forEach(proj => {
+          if (filterProject && proj !== filterProject) return;
+          Object.keys(hierarchy[proj]).forEach(m => {
+              if (filterMacro && m !== filterMacro) return;
+              Object.keys(hierarchy[proj][m]).forEach(p => processes.add(p));
+          });
+      });
+      return Array.from(processes).sort();
+  };
+
+  const clearFilters = () => {
+      setFilterProject('');
+      setFilterMacro('');
+      setFilterProcess('');
+      setFilterMicro('');
+      setFilterAnalyst('');
+  };
+
   // Flattened Data for Table View within Project
   const getFlattenedRows = (project: string) => {
       const rows: any[] = [];
       const macros = hierarchy[project] || {};
       
       Object.keys(macros).forEach(macro => {
+          if (filterMacro && macro !== filterMacro) return;
+          
           Object.keys(macros[macro]).forEach(proc => {
+              if (filterProcess && proc !== filterProcess) return;
+
               const nodes = macros[macro][proc];
               nodes.forEach(node => {
-                  if (searchTerm) {
-                      const searchLower = searchTerm.toLowerCase();
-                      const match = 
-                        macro.toLowerCase().includes(searchLower) ||
-                        proc.toLowerCase().includes(searchLower) ||
-                        node.name.toLowerCase().includes(searchLower) ||
-                        node.assignees.some(aid => allUsers.find(u => u.id === aid)?.name.toLowerCase().includes(searchLower));
-                      if (!match) return;
-                  }
+                  // Text Search for Microprocess
+                  if (filterMicro && !node.name.toLowerCase().includes(filterMicro.toLowerCase())) return;
+                  
+                  // Analyst Filter
+                  if (filterAnalyst && !node.assignees.includes(filterAnalyst)) return;
+
                   rows.push({ macro, proc, node });
               });
           });
@@ -179,12 +227,14 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando matriz de procesos...</div>;
 
+  const hasActiveFilters = filterProject || filterMacro || filterProcess || filterMicro || filterAnalyst;
+
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Matriz de Asignaciones</h1>
-          <p className="text-slate-500">Gestione los responsables y defina los documentos requeridos por microproceso.</p>
+          <p className="text-slate-500">Gestione los responsables y defina los documentos requeridos.</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
              <button 
@@ -194,23 +244,77 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                 <Plus size={18} className="mr-2" />
                 Nuevo Microproceso
             </button>
-            <div className="relative w-full md:w-64">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                    type="text" 
-                    placeholder="Buscar..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-            </div>
         </div>
+      </div>
+
+      {/* FILTER BAR */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+              <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+                  <Filter size={18} className="text-indigo-600" /> Filtros de Matriz
+              </h3>
+              {hasActiveFilters && (
+                  <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+                      <X size={14} /> Limpiar Todo
+                  </button>
+              )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <select 
+                  value={filterProject} 
+                  onChange={(e) => setFilterProject(e.target.value)}
+                  className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              >
+                  <option value="">Proyecto (Todos)</option>
+                  {Object.keys(hierarchy).map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+
+              <select 
+                  value={filterMacro} 
+                  onChange={(e) => setFilterMacro(e.target.value)}
+                  className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              >
+                  <option value="">Macroproceso (Todos)</option>
+                  {getAvailableMacros().map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+
+              <select 
+                  value={filterProcess} 
+                  onChange={(e) => setFilterProcess(e.target.value)}
+                  className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              >
+                  <option value="">Proceso (Todos)</option>
+                  {getAvailableProcesses().map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+
+              <div className="relative">
+                  <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                      type="text" 
+                      placeholder="Buscar Microproceso..."
+                      value={filterMicro}
+                      onChange={(e) => setFilterMicro(e.target.value)}
+                      className="w-full pl-8 p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+              </div>
+
+               <select 
+                  value={filterAnalyst} 
+                  onChange={(e) => setFilterAnalyst(e.target.value)}
+                  className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              >
+                  <option value="">Analista (Todos)</option>
+                  {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+          </div>
       </div>
 
       <div className="space-y-4">
         {Object.keys(hierarchy).map(projectKey => {
+            if (filterProject && projectKey !== filterProject) return null;
+
             const rows = getFlattenedRows(projectKey);
-            if (rows.length === 0 && searchTerm) return null;
+            if (rows.length === 0) return null;
 
             return (
                 <div key={projectKey} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -239,7 +343,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                                         <th className="px-4 py-3 w-1/4">Microproceso</th>
                                         <th className="px-4 py-3 w-1/5">Documentos Definidos</th>
                                         <th className="px-4 py-3 w-1/4">Analistas Responsables</th>
-                                        <th className="px-4 py-3 text-right">Acción</th>
+                                        <th className="px-4 py-3 text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -304,13 +408,22 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
                                             {/* Acciones */}
                                             <td className="px-4 py-3 align-top text-right">
-                                                <button 
-                                                    onClick={() => handleEditAssignment(projectKey, row.macro, row.proc, row.node)}
-                                                    className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors"
-                                                    title="Editar Asignación"
-                                                >
-                                                    <Edit size={16} />
-                                                </button>
+                                                <div className="flex justify-end gap-1">
+                                                    <button 
+                                                        onClick={() => handleEditAssignment(projectKey, row.macro, row.proc, row.node)}
+                                                        className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors"
+                                                        title="Editar Asignación"
+                                                    >
+                                                        <Edit size={16} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDelete(projectKey, row.node.name)}
+                                                        className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors"
+                                                        title="Eliminar Microproceso"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

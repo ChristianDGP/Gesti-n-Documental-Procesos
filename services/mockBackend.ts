@@ -10,7 +10,8 @@ const STORAGE_KEYS = {
   ASSIGNMENTS: 'sgd_assignments_v2026_h',
   MATRIX_OVERRIDES: 'sgd_matrix_overrides_v2026_h',
   REQUIRED_TYPES: 'sgd_required_types_v2026_h',
-  CUSTOM_NODES: 'sgd_custom_nodes_v2026_h' // New key for user-created microprocesses
+  CUSTOM_NODES: 'sgd_custom_nodes_v2026_h',
+  DELETED_NODES: 'sgd_deleted_nodes_v2026_h' // New key for logical deletions
 };
 
 // ... (Helper functions determineStateFromVersion and mapCodeToDocType remain unchanged) ...
@@ -58,6 +59,10 @@ const initializeStorage = () => {
   
   if (!localStorage.getItem(STORAGE_KEYS.CUSTOM_NODES)) {
       localStorage.setItem(STORAGE_KEYS.CUSTOM_NODES, JSON.stringify([]));
+  }
+  
+  if (!localStorage.getItem(STORAGE_KEYS.DELETED_NODES)) {
+      localStorage.setItem(STORAGE_KEYS.DELETED_NODES, JSON.stringify([]));
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.DOCS)) {
@@ -152,6 +157,7 @@ export const HierarchyService = {
     const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
     const requiredTypesMap = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES) || '{}');
     const customNodes = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_NODES) || '[]');
+    const deletedNodes = JSON.parse(localStorage.getItem(STORAGE_KEYS.DELETED_NODES) || '[]');
 
     // 1. Process Static Initial Load
     INITIAL_DATA_LOAD.forEach(row => {
@@ -159,6 +165,10 @@ export const HierarchyService = {
         const [project, macro, process, micro, namesStr] = row;
         
         const matrixKey = `${project}|${micro}`;
+        
+        // Skip if logically deleted
+        if (deletedNodes.includes(matrixKey)) return;
+
         let assigneeIds: string[] = [];
 
         if (overrides[matrixKey]) {
@@ -197,6 +207,9 @@ export const HierarchyService = {
         const { project, macro, process, micro, assignees, requiredTypes } = node;
         const matrixKey = `${project}|${micro}`;
         
+        // Skip if logically deleted
+        if (deletedNodes.includes(matrixKey)) return;
+
         // Determine effective assignees (override check)
         const finalAssignees = overrides[matrixKey] || assignees || [];
         // Determine effective types
@@ -293,13 +306,33 @@ export const HierarchyService = {
       localStorage.setItem(STORAGE_KEYS.REQUIRED_TYPES, JSON.stringify(requiredTypesMap));
   },
 
+  deleteMicroprocess: async (project: string, micro: string) => {
+      const matrixKey = `${project}|${micro}`;
+      const deletedNodes = JSON.parse(localStorage.getItem(STORAGE_KEYS.DELETED_NODES) || '[]');
+      
+      if (!deletedNodes.includes(matrixKey)) {
+          deletedNodes.push(matrixKey);
+          localStorage.setItem(STORAGE_KEYS.DELETED_NODES, JSON.stringify(deletedNodes));
+      }
+  },
+
   addMicroprocess: async (project: string, macro: string, process: string, microName: string, assignees: string[], requiredTypes: DocType[]) => {
       const customNodes = JSON.parse(localStorage.getItem(STORAGE_KEYS.CUSTOM_NODES) || '[]');
       const matrixKey = `${project}|${microName}`;
 
+      // Check if it was previously deleted, if so, remove from deleted list
+      const deletedNodes = JSON.parse(localStorage.getItem(STORAGE_KEYS.DELETED_NODES) || '[]');
+      const deletedIndex = deletedNodes.indexOf(matrixKey);
+      if (deletedIndex > -1) {
+          deletedNodes.splice(deletedIndex, 1);
+          localStorage.setItem(STORAGE_KEYS.DELETED_NODES, JSON.stringify(deletedNodes));
+      }
+
       // Basic duplicate check (simple)
       const exists = customNodes.some((n: any) => n.project === project && n.micro === microName);
-      if (exists) throw new Error('El microproceso ya existe en este proyecto.');
+      // Also check Initial Load indirectly via key but we'll allow overriding if not in custom
+      
+      if (exists) throw new Error('El microproceso personalizado ya existe.');
 
       const newNode = {
           project, macro, process, micro: microName,
