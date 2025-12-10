@@ -83,17 +83,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const filteredDocs = getFilteredDocs();
 
-  // Extract unique values for dropdowns based on available docs
-  const uniqueProjects = Array.from(new Set(docs.map(d => d.project).filter(Boolean))) as string[];
-  const uniqueMacros = Array.from(new Set(docs.filter(d => !filterProject || d.project === filterProject).map(d => d.macroprocess).filter(Boolean))) as string[];
-  const uniqueProcesses = Array.from(new Set(docs.filter(d => !filterMacro || d.macroprocess === filterMacro).map(d => d.process).filter(Boolean))) as string[];
+  // Extract unique values for dropdowns based on available docs (Cascading logic)
+  // We use the base user docs (unfiltered by dropdowns) to populate the *options*, 
+  // but respecting upstream selections.
   
-  // Calculate Stats based STRICTLY on REQUIRED Documents
   const baseDocs = user.role === UserRole.ANALYST ? 
     docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id))) : 
     docs;
+
+  const uniqueProjects = Array.from(new Set(baseDocs.map(d => d.project).filter(Boolean))) as string[];
   
-  const reqDocs = baseDocs.filter(d => isDocRequired(d));
+  const uniqueMacros = Array.from(new Set(
+      baseDocs.filter(d => !filterProject || d.project === filterProject)
+      .map(d => d.macroprocess).filter(Boolean)
+  )) as string[];
+  
+  const uniqueProcesses = Array.from(new Set(
+      baseDocs.filter(d => (!filterProject || d.project === filterProject) && (!filterMacro || d.macroprocess === filterMacro))
+      .map(d => d.process).filter(Boolean)
+  )) as string[];
+  
+  // Calculate Stats based on FILTERED Documents (Dynamic)
+  // This ensures the cards and chart reflect exactly what is selected in the dropdowns.
+  const reqDocs = filteredDocs.filter(d => isDocRequired(d));
 
   const stats = {
     // 1. Documentos Requeridos: N° Total de documentos asignados (que existen y son requeridos)
@@ -361,7 +373,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         </ResponsiveContainer>
                     </div>
                 ) : (
-                    <p className="text-slate-400">No hay datos requeridos.</p>
+                    <p className="text-slate-400 text-center text-sm px-4">No hay datos requeridos para los filtros seleccionados.</p>
                 )}
             </div>
 
@@ -382,7 +394,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     </li>
                     <li className="flex justify-between text-xs pt-1 opacity-80">
                         <span>No Requeridos:</span>
-                        <span>{baseDocs.length - reqDocs.length}</span>
+                        <span>{filteredDocs.length - reqDocs.length}</span>
                     </li>
                 </ul>
             </div>
