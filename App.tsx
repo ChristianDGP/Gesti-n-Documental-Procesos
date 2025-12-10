@@ -10,6 +10,7 @@ import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
 import AdminDatabase from './views/AdminDatabase';
 import Buffer from './views/Buffer';
+import Profile from './views/Profile';
 import { AuthService } from './services/mockBackend';
 import { User, UserRole } from './types';
 
@@ -51,6 +52,7 @@ const App: React.FC = () => {
                   <Route path="/inbox" element={<Buffer user={user} />} />
                   <Route path="/new" element={<CreateDocument user={user} />} />
                   <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
+                  <Route path="/profile" element={<Profile user={user} onUpdate={handleLogin} />} />
                   <Route 
                     path="/admin/users" 
                     element={user.role === UserRole.ADMIN ? <AdminUsers /> : <Navigate to="/" />} 

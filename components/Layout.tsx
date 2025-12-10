@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface LayoutProps {
@@ -59,6 +59,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
                  <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
             )}
+
+            <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Cuenta</div>
+            <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
             
             {/* Admin Only */}
             {user.role === UserRole.ADMIN && (

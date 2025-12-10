@@ -11,7 +11,7 @@ const STORAGE_KEYS = {
   MATRIX_OVERRIDES: 'sgd_matrix_overrides_v2026_h',
   REQUIRED_TYPES: 'sgd_required_types_v2026_h',
   CUSTOM_NODES: 'sgd_custom_nodes_v2026_h',
-  DELETED_NODES: 'sgd_deleted_nodes_v2026_h' // New key for logical deletions
+  DELETED_NODES: 'sgd_deleted_nodes_v2026_h'
 };
 
 // ... (Helper functions determineStateFromVersion and mapCodeToDocType remain unchanged) ...
@@ -255,7 +255,6 @@ export const HierarchyService = {
     return userTree;
   },
   
-  // New method exposed for Dashboard
   getRequiredTypesMap: async (): Promise<Record<string, DocType[]>> => {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES) || '{}');
   },
@@ -330,7 +329,6 @@ export const HierarchyService = {
 
       // Basic duplicate check (simple)
       const exists = customNodes.some((n: any) => n.project === project && n.micro === microName);
-      // Also check Initial Load indirectly via key but we'll allow overriding if not in custom
       
       if (exists) throw new Error('El microproceso personalizado ya existe.');
 
@@ -342,12 +340,10 @@ export const HierarchyService = {
       customNodes.push(newNode);
       localStorage.setItem(STORAGE_KEYS.CUSTOM_NODES, JSON.stringify(customNodes));
 
-      // Persist required types to the separate map as well to ensure consistency with the toggle logic
       const requiredTypesMap = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUIRED_TYPES) || '{}');
       requiredTypesMap[matrixKey] = requiredTypes;
       localStorage.setItem(STORAGE_KEYS.REQUIRED_TYPES, JSON.stringify(requiredTypesMap));
 
-      // Persist assignments to override map for consistency
       const overrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATRIX_OVERRIDES) || '{}');
       overrides[matrixKey] = assignees;
       localStorage.setItem(STORAGE_KEYS.MATRIX_OVERRIDES, JSON.stringify(overrides));
@@ -377,6 +373,14 @@ export const UserService = {
     const updatedUser = { ...users[index], ...userData };
     users[index] = updatedUser;
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+
+    // CRITICAL: Check if the updated user is the one currently logged in.
+    // If so, update the session storage too so changes (like name, email) are reflected immediately in UI.
+    const currentSession = AuthService.getCurrentUser();
+    if (currentSession && currentSession.id === id) {
+        localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(updatedUser));
+    }
+
     return updatedUser;
   },
   delete: async (id: string) => {
