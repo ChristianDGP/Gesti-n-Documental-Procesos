@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService } from '../services/mockBa
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, checkVersionRules } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users, RotateCcw, Send } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users, RotateCcw, Send, Mail } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -17,6 +17,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [doc, setDoc] = useState<Document | null>(null);
   const [history, setHistory] = useState<DocHistory[]>([]);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
+  const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -31,15 +32,21 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const loadData = async (docId: string) => {
     setLoading(true);
-    const [d, h] = await Promise.all([
+    const [d, h, allUsers] = await Promise.all([
       DocumentService.getById(docId),
-      HistoryService.getHistory(docId)
+      HistoryService.getHistory(docId),
+      UserService.getAll()
     ]);
     setDoc(d);
     setHistory(h);
 
+    // Find Coordinator Email
+    const coordinator = allUsers.find(u => u.role === UserRole.COORDINATOR);
+    if (coordinator) {
+        setCoordinatorEmail(coordinator.email);
+    }
+
     if (d && d.assignees && d.assignees.length > 0) {
-        const allUsers = await UserService.getAll();
         const names = d.assignees
             .map(aid => allUsers.find(u => u.id === aid)?.name)
             .filter(n => n) as string[];
@@ -157,6 +164,27 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
+  const handleGmailNotification = () => {
+    if (!doc || !coordinatorEmail) return;
+    
+    const subject = encodeURIComponent(`Solicitud SGD: ${doc.title}`);
+    const body = encodeURIComponent(
+        `Estimado Coordinador,\n\n` +
+        `Se requiere su atención en el siguiente documento:\n\n` +
+        `ID: ${doc.id}\n` +
+        `Proyecto: ${doc.project || '-'}\n` +
+        `MacroProceso: ${doc.macroprocess || '-'}\n` +
+        `Proceso: ${doc.process || '-'}\n` +
+        `MicroProceso: ${doc.microprocess || doc.title}\n` +
+        `Estado Actual: ${STATE_CONFIG[doc.state].label}\n\n` +
+        `Atentamente,\n${user.name}`
+    );
+
+    // Gmail compose URL magic
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, '_blank');
+  };
+
   if (loading || !doc) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
 
   const config = STATE_CONFIG[doc.state];
@@ -177,6 +205,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   );
 
   const canReject = canApprove; // Same permissions for reject
+
+  const canNotify = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -291,6 +321,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                  />
 
                  <div className="flex flex-wrap gap-3">
+                    {canNotify && (
+                         <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
+                            <Mail size={16} className="mr-2" /> Notificar al Coordinador (Gmail)
+                        </button>
+                    )}
+
                     {canRequestApproval && (
                          <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm">
                             <Send size={16} className="mr-2" /> Solicitar Aprobación
