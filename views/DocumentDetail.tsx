@@ -176,13 +176,24 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const handleGmailNotification = () => {
     if (!doc || !coordinatorEmail) return;
     
-    const subject = encodeURIComponent(`Solicitud SGD: ${doc.title}`);
+    const subject = encodeURIComponent(`Solicitud de Aprobación SGD: ${doc.project} - ${doc.microprocess} - ${doc.docType}`);
     const body = encodeURIComponent(
         `Estimado Coordinador,\n\n` +
-        `Se requiere su atención en el siguiente documento:\n\n` +
-        `ID: ${doc.id}\n` +
-        `MicroProceso: ${doc.microprocess || doc.title}\n` +
-        `Estado Actual: ${STATE_CONFIG[doc.state].label}\n\n` +
+        `Se informa que se ha generado una solicitud de revisión para el siguiente documento:\n\n` +
+        `INFORMACIÓN DEL DOCUMENTO:\n` +
+        `--------------------------------------------------\n` +
+        `Proyecto: ${doc.project || 'N/A'}\n` +
+        `Macroproceso: ${doc.macroprocess || 'N/A'}\n` +
+        `Proceso: ${doc.process || 'N/A'}\n` +
+        `Microproceso: ${doc.microprocess || doc.title}\n` +
+        `Tipo de Documento: ${doc.docType || 'N/A'}\n` +
+        `Versión Actual: ${doc.version}\n` +
+        `Estado: ${STATE_CONFIG[doc.state].label}\n` +
+        `--------------------------------------------------\n\n` +
+        `DATOS DEL ANALISTA SOLICITANTE:\n` +
+        `Nombre: ${user.name}\n` +
+        `Correo: ${user.email}\n\n` +
+        `Se solicita su gestión en la plataforma.\n\n` +
         `Atentamente,\n${user.name}`
     );
 
@@ -193,14 +204,20 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const handleNotifyAnalyst = () => {
       if (!doc || !authorEmail) return;
 
-      const subject = encodeURIComponent(`Respuesta Solicitud SGD: ${doc.title}`);
+      const subject = encodeURIComponent(`Respuesta Solicitud SGD: ${doc.project} - ${doc.microprocess}`);
       const body = encodeURIComponent(
           `Estimado/a ${doc.authorName},\n\n` +
           `Se ha revisado su documento con los siguientes detalles:\n\n` +
-          `ID: ${doc.id}\n` +
-          `MicroProceso: ${doc.microprocess || doc.title}\n` +
-          `Estado Resultante: ${STATE_CONFIG[doc.state].label}\n\n` +
-          `Comentarios/Observaciones: ${comment || 'Ver en plataforma.'}\n\n` +
+          `INFORMACIÓN DEL DOCUMENTO:\n` +
+          `--------------------------------------------------\n` +
+          `Proyecto: ${doc.project || 'N/A'}\n` +
+          `Macroproceso: ${doc.macroprocess || 'N/A'}\n` +
+          `Microproceso: ${doc.microprocess || doc.title}\n` +
+          `Tipo: ${doc.docType || 'N/A'}\n` +
+          `Estado Resultante: ${STATE_CONFIG[doc.state].label}\n` +
+          `--------------------------------------------------\n\n` +
+          `OBSERVACIONES:\n` +
+          `${comment || 'Ver en plataforma.'}\n\n` +
           `Atentamente,\n${user.name} (${user.role})`
       );
 
