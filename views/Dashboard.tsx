@@ -4,12 +4,14 @@ import { Link } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/mockBackend';
 import { Document, User, UserRole, DocState, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck } from 'lucide-react';
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface DashboardProps {
   user: User;
 }
+
+type SortKey = 'project' | 'microprocess' | 'state' | 'updatedAt';
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -21,6 +23,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [filterMacro, setFilterMacro] = useState('');
   const [filterProcess, setFilterProcess] = useState('');
   const [filterState, setFilterState] = useState('');
+
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
+    key: 'updatedAt',
+    direction: 'desc' // Default: Newest first
+  });
 
   useEffect(() => {
     loadData();
@@ -81,12 +89,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     return filtered;
   };
 
+  // Sorting Logic
+  const handleSort = (key: SortKey) => {
+      let direction: 'asc' | 'desc' = 'asc';
+      if (sortConfig.key === key && sortConfig.direction === 'asc') {
+          direction = 'desc';
+      }
+      setSortConfig({ key, direction });
+  };
+
+  const getSortedDocs = (filtered: Document[]) => {
+      return [...filtered].sort((a, b) => {
+          const modifier = sortConfig.direction === 'asc' ? 1 : -1;
+          
+          switch (sortConfig.key) {
+              case 'updatedAt':
+                  return (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) * modifier;
+              case 'project':
+                  return (a.project || '').localeCompare(b.project || '') * modifier;
+              case 'microprocess':
+                  const nameA = a.microprocess || a.title;
+                  const nameB = b.microprocess || b.title;
+                  return nameA.localeCompare(nameB) * modifier;
+              case 'state':
+                   // Sort by progress number for state
+                   return (a.progress - b.progress) * modifier;
+              default:
+                  return 0;
+          }
+      });
+  };
+
   const filteredDocs = getFilteredDocs();
+  const sortedDocs = getSortedDocs(filteredDocs);
 
   // Extract unique values for dropdowns based on available docs (Cascading logic)
-  // We use the base user docs (unfiltered by dropdowns) to populate the *options*, 
-  // but respecting upstream selections.
-  
   const baseDocs = user.role === UserRole.ANALYST ? 
     docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id))) : 
     docs;
@@ -104,7 +141,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   )) as string[];
   
   // Calculate Stats based on FILTERED Documents (Dynamic)
-  // This ensures the cards and chart reflect exactly what is selected in the dropdowns.
   const reqDocs = filteredDocs.filter(d => isDocRequired(d));
 
   const stats = {
@@ -149,6 +185,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const hasFilters = filterProject || filterMacro || filterProcess || filterState;
+
+  // Render Sort Icon helper
+  const SortIcon = ({ column }: { column: SortKey }) => {
+      if (sortConfig.key !== column) return <ArrowUpDown size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
+      return sortConfig.direction === 'asc' 
+        ? <ArrowUp size={14} className="text-indigo-600" /> 
+        : <ArrowDown size={14} className="text-indigo-600" />;
+  };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando dashboard...</div>;
 
@@ -246,20 +290,48 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <table className="w-full text-sm text-left">
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                         <tr>
-                            <th className="px-4 py-3">PROYECTO</th>
+                            <th 
+                                className="px-4 py-3 cursor-pointer hover:bg-slate-100 group select-none"
+                                onClick={() => handleSort('project')}
+                            >
+                                <div className="flex items-center gap-1">
+                                    PROYECTO <SortIcon column="project" />
+                                </div>
+                            </th>
                             <th className="px-4 py-3">Jerarquía (Macro / Proceso)</th>
-                            <th className="px-4 py-3">MICROPROCESO</th>
+                            <th 
+                                className="px-4 py-3 cursor-pointer hover:bg-slate-100 group select-none"
+                                onClick={() => handleSort('microprocess')}
+                            >
+                                <div className="flex items-center gap-1">
+                                    MICROPROCESO <SortIcon column="microprocess" />
+                                </div>
+                            </th>
                             <th className="px-4 py-3">Documento</th>
-                            <th className="px-4 py-3">Estado Actual</th>
-                            <th className="px-4 py-3">Última Actividad</th>
+                            <th 
+                                className="px-4 py-3 cursor-pointer hover:bg-slate-100 group select-none"
+                                onClick={() => handleSort('state')}
+                            >
+                                <div className="flex items-center gap-1">
+                                    Estado Actual <SortIcon column="state" />
+                                </div>
+                            </th>
+                            <th 
+                                className="px-4 py-3 cursor-pointer hover:bg-slate-100 group select-none"
+                                onClick={() => handleSort('updatedAt')}
+                            >
+                                <div className="flex items-center gap-1">
+                                    Última Actividad <SortIcon column="updatedAt" />
+                                </div>
+                            </th>
                             {user.role === UserRole.ADMIN && <th className="px-4 py-3 text-right">Admin</th>}
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredDocs.length === 0 ? (
+                        {sortedDocs.length === 0 ? (
                             <tr><td colSpan={7} className="p-8 text-center text-slate-400">No se encontraron documentos con los filtros aplicados.</td></tr>
                         ) : (
-                            filteredDocs.map(doc => {
+                            sortedDocs.map(doc => {
                                 const isRequired = isDocRequired(doc);
                                 const rowClass = isRequired 
                                     ? "border-b border-slate-50 hover:bg-slate-50 transition-colors" 
