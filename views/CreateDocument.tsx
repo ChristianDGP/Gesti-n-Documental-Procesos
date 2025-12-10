@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/mockBackend';
 import { User, DocState, DocType, UserHierarchy } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, PlayCircle } from 'lucide-react';
 
 interface Props {
   user: User;
 }
+
+type RequestType = 'INTERNAL' | 'REFERENT' | 'CONTROL';
 
 const CreateDocument: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
@@ -22,6 +24,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [selectedMicro, setSelectedMicro] = useState<string>('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
+  const [requestType, setRequestType] = useState<RequestType | ''>('');
 
   // File Upload State
   const [file, setFile] = useState<File | undefined>(undefined);
@@ -103,6 +106,11 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       resetFile();
   }
 
+  const handleRequestTypeChange = (val: string) => {
+      setRequestType(val as RequestType);
+      resetFile();
+  }
+
   const resetFile = () => {
       setFile(undefined);
       setFileError([]);
@@ -129,17 +137,25 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       }
   };
 
+  const getVersionHint = () => {
+      if (requestType === 'INTERNAL') return '[v0.n] donde n es IMPAR';
+      if (requestType === 'REFERENT') return '[v1.n.i] donde i es IMPAR';
+      if (requestType === 'CONTROL') return '[v1.n.iAR] donde i es IMPAR';
+      return '[Versión]';
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const selectedFile = e.target.files[0];
           setFile(selectedFile);
           
-          // Validate with context!
+          // Validate with context AND request type!
           const result = parseDocumentFilename(
               selectedFile.name,
               selectedProject,
               selectedMicro,
-              selectedDocType || undefined
+              selectedDocType || undefined,
+              requestType as RequestType || undefined
           );
           
           if (result.valido) {
@@ -150,7 +166,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               const cleanMicro = result.microproceso || selectedMicro;
               const cleanType = result.tipo || selectedDocType;
               setTitle(`${cleanMicro} - ${cleanType}`);
-              setDescription(`Informe ${cleanType} para microproceso ${cleanMicro}`);
+              setDescription(`Solicitud de ${requestType === 'INTERNAL' ? 'Revisión Interna' : requestType === 'REFERENT' ? 'Revisión Referente' : 'Control de Gestión'}`);
               
               if (result.estado) setDetectedState(mapParserStateToEnum(result.estado));
               if (result.nomenclatura) setDetectedVersion(result.nomenclatura);
@@ -215,7 +231,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
             <div className="mb-8 border-b border-slate-100 pb-4">
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Nueva Solicitud</h1>
                 <p className="text-slate-500">
-                   Completa la ficha técnica y carga el archivo validado.
+                   Completa la ficha técnica para iniciar una revisión formal.
                 </p>
             </div>
 
@@ -284,6 +300,22 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                             </select>
                         </div>
 
+                        {/* Request Type Selector (New) */}
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Tipo de Solicitud / Revisión</label>
+                            <select 
+                                value={requestType}
+                                onChange={(e) => handleRequestTypeChange(e.target.value)}
+                                disabled={!selectedMicro}
+                                className="w-full p-2.5 border border-indigo-200 bg-indigo-50/50 text-indigo-900 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
+                            >
+                                <option value="">-- Seleccionar Tipo de Solicitud --</option>
+                                <option value="INTERNAL">Revisión Interna (Inicio de Flujo)</option>
+                                <option value="REFERENT">Revisión con Referente</option>
+                                <option value="CONTROL">Control de Gestión</option>
+                            </select>
+                        </div>
+
                         {/* Report Type */}
                         <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-4">
                             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Tipo de Informe</label>
@@ -302,7 +334,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                             checked={selectedDocType === type}
                                             onChange={(e) => handleTypeChange(e.target.value)}
                                             className="hidden"
-                                            disabled={!selectedMicro}
+                                            disabled={!requestType}
                                         />
                                         <span className="text-sm font-medium">{type}</span>
                                     </label>
@@ -320,7 +352,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                 </div>
 
                 {/* Step 2: File Upload */}
-                {selectedMicro && selectedDocType && (
+                {selectedMicro && selectedDocType && requestType && (
                     <div className="animate-fadeIn">
                          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
                             <Upload size={18} className="text-indigo-600" />
@@ -331,8 +363,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                             <Info size={18} className="mt-0.5 flex-shrink-0" />
                             <div>
                                 <p className="font-semibold">Nomenclatura Requerida:</p>
-                                <p className="font-mono mt-1 text-xs md:text-sm">
-                                    {selectedProject} - {selectedMicro} - {selectedDocType.replace(' ', '')} - [Versión]
+                                <p className="font-mono mt-1 text-xs md:text-sm font-bold">
+                                    {selectedProject} - {selectedMicro} - {selectedDocType.replace(' ', '')} - {getVersionHint()}
                                 </p>
                             </div>
                         </div>
@@ -374,7 +406,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                     <Upload size={40} className="mx-auto mb-3" />
                                     <p className="font-medium">Click para seleccionar archivo</p>
                                     <p className="text-xs mt-2 text-slate-400">
-                                        El nombre del archivo debe coincidir con la selección
+                                        El nombre debe coincidir con la nomenclatura para {requestType}
                                     </p>
                                 </div>
                             )}
@@ -423,10 +455,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 disabled={loading}
                                 className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md font-medium"
                             >
-                                {loading ? 'Creando...' : (
+                                {loading ? 'Enviando...' : (
                                     <>
                                         <Save size={18} className="mr-2" />
-                                        Crear Solicitud
+                                        Crear Solicitud de Aprobación
                                     </>
                                 )}
                             </button>

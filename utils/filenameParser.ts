@@ -10,7 +10,8 @@ export const parseDocumentFilename = (
   fullFilename: string, 
   expectedProject?: string,
   expectedMicro?: string,
-  expectedType?: string
+  expectedType?: string,
+  expectedRequestType?: 'INTERNAL' | 'REFERENT' | 'CONTROL'
 ): ParsedFilenameResult => {
   const result: ParsedFilenameResult = {
     valido: false,
@@ -71,12 +72,52 @@ export const parseDocumentFilename = (
   }
   result.tipo = tipoCodigo;
 
-  // 7. Analizar Versión
+  // 7. Analizar Versión y Reglas de Solicitud (Paridad)
   result.nomenclatura = version;
-  if (/^v?\d+(\.\d+)*([A-Z]+)?$/.test(version)) {
-      // Basic syntax check pass
+
+  // Regex básicos
+  const regexInternal = /^v0\.(\d+)$/;          // v0.n
+  const regexReferent = /^v1\.(\d+)\.(\d+)$/;   // v1.n.i
+  const regexControl = /^v1\.(\d+)\.(\d+)AR$/;  // v1.n.iAR
+  const regexStandard = /^v?\d+(\.\d+)*([A-Z]+)?$/;
+
+  if (expectedRequestType) {
+      if (expectedRequestType === 'INTERNAL') {
+          const match = version.match(regexInternal);
+          if (!match) {
+              result.errores.push('Para Revisión Interna el formato debe ser "v0.n" (ej: v0.1).');
+          } else {
+              const n = parseInt(match[1]);
+              if (n % 2 === 0) {
+                  result.errores.push(`Para Revisión Interna el dígito "n" (${n}) debe ser IMPAR (ej: v0.1, v0.3).`);
+              }
+          }
+      } else if (expectedRequestType === 'REFERENT') {
+          const match = version.match(regexReferent);
+          if (!match) {
+              result.errores.push('Para Revisión Referente el formato debe ser "v1.n.i" (ej: v1.0.1).');
+          } else {
+              const i = parseInt(match[2]);
+              if (i % 2 === 0) {
+                  result.errores.push(`Para Revisión Referente el dígito "i" (${i}) debe ser IMPAR (ej: v1.0.1, v1.0.3).`);
+              }
+          }
+      } else if (expectedRequestType === 'CONTROL') {
+          const match = version.match(regexControl);
+          if (!match) {
+              result.errores.push('Para Control de Gestión el formato debe ser "v1.n.iAR" (ej: v1.0.1AR).');
+          } else {
+              const i = parseInt(match[2]);
+              if (i % 2 === 0) {
+                  result.errores.push(`Para Control de Gestión el dígito "i" (${i}) debe ser IMPAR (ej: v1.0.1AR).`);
+              }
+          }
+      }
   } else {
-    result.errores.push(`Formato de versión inválido: ${version}`);
+      // Validación genérica si no hay tipo de solicitud explícito
+      if (!regexStandard.test(version)) {
+          result.errores.push(`Formato de versión inválido: ${version}`);
+      }
   }
 
   // Logic map for state detection (CORRECTED)
@@ -88,7 +129,12 @@ export const parseDocumentFilename = (
       } else if (version.endsWith('AR')) {
           result.estado = 'Enviado a Control de Gestión'; // v1.nAR
           result.porcentaje = 90;
+      } else if (version.startsWith('v1.') && !version.includes('AR') && (version.split('.').length > 2)) {
+          // v1.n.i -> Revisión Referente (Flujo activo)
+          result.estado = 'Revisión con referentes';
+          result.porcentaje = 80;
       } else if (version.startsWith('v1.') && !version.includes('AR')) {
+          // v1.n -> Enviado a Referente (o aprobado v1.0)
           result.estado = 'Enviado a Referente'; 
           result.porcentaje = 80;
       } else if (version.startsWith('v0.')) {
