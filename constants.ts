@@ -240,8 +240,7 @@ export const INITIAL_DATA_LOAD = [
 
 // Defines the actual document status, version and type for seed
 // EMPTY ARRAY for clean slate production/upload use
-export const DOCUMENT_STATUS_LOAD = [
-];
+export const DOCUMENT_STATUS_LOAD: string[][] = [];
 
 // Definition Matrix for Required Documents per Microprocess
 // Format: [Project, Microprocess, AS IS(0/1), FCE(0/1), PM(0/1), TO BE(0/1)]
