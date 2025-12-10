@@ -636,12 +636,23 @@ export const DatabaseService = {
         let assigneeId = adminUser.id;
         let assigneeName = adminUser.name;
         
-        // Identify User
-        if (analystName && NAME_TO_ID_MAP[analystName]) {
-            assigneeId = NAME_TO_ID_MAP[analystName];
-            const u = users.find(user => user.id === assigneeId);
-            if (u) assigneeName = u.name;
+        // Identify User Logic
+        // 1. Try Map
+        if (analystName) {
+             if (NAME_TO_ID_MAP[analystName]) {
+                assigneeId = NAME_TO_ID_MAP[analystName];
+            } else {
+                // 2. Try finding by name in existing users
+                const directUser = users.find(u => u.name.trim().toLowerCase() === analystName.toLowerCase());
+                if (directUser) {
+                    assigneeId = directUser.id;
+                }
+            }
         }
+        
+        // Update name object based on resolved ID
+        const u = users.find(user => user.id === assigneeId);
+        if (u) assigneeName = u.name;
 
         // STORE MATRIX ASSIGNMENT
         if (project && micro && assigneeId !== adminUser.id) {
@@ -651,8 +662,11 @@ export const DatabaseService = {
 
         const baseDoc = {
             project, macroprocess: macro, process, microprocess: micro,
-            authorId: adminUser.id, authorName: adminUser.name,
-            assignedTo: assigneeId, assignees: [assigneeId],
+            // CHANGE: Use assigneeId/Name for author as well to reflect ownership in migration
+            authorId: assigneeId, 
+            authorName: assigneeName,
+            assignedTo: assigneeId, 
+            assignees: [assigneeId],
             assignedByName: 'Migración Histórica',
             files: []
         };
