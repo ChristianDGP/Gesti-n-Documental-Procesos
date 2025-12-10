@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { DocumentService } from '../services/mockBackend';
 import { Document, User, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Inbox, ChevronRight, AlertCircle, Clock, CheckCircle, FileText, Calendar, Send } from 'lucide-react';
+import { Inbox, CheckCircle, Clock, AlertCircle, Send, Paperclip, FileText } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -101,12 +101,13 @@ const Buffer: React.FC<Props> = ({ user }) => {
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 transition-all hover:shadow-md hover:border-indigo-300 relative overflow-hidden">
                         {/* Status Stripe */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 
-                            ${doc.state === DocState.REJECTED ? 'bg-red-500' : 'bg-yellow-500'}`} 
+                            ${doc.state === DocState.REJECTED ? 'bg-red-500' : 'bg-indigo-500'}`} 
                         />
                         
-                        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center pl-2">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-col gap-4 pl-3">
+                            {/* Header: Project & Type */}
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                                         {doc.project}
                                     </span>
@@ -116,26 +117,30 @@ const Buffer: React.FC<Props> = ({ user }) => {
                                         </span>
                                     )}
                                     {doc.hasPendingRequest && (
-                                        <span className="flex items-center gap-1 text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase">
+                                        <span className="flex items-center gap-1 text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase animate-pulse">
                                             <Send size={10} /> Solicitud Enviada
                                         </span>
                                     )}
                                 </div>
-                                <h3 className="text-lg font-semibold text-slate-800 group-hover:text-indigo-700 flex items-center gap-2">
-                                    {doc.microprocess || doc.title}
-                                </h3>
-                                <div className="text-sm text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                                    <span className="flex items-center gap-1">
-                                        <FileText size={14} /> {doc.macroprocess}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <Clock size={14} /> Actualizado: {new Date(doc.updatedAt).toLocaleDateString()}
-                                    </span>
+                                <div className="text-xs text-slate-400 flex items-center gap-1">
+                                    <Clock size={12} /> {new Date(doc.updatedAt).toLocaleDateString()}
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-4 self-end md:self-center">
-                                <div className="text-right">
+                            {/* Main Content */}
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-slate-800 group-hover:text-indigo-700 flex items-center gap-2">
+                                        {doc.microprocess || doc.title}
+                                    </h3>
+                                    <div className="text-sm text-slate-500 mt-0.5 flex items-center gap-1">
+                                        <FileText size={14} className="text-slate-400"/>
+                                        {doc.macroprocess}
+                                    </div>
+                                </div>
+                                
+                                {/* Version & Status Badge */}
+                                 <div className="flex flex-col items-end gap-1">
                                     <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>
                                         {user.role === UserRole.ANALYST && doc.state === DocState.REJECTED ? (
                                             <span className="flex items-center gap-1"><AlertCircle size={12} /> Requiere Atención</span>
@@ -143,12 +148,33 @@ const Buffer: React.FC<Props> = ({ user }) => {
                                             STATE_CONFIG[doc.state].label.split('(')[0]
                                         )}
                                     </div>
-                                    <div className="text-xs text-slate-400 mt-1 font-mono">
-                                        v{doc.version}
-                                    </div>
+                                     <div className="flex items-center gap-2 mt-1">
+                                         <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-bold" title="Versión Actual">
+                                            v{doc.version}
+                                         </span>
+                                         {doc.files.length > 0 && (
+                                            <span className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100" title={`${doc.files.length} archivos adjuntos`}>
+                                                <Paperclip size={10} /> {doc.files.length}
+                                            </span>
+                                         )}
+                                     </div>
                                 </div>
-                                <div className="bg-slate-50 p-2 rounded-full text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                                    <ChevronRight size={20} />
+                            </div>
+
+                            {/* Progress Bar Footer */}
+                            <div className="w-full">
+                                <div className="flex justify-between text-[10px] text-slate-400 mb-1 uppercase font-bold tracking-wider">
+                                    <span>Progreso del Flujo</span>
+                                    <span>{doc.progress}%</span>
+                                </div>
+                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                    <div 
+                                        className={`h-1.5 rounded-full transition-all duration-500 ${
+                                            doc.progress === 100 ? 'bg-green-500' : 
+                                            doc.state === DocState.REJECTED ? 'bg-red-400' : 'bg-indigo-500'
+                                        }`}
+                                        style={{ width: `${doc.progress}%` }}
+                                    ></div>
                                 </div>
                             </div>
                         </div>
