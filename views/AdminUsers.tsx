@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/mockBackend';
 import { User, UserRole } from '../types';
@@ -98,7 +99,7 @@ const AdminUsers: React.FC = () => {
                 role,
                 organization,
                 password
-            });
+            } as User); // Adjusted typing for creation
         }
         
         setShowForm(false);

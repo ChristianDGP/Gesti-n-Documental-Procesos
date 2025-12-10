@@ -15,29 +15,23 @@ import { User, UserRole } from './types';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    const storedUser = AuthService.getCurrentUser();
-    if (storedUser) {
-      setUser(storedUser);
+    const currentUser = AuthService.getCurrentUser();
+    if (currentUser) {
+      setUser(currentUser);
     }
-    setInitializing(false);
   }, []);
 
   const handleLogin = () => {
-    const u = AuthService.getCurrentUser();
-    setUser(u);
+    const currentUser = AuthService.getCurrentUser();
+    setUser(currentUser);
   };
 
   const handleLogout = () => {
     AuthService.logout();
     setUser(null);
   };
-
-  if (initializing) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50">Cargando...</div>;
-  }
 
   return (
     <HashRouter>
