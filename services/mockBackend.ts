@@ -520,6 +520,51 @@ export const HistoryService = {
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
   }
 };
+
+export const DatabaseService = {
+  exportData: async (): Promise<string> => {
+    const data: Record<string, any> = {};
+    for (const key of Object.values(STORAGE_KEYS)) {
+      const item = localStorage.getItem(key);
+      if (item) {
+        try {
+          data[key] = JSON.parse(item);
+        } catch (e) {
+          data[key] = item;
+        }
+      }
+    }
+    return JSON.stringify(data, null, 2);
+  },
+  
+  importData: async (jsonContent: string): Promise<void> => {
+    let data;
+    try {
+      data = JSON.parse(jsonContent);
+    } catch (e) {
+      throw new Error('El archivo no es un JSON válido.');
+    }
+
+    // Simple validation: Check if at least one expected key exists in the import
+    const validKeys = Object.values(STORAGE_KEYS);
+    const hasValidKey = Object.keys(data).some(k => validKeys.includes(k));
+    
+    if (!hasValidKey) {
+       throw new Error('El archivo no parece ser un respaldo válido de SGD.');
+    }
+
+    // Clear existing data and import new
+    validKeys.forEach(key => localStorage.removeItem(key));
+    
+    for (const key in data) {
+       if (validKeys.includes(key)) {
+           const val = data[key];
+           localStorage.setItem(key, typeof val === 'object' ? JSON.stringify(val) : val);
+       }
+    }
+  }
+};
+
 export const AssignmentService = {
   getUnassignedDocs: async (): Promise<Document[]> => { return [] },
   getWorkload: async (): Promise<AnalystWorkload[]> => { return [] },

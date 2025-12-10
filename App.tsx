@@ -8,6 +8,7 @@ import CreateDocument from './views/CreateDocument';
 import DocumentDetail from './views/DocumentDetail';
 import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
+import AdminDatabase from './views/AdminDatabase';
 import Buffer from './views/Buffer';
 import { AuthService } from './services/mockBackend';
 import { User, UserRole } from './types';
@@ -63,6 +64,10 @@ const App: React.FC = () => {
                   <Route 
                     path="/admin/assignments" 
                     element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminAssignments user={user} /> : <Navigate to="/" />} 
+                  />
+                  <Route 
+                    path="/admin/database" 
+                    element={user.role === UserRole.ADMIN ? <AdminDatabase /> : <Navigate to="/" />} 
                   />
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>

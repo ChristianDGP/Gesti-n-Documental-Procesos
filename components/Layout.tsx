@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface LayoutProps {
@@ -65,6 +65,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
               <>
                 <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Administración</div>
                 <NavItem to="/admin/users" icon={Users} label="Usuarios" />
+                <NavItem to="/admin/database" icon={Database} label="Base de Datos" />
               </>
             )}
           </nav>
