@@ -62,7 +62,7 @@ const AdminDatabase: React.FC = () => {
     if (!e.target.files || !e.target.files[0]) return;
     const file = e.target.files[0];
 
-    if (!window.confirm(`¿Importar historia documental desde "${file.name}"?\n\nSe procesará el archivo CSV/Excel y se generarán los documentos correspondientes. Los datos anteriores marcados como 'legacy' serán reemplazados.`)) {
+    if (!window.confirm(`ATENCIÓN: IMPORTACIÓN HISTÓRICA (MIGRACIÓN)\n\nAl importar desde "${file.name}":\n\n1. SE ELIMINARÁN TODOS LOS DOCUMENTOS ACTUALES.\n2. Se limpiará el historial de versiones.\n3. Se poblará la base de datos exclusivamente con la información del archivo CSV.\n\n¿Desea continuar con esta operación destructiva?`)) {
         if (legacyInputRef.current) legacyInputRef.current.value = '';
         return;
     }
@@ -73,7 +73,7 @@ const AdminDatabase: React.FC = () => {
         try {
             const content = event.target?.result as string;
             const result = await DatabaseService.importLegacyFromCSV(content);
-            alert(`Importación completada.\n\nDocumentos creados: ${result.imported}\nErrores: ${result.errors.length}`);
+            alert(`Importación completada exitosamente.\n\nBase de datos limpiada y regenerada.\nDocumentos creados: ${result.imported}\nErrores: ${result.errors.length}`);
             window.location.reload();
         } catch (error: any) {
             alert('Error en importación legacy: ' + error.message);

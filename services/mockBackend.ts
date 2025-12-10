@@ -725,12 +725,11 @@ export const DatabaseService = {
         }
     }
 
-    // Save to LocalStorage
-    const currentDocs = JSON.parse(localStorage.getItem(STORAGE_KEYS.DOCS) || '[]');
-    // Filter out previous legacy imports to avoid dupes if running twice
-    const nonLegacy = currentDocs.filter((d: Document) => !d.id.startsWith('doc-legacy-'));
-    
-    localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify([...nonLegacy, ...newDocs]));
+    // Save to LocalStorage - WIPE AND REPLACE
+    // We purposefully overwrite existing docs to clean slate from the CSV
+    localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(newDocs));
+    // Optionally clean history to avoid orphan logs for deleted documents
+    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify([]));
     
     return { imported: newDocs.length, errors };
   }
