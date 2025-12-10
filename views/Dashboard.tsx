@@ -12,6 +12,7 @@ interface DashboardProps {
 }
 
 type SortKey = 'project' | 'microprocess' | 'state' | 'updatedAt';
+type QuickFilterType = 'ALL' | 'REQUIRED' | 'IN_PROCESS' | 'REFERENT' | 'CONTROL' | 'FINISHED';
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -24,7 +25,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [filterProcess, setFilterProcess] = useState('');
   const [filterDocType, setFilterDocType] = useState('');
   const [filterState, setFilterState] = useState('');
-  const [filterAnalyst, setFilterAnalyst] = useState(''); // New Analyst Filter
+  const [filterAnalyst, setFilterAnalyst] = useState('');
+  
+  // Quick Filter State (Stat Cards)
+  const [quickFilter, setQuickFilter] = useState<QuickFilterType>('ALL');
 
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
@@ -58,8 +62,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const isDocRequired = (doc: Document): boolean => {
       const key = `${doc.project}|${doc.microprocess}`;
       const requiredTypes = requiredMap[key];
-      if (!requiredTypes) return false; // Default to false if not found in matrix? Or based on load?
+      if (!requiredTypes) return false; 
       return doc.docType ? requiredTypes.includes(doc.docType) : false;
+  };
+
+  const handleQuickFilterClick = (type: QuickFilterType) => {
+      if (quickFilter === type) {
+          setQuickFilter('ALL'); // Toggle off
+      } else {
+          setQuickFilter(type);
+          setFilterState(''); // Reset manual state dropdown to avoid conflicts
+      }
   };
 
   const getFilteredDocs = () => {
@@ -94,6 +107,40 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         filtered = filtered.filter(d => d.authorName === filterAnalyst);
     }
 
+    // 3. Quick Filters (Stat Cards)
+    if (quickFilter !== 'ALL') {
+        // All quick filters (except ALL) imply showing "Required" docs context
+        filtered = filtered.filter(d => isDocRequired(d));
+
+        switch (quickFilter) {
+            case 'IN_PROCESS':
+                filtered = filtered.filter(d => 
+                    d.state === DocState.INITIATED || 
+                    d.state === DocState.IN_PROCESS || 
+                    d.state === DocState.INTERNAL_REVIEW
+                );
+                break;
+            case 'REFERENT':
+                filtered = filtered.filter(d => 
+                    d.state === DocState.SENT_TO_REFERENT || 
+                    d.state === DocState.REFERENT_REVIEW
+                );
+                break;
+            case 'CONTROL':
+                filtered = filtered.filter(d => 
+                    d.state === DocState.SENT_TO_CONTROL || 
+                    d.state === DocState.CONTROL_REVIEW
+                );
+                break;
+            case 'FINISHED':
+                filtered = filtered.filter(d => d.state === DocState.APPROVED);
+                break;
+            case 'REQUIRED':
+                // Already filtered by isDocRequired above
+                break;
+        }
+    }
+
     return filtered;
   };
 
@@ -120,7 +167,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   const nameB = b.microprocess || b.title;
                   return nameA.localeCompare(nameB) * modifier;
               case 'state':
-                   // Sort by progress number for state
                    return (a.progress - b.progress) * modifier;
               default:
                   return 0;
@@ -131,7 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const filteredDocs = getFilteredDocs();
   const sortedDocs = getSortedDocs(filteredDocs);
 
-  // Extract unique values for dropdowns based on available docs (Cascading logic)
+  // Extract unique values for dropdowns
   const baseDocs = user.role === UserRole.ANALYST ? 
     docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id))) : 
     docs;
@@ -165,41 +211,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       .map(d => d.authorName).filter(Boolean)
   )).sort() as string[];
   
-  // Calculate Stats based on FILTERED Documents (Dynamic)
-  const reqDocs = filteredDocs.filter(d => isDocRequired(d));
+  // Calculate Stats based on BASE filtered documents (ignoring quick filter for the counts themselves to stay static relative to dropdowns)
+  // Logic: The stats cards should reflect the counts of the current Dropdown Context, not filter themselves out.
+  const contextDocs = (() => {
+      let d = docs;
+      if (user.role === UserRole.ANALYST) {
+          d = docs.filter(doc => doc.authorId === user.id || (doc.assignees && doc.assignees.includes(user.id)));
+      }
+      if (filterProject) d = d.filter(doc => doc.project === filterProject);
+      if (filterMacro) d = d.filter(doc => doc.macroprocess === filterMacro);
+      if (filterProcess) d = d.filter(doc => doc.process === filterProcess);
+      if (filterDocType) d = d.filter(doc => doc.docType === filterDocType);
+      if (filterAnalyst) d = d.filter(doc => doc.authorName === filterAnalyst);
+      return d.filter(doc => isDocRequired(doc));
+  })();
 
   const stats = {
-    // 1. Documentos Requeridos: N° Total de documentos asignados (que existen y son requeridos)
-    totalRequired: reqDocs.length,
-
-    // 2. En Proceso: Iniciado + En Proceso + En revisión interna
-    inProcess: reqDocs.filter(d => 
+    totalRequired: contextDocs.length,
+    inProcess: contextDocs.filter(d => 
         d.state === DocState.INITIATED || 
         d.state === DocState.IN_PROCESS || 
         d.state === DocState.INTERNAL_REVIEW
     ).length,
-
-    // 3. Referente: Enviado a referente + Revisión con referente
-    referent: reqDocs.filter(d => 
+    referent: contextDocs.filter(d => 
         d.state === DocState.SENT_TO_REFERENT || 
         d.state === DocState.REFERENT_REVIEW
     ).length,
-
-    // 4. Control de Gestión: Enviado a control + Revisión con control
-    control: reqDocs.filter(d => 
+    control: contextDocs.filter(d => 
         d.state === DocState.SENT_TO_CONTROL || 
         d.state === DocState.CONTROL_REVIEW
     ).length,
-
-    // 5. Terminados: Aprobado
-    finished: reqDocs.filter(d => d.state === DocState.APPROVED).length
+    finished: contextDocs.filter(d => d.state === DocState.APPROVED).length
   };
 
   const chartData = [
-    { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' }, // blue-500
-    { name: 'Referente', value: stats.referent, color: '#a855f7' }, // purple-500
-    { name: 'Control Gestión', value: stats.control, color: '#f97316' }, // orange-500
-    { name: 'Terminados', value: stats.finished, color: '#22c55e' }, // green-500
+    { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' },
+    { name: 'Referente', value: stats.referent, color: '#a855f7' },
+    { name: 'Control Gestión', value: stats.control, color: '#f97316' },
+    { name: 'Terminados', value: stats.finished, color: '#22c55e' },
   ].filter(d => d.value > 0);
 
   const clearFilters = () => {
@@ -209,11 +258,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setFilterDocType('');
       setFilterState('');
       setFilterAnalyst('');
+      setQuickFilter('ALL');
   };
 
-  const hasFilters = filterProject || filterMacro || filterProcess || filterDocType || filterState || filterAnalyst;
+  const hasFilters = filterProject || filterMacro || filterProcess || filterDocType || filterState || filterAnalyst || quickFilter !== 'ALL';
 
-  // Render Sort Icon helper
   const SortIcon = ({ column }: { column: SortKey }) => {
       if (sortConfig.key !== column) return <ArrowUpDown size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
       return sortConfig.direction === 'asc' 
@@ -248,13 +297,48 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Stats Cards - Updated to new Requirements */}
+      {/* Stats Cards - Interactive */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-        <StatCard title="Doc. Requeridos" value={stats.totalRequired} icon={BookOpen} color="bg-slate-100 text-slate-600" />
-        <StatCard title="En Proceso" value={stats.inProcess} icon={Activity} color="bg-blue-100 text-blue-600" />
-        <StatCard title="Referente" value={stats.referent} icon={Users} color="bg-purple-100 text-purple-600" />
-        <StatCard title="Control Gestión" value={stats.control} icon={ShieldCheck} color="bg-orange-100 text-orange-600" />
-        <StatCard title="Terminados" value={stats.finished} icon={CheckCircle} color="bg-green-100 text-green-600" />
+        <StatCard 
+            title="Doc. Requeridos" 
+            value={stats.totalRequired} 
+            icon={BookOpen} 
+            color="bg-slate-100 text-slate-600" 
+            isActive={quickFilter === 'REQUIRED'}
+            onClick={() => handleQuickFilterClick('REQUIRED')}
+        />
+        <StatCard 
+            title="En Proceso" 
+            value={stats.inProcess} 
+            icon={Activity} 
+            color="bg-blue-100 text-blue-600" 
+            isActive={quickFilter === 'IN_PROCESS'}
+            onClick={() => handleQuickFilterClick('IN_PROCESS')}
+        />
+        <StatCard 
+            title="Referente" 
+            value={stats.referent} 
+            icon={Users} 
+            color="bg-purple-100 text-purple-600" 
+            isActive={quickFilter === 'REFERENT'}
+            onClick={() => handleQuickFilterClick('REFERENT')}
+        />
+        <StatCard 
+            title="Control Gestión" 
+            value={stats.control} 
+            icon={ShieldCheck} 
+            color="bg-orange-100 text-orange-600" 
+            isActive={quickFilter === 'CONTROL'}
+            onClick={() => handleQuickFilterClick('CONTROL')}
+        />
+        <StatCard 
+            title="Terminados" 
+            value={stats.finished} 
+            icon={CheckCircle} 
+            color="bg-green-100 text-green-600" 
+            isActive={quickFilter === 'FINISHED'}
+            onClick={() => handleQuickFilterClick('FINISHED')}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -274,6 +358,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         </button>
                     )}
                 </div>
+                
+                {quickFilter !== 'ALL' && (
+                    <div className="mb-3 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-700 flex items-center justify-between">
+                        <span>
+                            Filtrando por: <strong>
+                                {quickFilter === 'REQUIRED' && 'Total Requeridos'}
+                                {quickFilter === 'IN_PROCESS' && 'En Proceso'}
+                                {quickFilter === 'REFERENT' && 'En Referente'}
+                                {quickFilter === 'CONTROL' && 'Control de Gestión'}
+                                {quickFilter === 'FINISHED' && 'Terminados'}
+                            </strong>
+                        </span>
+                        <button onClick={() => setQuickFilter('ALL')} className="text-indigo-500 hover:text-indigo-800"><X size={16}/></button>
+                    </div>
+                )}
+
                 <div className={`grid grid-cols-1 gap-3 ${showAnalystFilter ? 'md:grid-cols-6' : 'md:grid-cols-5'}`}>
                     <select 
                         value={filterProject} 
@@ -324,8 +424,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
                     <select 
                         value={filterState} 
-                        onChange={(e) => setFilterState(e.target.value)}
+                        onChange={(e) => {
+                            setFilterState(e.target.value);
+                            setQuickFilter('ALL'); // Disable quick filter if manual state is selected
+                        }}
                         className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                        disabled={quickFilter !== 'ALL' && quickFilter !== 'REQUIRED'}
                     >
                         <option value="">Estado (Todos)</option>
                         {Object.keys(STATE_CONFIG).map(key => (
@@ -388,30 +492,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
                                 return (
                                     <tr key={doc.id} className={rowClass}>
-                                        {/* COL 1: PROYECTO */}
                                         <td className="px-4 py-3 font-bold">
                                             {doc.project}
                                         </td>
-
-                                        {/* COL 2: Jerarquía */}
                                         <td className="px-4 py-3 text-xs">
                                             <div className="font-medium">{doc.macroprocess}</div>
                                             <div>{doc.process}</div>
                                         </td>
-
-                                        {/* COL 3: MICROPROCESO */}
                                         <td className="px-4 py-3 font-medium">
                                             {doc.microprocess || doc.title}
                                             {!isRequired && <div className="text-[10px] text-slate-400 font-normal mt-0.5">(No Requerido)</div>}
-                                            {/* Show analyst name for admins/coordinators if filtered */}
                                             {showAnalystFilter && (
                                                 <div className="text-[10px] text-indigo-600 mt-1 flex items-center gap-1">
                                                     <Users size={10} /> {doc.authorName}
                                                 </div>
                                             )}
                                         </td>
-
-                                        {/* COL 4: Documento (Tipo + Link) */}
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col items-start gap-1">
                                                 {doc.docType && (
@@ -428,8 +524,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                 </Link>
                                             </div>
                                         </td>
-
-                                        {/* COL 5: Estado Actual */}
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col items-start gap-1">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${isRequired ? STATE_CONFIG[doc.state].color : 'bg-slate-200 text-slate-500'}`}>
@@ -440,8 +534,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                 </span>
                                             </div>
                                         </td>
-
-                                        {/* COL 6: Última Actividad */}
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-1.5">
                                                 <Calendar size={14} className={isRequired ? "text-slate-400" : "text-slate-300"} />
@@ -451,8 +543,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                 {new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                         </td>
-
-                                        {/* Admin Actions */}
                                         {user.role === UserRole.ADMIN && (
                                             <td className="px-4 py-3 text-right">
                                                 <button 
@@ -473,7 +563,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             </div>
         </div>
 
-        {/* Chart Column (Takes up 1 column) */}
+        {/* Chart Column */}
         <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center justify-center min-h-[300px]">
                 <h2 className="font-semibold text-slate-800 w-full mb-4 text-center">Distribución Requerida</h2>
@@ -521,7 +611,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     </li>
                     <li className="flex justify-between text-xs pt-1 opacity-80">
                         <span>No Requeridos:</span>
-                        <span>{filteredDocs.length - reqDocs.length}</span>
+                        <span>{filteredDocs.length - filteredDocs.filter(d => isDocRequired(d)).length}</span>
                     </li>
                 </ul>
             </div>
@@ -531,14 +621,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   );
 };
 
-const StatCard = ({ title, value, icon: Icon, color }: any) => (
-    <div className={`bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-3`}>
+const StatCard = ({ title, value, icon: Icon, color, isActive, onClick }: any) => (
+    <div 
+        onClick={onClick}
+        className={`bg-white p-3 rounded-xl shadow-sm border transition-all cursor-pointer flex items-center space-x-3 hover:shadow-md select-none
+        ${isActive ? 'border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50/20' : 'border-slate-200 hover:border-indigo-300'}`}
+    >
         <div className={`p-2 rounded-lg ${color}`}>
             <Icon size={20} />
         </div>
         <div>
             <p className="text-slate-500 text-[10px] font-bold uppercase leading-tight">{title}</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight">{value}</p>
+            <p className={`text-xl font-bold leading-tight ${isActive ? 'text-indigo-700' : 'text-slate-900'}`}>{value}</p>
         </div>
     </div>
 );
