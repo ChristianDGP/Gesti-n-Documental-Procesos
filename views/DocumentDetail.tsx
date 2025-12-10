@@ -235,8 +235,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   // LOGIC UPDATE: Allow Coordinator/Admin to approve proactively OR if request is pending
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
   const isDocActive = doc.state !== DocState.APPROVED;
-  const canApprove = isCoordinatorOrAdmin && isDocActive; // Relaxed rule for proactive approval
   
+  // MODIFICATION: Allow Analysts (Author/Assignee) to also use the Approve button to trigger validation modal
+  const canApprove = (isCoordinatorOrAdmin || (user.role === UserRole.ANALYST && (isAssignee || isAuthor))) && isDocActive;
+
   const canReject = canApprove;
   const canNotifyCoordinator = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
