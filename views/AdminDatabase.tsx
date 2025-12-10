@@ -1,12 +1,14 @@
 
 import React, { useState, useRef } from 'react';
 import { DatabaseService } from '../services/mockBackend';
-import { Download, Upload, Database, AlertTriangle, CheckCircle, Save } from 'lucide-react';
+import { Download, Upload, Database, AlertTriangle, CheckCircle, Save, FileSpreadsheet } from 'lucide-react';
 
 const AdminDatabase: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isLegacyImporting, setIsLegacyImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const legacyInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -56,6 +58,32 @@ const AdminDatabase: React.FC = () => {
     reader.readAsText(file);
   };
 
+  const handleLegacyFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+
+    if (!window.confirm(`¿Importar historia documental desde "${file.name}"?\n\nSe procesará el archivo CSV/Excel y se generarán los documentos correspondientes. Los datos anteriores marcados como 'legacy' serán reemplazados.`)) {
+        if (legacyInputRef.current) legacyInputRef.current.value = '';
+        return;
+    }
+
+    setIsLegacyImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const content = event.target?.result as string;
+            const result = await DatabaseService.importLegacyFromCSV(content);
+            alert(`Importación completada.\n\nDocumentos creados: ${result.imported}\nErrores: ${result.errors.length}`);
+            window.location.reload();
+        } catch (error: any) {
+            alert('Error en importación legacy: ' + error.message);
+            if (legacyInputRef.current) legacyInputRef.current.value = '';
+            setIsLegacyImporting(false);
+        }
+    };
+    reader.readAsText(file); // Reads as text (CSV/TSV)
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -64,7 +92,7 @@ const AdminDatabase: React.FC = () => {
             <Database className="text-indigo-600" />
             Base de Datos
           </h1>
-          <p className="text-slate-500">Gestión de respaldos y recuperación del sistema.</p>
+          <p className="text-slate-500">Gestión de respaldos, recuperación y migración de datos.</p>
         </div>
       </div>
 
@@ -129,6 +157,47 @@ const AdminDatabase: React.FC = () => {
                     </>
                 )}
             </button>
+        </div>
+
+        {/* Legacy Import Card (New) */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 md:col-span-2">
+            <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-600">
+                        <FileSpreadsheet size={24} />
+                    </div>
+                    <h2 className="text-lg font-bold text-slate-800 mb-2">Importar desde Excel Histórico (Migración)</h2>
+                    <p className="text-sm text-slate-500 mb-4">
+                        Carga el archivo Excel de gestión documental histórica (formato CSV/TSV) para poblar la base de datos inicial.
+                    </p>
+                    <ul className="text-xs text-slate-500 list-disc pl-4 space-y-1 mb-4">
+                        <li>El archivo debe contener las columnas de Jerarquía (Proyecto, Macro, Proceso, Micro).</li>
+                        <li>Debe incluir las columnas de estado para AS IS, FCE, PM y TO BE.</li>
+                        <li>Se recomienda guardar el Excel como "CSV (delimitado por punto y coma)" antes de subir.</li>
+                    </ul>
+                </div>
+                <div className="flex items-center justify-center md:w-1/3">
+                     <input 
+                        type="file" 
+                        ref={legacyInputRef}
+                        accept=".csv,.txt"
+                        onChange={handleLegacyFileSelect}
+                        className="hidden"
+                    />
+                     <button 
+                        onClick={() => legacyInputRef.current?.click()}
+                        disabled={isLegacyImporting}
+                        className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium shadow-sm disabled:opacity-70"
+                    >
+                        {isLegacyImporting ? 'Procesando...' : (
+                            <>
+                                <Upload size={18} className="mr-2" />
+                                Subir Excel/CSV
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
         </div>
       </div>
     </div>

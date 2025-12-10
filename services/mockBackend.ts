@@ -562,6 +562,177 @@ export const DatabaseService = {
            localStorage.setItem(key, typeof val === 'object' ? JSON.stringify(val) : val);
        }
     }
+  },
+
+  importLegacyFromCSV: async (csvContent: string): Promise<{ imported: number, errors: string[] }> => {
+    // 1. Split lines (handle \r\n and \n)
+    const lines = csvContent.split(/\r?\n/).filter(line => line.trim() !== '');
+    if (lines.length < 2) throw new Error('El archivo CSV está vacío o solo contiene cabeceras.');
+
+    const users = await UserService.getAll();
+    const adminUser = users.find(u => u.role === UserRole.ADMIN) || MOCK_USERS[0];
+    const newDocs: Document[] = [];
+    const errors: string[] = [];
+
+    // Helper parsers
+    const parseLegacyDate = (d: string) => {
+        if (!d || d.trim() === '') return new Date().toISOString();
+        // Assume DD-MM-YYYY
+        const parts = d.trim().split('-');
+        if (parts.length === 3) {
+            // YYYY-MM-DD
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toISOString();
+        }
+        return new Date().toISOString();
+    };
+
+    const parseLegacyState = (s: string): DocState => {
+        if (!s) return DocState.INITIATED;
+        const normalized = s.trim();
+        
+        // Mapeo Estricto solicitado
+        if (normalized.startsWith('6')) return DocState.APPROVED;
+        if (normalized.startsWith('5.1')) return DocState.CONTROL_REVIEW;
+        if (normalized.startsWith('5')) return DocState.SENT_TO_CONTROL;
+        if (normalized.startsWith('4.1')) return DocState.REFERENT_REVIEW;
+        if (normalized.startsWith('4')) return DocState.SENT_TO_REFERENT;
+        if (normalized.startsWith('3')) return DocState.INTERNAL_REVIEW;
+        if (normalized.startsWith('2')) return DocState.IN_PROCESS;
+        if (normalized.startsWith('1')) return DocState.INITIATED;
+
+        // Fallback textual (por si acaso viene sin número)
+        const lower = s.toLowerCase();
+        if (lower.includes('aprobado')) return DocState.APPROVED;
+        if (lower.includes('control')) return DocState.SENT_TO_CONTROL;
+        if (lower.includes('referente')) return DocState.SENT_TO_REFERENT;
+        if (lower.includes('revisión interna') || lower.includes('revision interna')) return DocState.INTERNAL_REVIEW;
+        if (lower.includes('proceso')) return DocState.IN_PROCESS;
+        
+        return DocState.IN_PROCESS; 
+    };
+
+    const cleanPercentage = (p: string): number => {
+        if (!p) return 0;
+        return parseInt(p.replace('%', '').trim()) || 0;
+    };
+
+    // 3. Iterate rows (Skip header idx 0)
+    for (let i = 1; i < lines.length; i++) {
+        // Handle CSV split by Semicolon as requested
+        let cols = lines[i].split(';');
+
+        if (cols.length < 5) continue; // Invalid row
+
+        // Map Columns based on provided structure:
+        // 0:ID, 1:PROY, 2:MACRO, 3:PROC, 4:MICRO, 5:NOMBRE
+        const project = cols[1]?.trim();
+        const macro = cols[2]?.trim();
+        const process = cols[3]?.trim();
+        const micro = cols[4]?.trim();
+        const analystName = cols[5]?.trim();
+
+        // Resolve Assignee
+        let assigneeId = adminUser.id;
+        let assigneeName = adminUser.name;
+        if (analystName && NAME_TO_ID_MAP[analystName]) {
+            assigneeId = NAME_TO_ID_MAP[analystName];
+            const u = users.find(user => user.id === assigneeId);
+            if (u) assigneeName = u.name;
+        }
+
+        const baseDoc = {
+            project, macroprocess: macro, process, microprocess: micro,
+            authorId: adminUser.id, authorName: adminUser.name,
+            assignedTo: assigneeId, assignees: [assigneeId],
+            assignedByName: 'Migración Histórica',
+            files: []
+        };
+
+        // --- PROCESS TYPE: AS IS (Cols 6-9) ---
+        // 6: %, 7: Fecha (Activity), 8: Ver, 9: Estado
+        if (cols[8] && cols[8].trim() !== '') {
+            const dateVal = parseLegacyDate(cols[7]);
+            newDocs.push({
+                ...baseDoc,
+                id: `doc-legacy-${i}-ASIS`,
+                title: `${project} - ${micro} - AS IS`,
+                description: `Migración: AS IS para ${micro}`,
+                docType: 'AS IS',
+                progress: cleanPercentage(cols[6]),
+                updatedAt: dateVal, // Uses CSV date
+                createdAt: dateVal,
+                version: cols[8].trim(),
+                state: parseLegacyState(cols[9]),
+                hasPendingRequest: false
+            });
+        }
+
+        // --- PROCESS TYPE: FCE (Cols 10-13) ---
+        // 10: %, 11: Fecha, 12: Ver, 13: Estado
+        if (cols[12] && cols[12].trim() !== '') {
+            const dateVal = parseLegacyDate(cols[11]);
+            newDocs.push({
+                ...baseDoc,
+                id: `doc-legacy-${i}-FCE`,
+                title: `${project} - ${micro} - FCE`,
+                description: `Migración: FCE para ${micro}`,
+                docType: 'FCE',
+                progress: cleanPercentage(cols[10]),
+                updatedAt: dateVal,
+                createdAt: dateVal,
+                version: cols[12].trim(),
+                state: parseLegacyState(cols[13]),
+                hasPendingRequest: false
+            });
+        }
+
+        // --- PROCESS TYPE: PM (Cols 14-17) ---
+        // 14: %, 15: Fecha, 16: Ver, 17: Estado
+        if (cols[16] && cols[16].trim() !== '') {
+            const dateVal = parseLegacyDate(cols[15]);
+            newDocs.push({
+                ...baseDoc,
+                id: `doc-legacy-${i}-PM`,
+                title: `${project} - ${micro} - PM`,
+                description: `Migración: PM para ${micro}`,
+                docType: 'PM',
+                progress: cleanPercentage(cols[14]),
+                updatedAt: dateVal,
+                createdAt: dateVal,
+                version: cols[16].trim(),
+                state: parseLegacyState(cols[17]),
+                hasPendingRequest: false
+            });
+        }
+
+        // --- PROCESS TYPE: TO BE (Cols 18-21) ---
+        // 18: %, 19: Fecha, 20: Ver, 21: Estado
+        if (cols[20] && cols[20].trim() !== '') {
+            const dateVal = parseLegacyDate(cols[19]);
+            newDocs.push({
+                ...baseDoc,
+                id: `doc-legacy-${i}-TOBE`,
+                title: `${project} - ${micro} - TO BE`,
+                description: `Migración: TO BE para ${micro}`,
+                docType: 'TO BE',
+                progress: cleanPercentage(cols[18]),
+                updatedAt: dateVal,
+                createdAt: dateVal,
+                version: cols[20].trim(),
+                state: parseLegacyState(cols[21]),
+                hasPendingRequest: false
+            });
+        }
+    }
+
+    // Save to LocalStorage
+    const currentDocs = JSON.parse(localStorage.getItem(STORAGE_KEYS.DOCS) || '[]');
+    // Filter out previous legacy imports to avoid dupes if running twice
+    const nonLegacy = currentDocs.filter((d: Document) => !d.id.startsWith('doc-legacy-'));
+    
+    localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify([...nonLegacy, ...newDocs]));
+    
+    return { imported: newDocs.length, errors };
   }
 };
 
