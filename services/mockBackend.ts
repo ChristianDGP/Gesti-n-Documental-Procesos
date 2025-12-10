@@ -659,20 +659,18 @@ export const DatabaseService = {
         const micro = cols[4]?.trim();
         const analystNameRaw = cols[5]?.trim();
 
-        // Resolve Assignee(s) handling multiple names separated by / or &
+        // Resolve Assignee - Single User per row for initial load
         let assignees: string[] = [];
         
         if (analystNameRaw) {
-            const splitNames = analystNameRaw.split(/\/|&| y /); // Regex split for /, &, or " y "
-            splitNames.forEach(raw => {
-                const clean = raw.trim();
-                if (NAME_TO_ID_MAP[clean]) {
-                    assignees.push(NAME_TO_ID_MAP[clean]);
-                } else {
-                    const directUser = users.find(u => u.name.trim().toLowerCase() === clean.toLowerCase() || u.nickname === clean);
-                    if (directUser) assignees.push(directUser.id);
-                }
-            });
+             const clean = analystNameRaw.trim();
+             if (NAME_TO_ID_MAP[clean]) {
+                assignees.push(NAME_TO_ID_MAP[clean]);
+             } else {
+                 // Fuzzy match
+                 const directUser = users.find(u => u.name.trim().toLowerCase() === clean.toLowerCase() || u.nickname === clean);
+                 if (directUser) assignees.push(directUser.id);
+             }
         }
         
         // Fallback to Admin if no valid assignee found
@@ -680,13 +678,9 @@ export const DatabaseService = {
             assignees.push(adminUser.id);
         }
 
-        // Construct composite display name
-        const authorDisplayName = assignees.map(aid => {
-            const u = users.find(user => user.id === aid);
-            return u ? u.name : 'Desconocido';
-        }).join(' / ');
-
         const primaryAssignee = assignees[0];
+        const primaryUser = users.find(u => u.id === primaryAssignee);
+        const authorDisplayName = primaryUser ? primaryUser.name : 'Desconocido';
 
         // STORE MATRIX ASSIGNMENT
         if (project && micro && primaryAssignee !== adminUser.id) {
@@ -698,7 +692,7 @@ export const DatabaseService = {
             project, macroprocess: macro, process, microprocess: micro,
             // Use primary ID for single-value compatibility, but full list in assignees
             authorId: primaryAssignee, 
-            authorName: authorDisplayName, // Composite name
+            authorName: authorDisplayName, 
             assignedTo: primaryAssignee, 
             assignees: assignees,
             assignedByName: 'Migración Histórica',

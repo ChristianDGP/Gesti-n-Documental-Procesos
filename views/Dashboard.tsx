@@ -69,13 +69,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return doc.docType ? requiredTypes.includes(doc.docType) : false;
   };
 
-  // Helper to get formatted assignees names
-  const getAssigneesNames = (doc: Document) => {
-      if (!doc.assignees || doc.assignees.length === 0) return doc.authorName; // Fallback
+  // Helper to get formatted assignees names (returns array of names for display filtering)
+  const getAssigneesNames = (doc: Document): string[] => {
+      if (!doc.assignees || doc.assignees.length === 0) return [doc.authorName]; 
       return doc.assignees
           .map(id => allUsers.find(u => u.id === id)?.name)
-          .filter(name => name)
-          .join(' / ');
+          .filter((name): name is string => !!name);
   };
 
   const handleQuickFilterClick = (type: QuickFilterType) => {
@@ -118,7 +117,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     if (filterAnalyst) {
         filtered = filtered.filter(d => {
             const names = getAssigneesNames(d);
-            return names.includes(filterAnalyst) || d.authorName === filterAnalyst;
+            // Check if ANY of the assignees matches the filter
+            return names.includes(filterAnalyst);
         });
     }
 
@@ -218,13 +218,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       .map(d => d.docType).filter(Boolean)
   )) as string[];
 
-  // This list logic is tricky with multiple assignees. Simplified to showing authorName which now contains combined strings
+  // Flattened list of individual analysts
   const uniqueAnalysts = Array.from(new Set(
       baseDocs.filter(d => 
         (!filterProject || d.project === filterProject) && 
         (!filterMacro || d.macroprocess === filterMacro)
       )
-      .map(d => getAssigneesNames(d)).filter(Boolean)
+      .flatMap(d => getAssigneesNames(d))
   )).sort() as string[];
   
   // Calculate Stats based on BASE filtered documents (ignoring quick filter for the counts themselves to stay static relative to dropdowns)
@@ -237,7 +237,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       if (filterMacro) d = d.filter(doc => doc.macroprocess === filterMacro);
       if (filterProcess) d = d.filter(doc => doc.process === filterProcess);
       if (filterDocType) d = d.filter(doc => doc.docType === filterDocType);
-      if (filterAnalyst) d = d.filter(doc => getAssigneesNames(doc) === filterAnalyst);
+      if (filterAnalyst) d = d.filter(doc => getAssigneesNames(doc).includes(filterAnalyst));
       return d.filter(doc => isDocRequired(doc));
   })();
 
@@ -505,8 +505,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     ? "border-b border-slate-50 hover:bg-slate-50 transition-colors" 
                                     : "border-b border-slate-50 bg-slate-100/50 text-slate-400 hover:bg-slate-100 transition-colors";
                                 
-                                const assigneesDisplay = getAssigneesNames(doc);
-
                                 return (
                                     <tr key={doc.id} className={rowClass}>
                                         <td className="px-4 py-3 font-bold">
@@ -519,9 +517,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                         <td className="px-4 py-3 font-medium">
                                             {doc.microprocess || doc.title}
                                             {!isRequired && <div className="text-[10px] text-slate-400 font-normal mt-0.5">(No Requerido)</div>}
-                                            {showAnalystFilter && (
-                                                <div className="text-[10px] text-indigo-600 mt-1 flex items-center gap-1">
-                                                    <Users size={10} /> {assigneesDisplay}
+                                            
+                                            {/* VISUALIZACIÓN VERTICAL DE ANALISTAS */}
+                                            {showAnalystFilter && doc.assignees && doc.assignees.length > 0 && (
+                                                <div className="flex flex-col gap-1 mt-1">
+                                                    {doc.assignees.map(aid => {
+                                                        const u = allUsers.find(user => user.id === aid);
+                                                        return u ? (
+                                                            <div key={aid} className="flex items-center gap-1 text-[10px] text-indigo-600">
+                                                                <Users size={10} /> {u.name}
+                                                            </div>
+                                                        ) : null;
+                                                    })}
                                                 </div>
                                             )}
                                         </td>
@@ -543,7 +550,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col items-start gap-1">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${isRequired ? STATE_CONFIG[doc.state].color : 'bg-slate-200 text-slate-500'}`}>
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>
                                                     {STATE_CONFIG[doc.state].label.split('(')[0]}
                                                 </span>
                                                 <span className="text-xs font-mono ml-1">
