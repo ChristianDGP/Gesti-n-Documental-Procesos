@@ -1,7 +1,7 @@
+
 import React, { useState } from 'react';
 import { AuthService } from '../services/mockBackend';
 import { Eye, EyeOff, AlertCircle, Lock, User } from 'lucide-react';
-import { MOCK_USERS } from '../constants';
 
 interface LoginProps {
   onLogin: () => void;
@@ -31,21 +31,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Helper to pre-fill for testing purposes
-  const fillCredentials = (userType: string) => {
-      if (userType === 'ADMIN') {
-        setUsername('admin');
-        setPassword('admin');
-      } else {
-        const u = MOCK_USERS.find(user => user.role === userType);
-        if (u) {
-            setUsername(u.nickname || u.email);
-            setPassword(u.password || 'dgp2026');
-        }
-      }
-      setError(null);
   };
 
   return (
@@ -123,25 +108,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </a>
         </div>
       </div>
-
-        {/* Development Helper: Only visible to help you test */}
-        <div className="mt-8 max-w-[400px] w-full text-xs text-slate-500 text-center">
-            <p className="font-semibold mb-3">Accesos Rápidos (Entorno de Pruebas)</p>
-            <div className="flex flex-wrap justify-center gap-2">
-                <button 
-                    onClick={() => fillCredentials('ADMIN')}
-                    className="bg-white border border-slate-300 hover:border-indigo-400 hover:text-indigo-600 px-3 py-1.5 rounded-full transition-colors shadow-sm"
-                >
-                    Admin (admin / admin)
-                </button>
-                <button 
-                    onClick={() => fillCredentials('ANALYST')}
-                    className="bg-white border border-slate-300 hover:border-indigo-400 hover:text-indigo-600 px-3 py-1.5 rounded-full transition-colors shadow-sm"
-                >
-                    Analista (Procesos)
-                </button>
-            </div>
-        </div>
     </div>
   );
 };
