@@ -170,6 +170,7 @@ export const validateCoordinatorRules = (
     const regexApprovedInternal = /^v(\d+)\.0$/;   // v1.0
     const regexApprovedReferent = /^v1\.(\d+)$/;   // v1.n
     const regexApprovedControl = /^v1\.(\d+)AR$/;  // v1.nAR
+    const regexApprovedFinal = /^v1\.(\d+)ACG$/;   // v1.nACG
 
     // --- RECHAZAR (Feedback Loop) ---
     if (action === 'REJECT') {
@@ -224,11 +225,16 @@ export const validateCoordinatorRules = (
         }
 
         if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
-            // Caso C: v1.n.iAR -> n incrementa en 1, termina en AR
-            // Example: v1.0.1AR -> v1.1AR
-            const match = newVersion.match(regexApprovedControl);
-            if (!match) return { valid: false, error: 'Formato incorrecto. Para aprobar Control debe ser v1.nAR (ej: v1.1AR).' };
-            return { valid: true };
+            // Caso C - Opción 1: v1.nAR (Incremento dentro de control)
+            const matchIncrement = newVersion.match(regexApprovedControl);
+
+            // Caso C - Opción 2: v1.nACG (Aprobación Final)
+            const matchFinal = newVersion.match(regexApprovedFinal);
+
+            if (matchIncrement) return { valid: true };
+            if (matchFinal) return { valid: true };
+
+            return { valid: false, error: 'Formato incorrecto. Opciones: v1.nAR (Incremento) O v1.nACG (Final).' };
         }
     }
 
@@ -247,7 +253,7 @@ export const getCoordinatorRuleHint = (currentState: DocState, action: 'APPROVE'
     } else {
         if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v1.0 (Incremento de entero)';
         if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) return 'Opción 1: v1.n (Incremento) | Opción 2: v1.nAR (Paso a Control)';
-        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) return 'Formato: v1.nAR (n incrementa). Ej: v1.1AR';
+        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) return 'Opción 1: v1.nAR (Incremento) | Opción 2: v1.nACG (Final)';
     }
     return 'Formato estándar';
 };
