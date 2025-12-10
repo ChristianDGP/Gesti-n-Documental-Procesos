@@ -22,6 +22,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [filterProject, setFilterProject] = useState('');
   const [filterMacro, setFilterMacro] = useState('');
   const [filterProcess, setFilterProcess] = useState('');
+  const [filterDocType, setFilterDocType] = useState('');
   const [filterState, setFilterState] = useState('');
 
   // Sorting State
@@ -82,6 +83,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     if (filterProcess) {
         filtered = filtered.filter(d => d.process === filterProcess);
     }
+    if (filterDocType) {
+        filtered = filtered.filter(d => d.docType === filterDocType);
+    }
     if (filterState) {
         filtered = filtered.filter(d => d.state === filterState);
     }
@@ -139,6 +143,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       baseDocs.filter(d => (!filterProject || d.project === filterProject) && (!filterMacro || d.macroprocess === filterMacro))
       .map(d => d.process).filter(Boolean)
   )) as string[];
+
+  const uniqueDocTypes = Array.from(new Set(
+      baseDocs.filter(d => 
+        (!filterProject || d.project === filterProject) && 
+        (!filterMacro || d.macroprocess === filterMacro) &&
+        (!filterProcess || d.process === filterProcess)
+      )
+      .map(d => d.docType).filter(Boolean)
+  )) as string[];
   
   // Calculate Stats based on FILTERED Documents (Dynamic)
   const reqDocs = filteredDocs.filter(d => isDocRequired(d));
@@ -181,10 +194,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setFilterProject('');
       setFilterMacro('');
       setFilterProcess('');
+      setFilterDocType('');
       setFilterState('');
   };
 
-  const hasFilters = filterProject || filterMacro || filterProcess || filterState;
+  const hasFilters = filterProject || filterMacro || filterProcess || filterDocType || filterState;
 
   // Render Sort Icon helper
   const SortIcon = ({ column }: { column: SortKey }) => {
@@ -245,7 +259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         </button>
                     )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                     <select 
                         value={filterProject} 
                         onChange={(e) => setFilterProject(e.target.value)}
@@ -271,6 +285,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     >
                         <option value="">Proceso (Todos)</option>
                         {uniqueProcesses.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+
+                    <select 
+                        value={filterDocType} 
+                        onChange={(e) => setFilterDocType(e.target.value)}
+                        className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                        <option value="">Documento (Todos)</option>
+                        {uniqueDocTypes.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
 
                     <select 
