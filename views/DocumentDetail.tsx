@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService } from '../services/mockBa
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, checkVersionRules } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users, RotateCcw, Send, Mail } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users, RotateCcw, Send, Mail, MessageSquare } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -94,8 +94,17 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   // 2. Action Trigger (Check prerequisites)
-  const handleActionClick = (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'REQUEST_APPROVAL') => {
+  const handleActionClick = (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'REQUEST_APPROVAL' | 'COMMENT') => {
       if (!doc) return;
+
+      if (action === 'COMMENT') {
+          if (!comment.trim()) {
+              alert('Por favor escribe una observación antes de guardar.');
+              return;
+          }
+          executeTransition('COMMENT', null, null);
+          return;
+      }
 
       if (action === 'REQUEST_APPROVAL') {
           if (!window.confirm('¿Solicitar aprobación para la versión actual?')) return;
@@ -231,6 +240,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
 
+  // General write permission check
+  const hasWriteAccess = (user.role === UserRole.ANALYST && (isAssignee || isAuthor)) || user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+
   const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
   
   // Logic updated: Request Approval checks nomenclature internally
@@ -356,21 +368,33 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                  <textarea 
                     className="w-full p-3 border border-slate-300 rounded-lg text-sm mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
                     rows={3}
-                    placeholder="Observaciones (requerido para rechazo o correo)..."
+                    placeholder="Escriba aquí sus observaciones o comentarios..."
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                  />
 
                  <div className="flex flex-wrap gap-3">
+                    {/* Botón para guardar solo observación - Disponible para cualquiera con acceso de escritura */}
+                    {hasWriteAccess && (
+                        <button 
+                            onClick={() => handleActionClick('COMMENT')} 
+                            disabled={actionLoading} 
+                            className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium shadow-sm transition-colors"
+                            title="Guarda el comentario sin cambiar el estado del documento"
+                        >
+                            <MessageSquare size={16} className="mr-2" /> Guardar Observación
+                        </button>
+                    )}
+
                     {canNotifyCoordinator && (
                          <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
-                            <Mail size={16} className="mr-2" /> Notificar al Coordinador (Gmail)
+                            <Mail size={16} className="mr-2" /> Notificar Coord.
                         </button>
                     )}
 
                     {canNotifyAuthor && (
                         <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
-                            <Mail size={16} className="mr-2" /> Notificar al Analista (Gmail)
+                            <Mail size={16} className="mr-2" /> Notificar Analista
                         </button>
                     )}
 
@@ -388,13 +412,13 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
                     {canApprove && (
                         <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm">
-                            <CheckCircle size={16} className="mr-2" /> Aprobar (Subir Archivo)
+                            <CheckCircle size={16} className="mr-2" /> Aprobar
                         </button>
                     )}
 
                     {canReject && (
                         <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium border border-red-200">
-                            <XCircle size={16} className="mr-2" /> Rechazar (Subir Archivo)
+                            <XCircle size={16} className="mr-2" /> Rechazar
                         </button>
                     )}
 
@@ -409,7 +433,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             <div className="space-y-6 pl-4 border-l-2 border-slate-100 relative">
                 {history.map(h => (
                     <div key={h.id} className="relative">
-                        <div className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-slate-300 border-2 border-white"></div>
+                        <div className={`absolute -left-[21px] top-1 h-3 w-3 rounded-full border-2 border-white ${h.action === 'Observación' ? 'bg-indigo-400' : 'bg-slate-300'}`}></div>
                         <div className="text-xs text-slate-400 mb-0.5">{new Date(h.timestamp).toLocaleString()}</div>
                         <p className="text-sm font-medium text-slate-800">{h.action} <span className="font-normal text-slate-500">por {h.userName}</span></p>
                         {h.comment && <div className="mt-1 p-2 bg-slate-50 rounded text-xs text-slate-600 italic border border-slate-100">"{h.comment}"</div>}

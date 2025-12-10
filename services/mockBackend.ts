@@ -453,7 +453,7 @@ export const DocumentService = {
     localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(docs));
     return newFile;
   },
-  transitionState: async (docId: string, user: User, action: 'ADVANCE' | 'REJECT' | 'APPROVE' | 'REQUEST_APPROVAL', comment: string, file?: File, customVersion?: string): Promise<Document> => {
+  transitionState: async (docId: string, user: User, action: 'ADVANCE' | 'REJECT' | 'APPROVE' | 'REQUEST_APPROVAL' | 'COMMENT', comment: string, file?: File, customVersion?: string): Promise<Document> => {
     const docs = await DocumentService.getAll();
     const docIndex = docs.findIndex(d => d.id === docId);
     if (docIndex === -1) throw new Error('Documento no encontrado');
@@ -512,6 +512,11 @@ export const DocumentService = {
         newState = DocState.REJECTED;
         comment = `RECHAZADO: ${comment}`;
         break;
+
+      case 'COMMENT':
+          // Log only. No state change.
+          comment = `OBSERVACIÓN: ${comment}`;
+          break;
     }
 
     // Recalculate progress based on new state config
@@ -527,7 +532,8 @@ export const DocumentService = {
     };
 
     localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(docs));
-    await HistoryService.log(doc.id, user, action, previousState, newState, comment);
+    const actionLabel = action === 'COMMENT' ? 'Observación' : action;
+    await HistoryService.log(doc.id, user, actionLabel, previousState, newState, comment);
     return docs[docIndex];
   }
 };
