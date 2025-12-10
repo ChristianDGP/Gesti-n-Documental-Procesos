@@ -5,11 +5,13 @@ import { DocumentService, HistoryService, UserService } from '../services/mockBa
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter } from 'lucide-react';
 
 interface Props {
   user: User;
 }
+
+type ApprovalContext = 'INTERNAL' | 'REFERENT' | 'CONTROL';
 
 const DocumentDetail: React.FC<Props> = ({ user }) => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +28,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   // Response Modal State
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'APPROVE' | 'REJECT' | null>(null);
+  const [approvalType, setApprovalType] = useState<ApprovalContext | ''>(''); // New selector state
   const [responseFile, setResponseFile] = useState<File | undefined>(undefined);
   const [responseFileError, setResponseFileError] = useState<string | null>(null);
   const modalFileRef = useRef<HTMLInputElement>(null);
@@ -118,6 +121,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           setPendingAction(action);
           setResponseFile(undefined);
           setResponseFileError(null);
+
+          // Auto-detect approval type if based on current state (Legacy behavior fallback)
+          let autoType: ApprovalContext | '' = '';
+          if (doc.state === DocState.INTERNAL_REVIEW) autoType = 'INTERNAL';
+          else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) autoType = 'REFERENT';
+          else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) autoType = 'CONTROL';
+          
+          setApprovalType(autoType);
           setShowResponseModal(true);
       }
   };
@@ -134,8 +145,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               return;
           }
 
+          // Determine Mock State for Validation based on Dropdown
+          let mockStateForValidation = doc.state;
+          if (approvalType === 'INTERNAL') mockStateForValidation = DocState.INTERNAL_REVIEW;
+          else if (approvalType === 'REFERENT') mockStateForValidation = DocState.SENT_TO_REFERENT;
+          else if (approvalType === 'CONTROL') mockStateForValidation = DocState.SENT_TO_CONTROL;
+
           // 2. Strict Coordinator Rule Validation
-          const ruleCheck = validateCoordinatorRules(file.name, doc.version, doc.state, pendingAction);
+          const ruleCheck = validateCoordinatorRules(file.name, doc.version, mockStateForValidation, pendingAction);
           if (!ruleCheck.valid) {
               setResponseFileError(ruleCheck.error || 'Error de validación');
               return;
@@ -147,6 +164,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const handleSubmitResponse = async () => {
       if (!doc || !pendingAction || !responseFile || responseFileError) return;
+      if (pendingAction === 'APPROVE' && !approvalType) {
+          alert('Debe seleccionar un Tipo de Aprobación.');
+          return;
+      }
 
       // Extract Clean Version
       const parts = responseFile.name.replace(/\.[^/.]+$/, "").split(' - ');
@@ -191,6 +212,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
+  // Helper to get hint based on selector
+  const getCurrentHint = () => {
+      let mockState = doc?.state || DocState.INITIATED;
+      if (approvalType === 'INTERNAL') mockState = DocState.INTERNAL_REVIEW;
+      else if (approvalType === 'REFERENT') mockState = DocState.SENT_TO_REFERENT;
+      else if (approvalType === 'CONTROL') mockState = DocState.SENT_TO_CONTROL;
+      
+      return getCoordinatorRuleHint(mockState, pendingAction || 'APPROVE');
+  };
+
   if (loading || !doc) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
 
   const config = STATE_CONFIG[doc.state];
@@ -200,10 +231,15 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
   const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && (doc.state === DocState.IN_PROCESS || doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT);
   const canRestart = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.REJECTED;
-  const canApprove = ((user.role === UserRole.COORDINATOR && doc.hasPendingRequest && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) || (user.role === UserRole.ADMIN && doc.hasPendingRequest && doc.state === DocState.SENT_TO_CONTROL));
+  
+  // LOGIC UPDATE: Allow Coordinator/Admin to approve proactively OR if request is pending
+  const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+  const isDocActive = doc.state !== DocState.APPROVED;
+  const canApprove = isCoordinatorOrAdmin && isDocActive; // Relaxed rule for proactive approval
+  
   const canReject = canApprove;
   const canNotifyCoordinator = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
-  const canNotifyAuthor = (user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN) && authorEmail && doc.authorId !== user.id;
+  const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -313,27 +349,48 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                   </div>
                   
                   <div className="p-6 space-y-4">
-                        <p className="text-sm text-slate-600">
-                            Para completar esta acción, debe subir la versión correspondiente del documento.
-                        </p>
+                        {/* SELECTOR DE CONTEXTO (NUEVO) */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                                <ListFilter size={14} /> Tipo de Aprobación / Contexto
+                            </label>
+                            <select 
+                                value={approvalType} 
+                                onChange={(e) => {
+                                    setApprovalType(e.target.value as ApprovalContext);
+                                    setResponseFile(undefined); // Reset file to force re-validation
+                                    setResponseFileError(null);
+                                }}
+                                className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                            >
+                                <option value="">-- Seleccionar Etapa --</option>
+                                <option value="INTERNAL">Aprobación Revisión Interna (v1.0)</option>
+                                <option value="REFERENT">Aprobación Referente (v1.n / v1.nAR)</option>
+                                <option value="CONTROL">Aprobación Control Gestión (v1.nAR / v1.nACG)</option>
+                            </select>
+                        </div>
 
                         <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-3">
                             <Info size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
                             <div>
                                 <p className="text-xs font-bold text-blue-800 uppercase mb-1">Nomenclatura Requerida</p>
                                 <p className="text-sm font-mono font-bold text-blue-900">
-                                    {getCoordinatorRuleHint(doc.state, pendingAction)}
+                                    {approvalType ? getCurrentHint() : 'Seleccione un tipo de aprobación'}
                                 </p>
                             </div>
                         </div>
 
                         <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-colors
-                            ${responseFileError ? 'border-red-300 bg-red-50' : responseFile ? 'border-green-300 bg-green-50' : 'border-slate-300 hover:bg-slate-50'}`}>
+                            ${!approvalType ? 'bg-slate-50 border-slate-200 cursor-not-allowed opacity-60' : 
+                               responseFileError ? 'border-red-300 bg-red-50' : 
+                               responseFile ? 'border-green-300 bg-green-50' : 
+                               'border-slate-300 hover:bg-slate-50 hover:border-indigo-300 cursor-pointer'}`}>
                             
                             <input 
                                 type="file" 
                                 ref={modalFileRef}
                                 className="hidden"
+                                disabled={!approvalType}
                                 onChange={handleResponseFileSelect}
                             />
 
@@ -356,9 +413,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                     )}
                                 </div>
                             ) : (
-                                <div onClick={() => modalFileRef.current?.click()} className="cursor-pointer">
+                                <div onClick={() => approvalType && modalFileRef.current?.click()} className={approvalType ? "cursor-pointer" : ""}>
                                     <Upload size={32} className="text-slate-400 mx-auto mb-2" />
-                                    <p className="text-sm font-medium text-slate-600">Click para subir archivo</p>
+                                    <p className="text-sm font-medium text-slate-600">
+                                        {approvalType ? 'Click para subir archivo' : 'Seleccione un Tipo primero'}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -367,7 +426,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             <button onClick={() => setShowResponseModal(false)} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm">Cancelar</button>
                             <button 
                                 onClick={handleSubmitResponse}
-                                disabled={!responseFile || !!responseFileError}
+                                disabled={!responseFile || !!responseFileError || !approvalType}
                                 className={`px-4 py-2 rounded-lg text-white text-sm font-bold shadow-sm transition-all
                                     ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
                                     disabled:opacity-50 disabled:cursor-not-allowed`}
