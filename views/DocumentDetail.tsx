@@ -18,6 +18,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [history, setHistory] = useState<DocHistory[]>([]);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
+  const [authorEmail, setAuthorEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -44,6 +45,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     const coordinator = allUsers.find(u => u.role === UserRole.COORDINATOR);
     if (coordinator) {
         setCoordinatorEmail(coordinator.email);
+    }
+
+    // Find Author Email (for notifications back to analyst)
+    if (d) {
+        const author = allUsers.find(u => u.id === d.authorId);
+        if (author) {
+            setAuthorEmail(author.email);
+        }
     }
 
     if (d && d.assignees && d.assignees.length > 0) {
@@ -172,17 +181,31 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         `Estimado Coordinador,\n\n` +
         `Se requiere su atención en el siguiente documento:\n\n` +
         `ID: ${doc.id}\n` +
-        `Proyecto: ${doc.project || '-'}\n` +
-        `MacroProceso: ${doc.macroprocess || '-'}\n` +
-        `Proceso: ${doc.process || '-'}\n` +
         `MicroProceso: ${doc.microprocess || doc.title}\n` +
         `Estado Actual: ${STATE_CONFIG[doc.state].label}\n\n` +
         `Atentamente,\n${user.name}`
     );
 
-    // Gmail compose URL magic
     const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`;
     window.open(gmailUrl, '_blank');
+  };
+
+  const handleNotifyAnalyst = () => {
+      if (!doc || !authorEmail) return;
+
+      const subject = encodeURIComponent(`Respuesta Solicitud SGD: ${doc.title}`);
+      const body = encodeURIComponent(
+          `Estimado/a ${doc.authorName},\n\n` +
+          `Se ha revisado su documento con los siguientes detalles:\n\n` +
+          `ID: ${doc.id}\n` +
+          `MicroProceso: ${doc.microprocess || doc.title}\n` +
+          `Estado Resultante: ${STATE_CONFIG[doc.state].label}\n\n` +
+          `Comentarios/Observaciones: ${comment || 'Ver en plataforma.'}\n\n` +
+          `Atentamente,\n${user.name} (${user.role})`
+      );
+
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}&su=${subject}&body=${body}`;
+      window.open(gmailUrl, '_blank');
   };
 
   if (loading || !doc) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
@@ -206,7 +229,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const canReject = canApprove; // Same permissions for reject
 
-  const canNotify = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
+  const canNotifyCoordinator = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
+  const canNotifyAuthor = (user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN) && authorEmail && doc.authorId !== user.id;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -315,15 +339,21 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                  <textarea 
                     className="w-full p-3 border border-slate-300 rounded-lg text-sm mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
                     rows={3}
-                    placeholder="Observaciones (requerido para rechazo)..."
+                    placeholder="Observaciones (requerido para rechazo o correo)..."
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                  />
 
                  <div className="flex flex-wrap gap-3">
-                    {canNotify && (
+                    {canNotifyCoordinator && (
                          <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
                             <Mail size={16} className="mr-2" /> Notificar al Coordinador (Gmail)
+                        </button>
+                    )}
+
+                    {canNotifyAuthor && (
+                        <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
+                            <Mail size={16} className="mr-2" /> Notificar al Analista (Gmail)
                         </button>
                     )}
 
