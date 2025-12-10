@@ -24,6 +24,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [filterProcess, setFilterProcess] = useState('');
   const [filterDocType, setFilterDocType] = useState('');
   const [filterState, setFilterState] = useState('');
+  const [filterAnalyst, setFilterAnalyst] = useState(''); // New Analyst Filter
 
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
@@ -89,6 +90,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     if (filterState) {
         filtered = filtered.filter(d => d.state === filterState);
     }
+    if (filterAnalyst) {
+        filtered = filtered.filter(d => d.authorName === filterAnalyst);
+    }
 
     return filtered;
   };
@@ -152,6 +156,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       )
       .map(d => d.docType).filter(Boolean)
   )) as string[];
+
+  const uniqueAnalysts = Array.from(new Set(
+      baseDocs.filter(d => 
+        (!filterProject || d.project === filterProject) && 
+        (!filterMacro || d.macroprocess === filterMacro)
+      )
+      .map(d => d.authorName).filter(Boolean)
+  )).sort() as string[];
   
   // Calculate Stats based on FILTERED Documents (Dynamic)
   const reqDocs = filteredDocs.filter(d => isDocRequired(d));
@@ -196,9 +208,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setFilterProcess('');
       setFilterDocType('');
       setFilterState('');
+      setFilterAnalyst('');
   };
 
-  const hasFilters = filterProject || filterMacro || filterProcess || filterDocType || filterState;
+  const hasFilters = filterProject || filterMacro || filterProcess || filterDocType || filterState || filterAnalyst;
 
   // Render Sort Icon helper
   const SortIcon = ({ column }: { column: SortKey }) => {
@@ -207,6 +220,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         ? <ArrowUp size={14} className="text-indigo-600" /> 
         : <ArrowDown size={14} className="text-indigo-600" />;
   };
+
+  const showAnalystFilter = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
 
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando dashboard...</div>;
 
@@ -259,7 +274,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         </button>
                     )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div className={`grid grid-cols-1 gap-3 ${showAnalystFilter ? 'md:grid-cols-6' : 'md:grid-cols-5'}`}>
                     <select 
                         value={filterProject} 
                         onChange={(e) => setFilterProject(e.target.value)}
@@ -269,12 +284,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         {uniqueProjects.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
 
+                    {showAnalystFilter && (
+                         <select 
+                            value={filterAnalyst} 
+                            onChange={(e) => setFilterAnalyst(e.target.value)}
+                            className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                        >
+                            <option value="">Analista (Todos)</option>
+                            {uniqueAnalysts.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                    )}
+
                     <select 
                         value={filterMacro} 
                         onChange={(e) => setFilterMacro(e.target.value)}
                         className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                     >
-                        <option value="">Macroproceso (Todos)</option>
+                        <option value="">Macro (Todos)</option>
                         {uniqueMacros.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
 
@@ -292,7 +318,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         onChange={(e) => setFilterDocType(e.target.value)}
                         className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                     >
-                        <option value="">Documento (Todos)</option>
+                        <option value="">Doc (Todos)</option>
                         {uniqueDocTypes.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
 
@@ -377,6 +403,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                         <td className="px-4 py-3 font-medium">
                                             {doc.microprocess || doc.title}
                                             {!isRequired && <div className="text-[10px] text-slate-400 font-normal mt-0.5">(No Requerido)</div>}
+                                            {/* Show analyst name for admins/coordinators if filtered */}
+                                            {showAnalystFilter && (
+                                                <div className="text-[10px] text-indigo-600 mt-1 flex items-center gap-1">
+                                                    <Users size={10} /> {doc.authorName}
+                                                </div>
+                                            )}
                                         </td>
 
                                         {/* COL 4: Documento (Tipo + Link) */}
