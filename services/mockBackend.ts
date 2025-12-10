@@ -70,11 +70,17 @@ const initializeStorage = () => {
         if (!row || row.length < 5) return;
         const [project, macro, process, micro, namesStr] = row;
         const key = `${project}|${micro}`;
-        const rawNames = namesStr ? namesStr.split('/') : [];
+        const rawNames = namesStr ? namesStr.split(/\/|&| y /) : []; // Split by / or & or ' y '
         const assigneeIds: string[] = [];
         rawNames.forEach(name => {
             const cleanName = name.trim();
-            if (NAME_TO_ID_MAP[cleanName]) assigneeIds.push(NAME_TO_ID_MAP[cleanName]);
+            if (NAME_TO_ID_MAP[cleanName]) {
+                assigneeIds.push(NAME_TO_ID_MAP[cleanName]);
+            } else {
+                 // Try simple name match from MOCK_USERS
+                 const found = MOCK_USERS.find(u => u.name.includes(cleanName) || u.nickname === cleanName);
+                 if (found) assigneeIds.push(found.id);
+            }
         });
         hierarchyIndex.set(key, { macro, process, assignees: assigneeIds });
     });
@@ -89,6 +95,13 @@ const initializeStorage = () => {
 
         const { macro, process, assignees } = hierarchyData;
         const primaryAssignee = assignees.length > 0 ? assignees[0] : adminUser.id;
+        
+        // Construct a display name for multiple authors
+        let authorDisplayName = adminUser.name;
+        if (assignees.length > 0) {
+            authorDisplayName = assignees.map(aid => MOCK_USERS.find(u => u.id === aid)?.name).join(' / ');
+        }
+
         const docType = mapCodeToDocType(typeCode);
         const { state, progress } = determineStateFromVersion(version);
 
@@ -101,8 +114,8 @@ const initializeStorage = () => {
             process: process,
             microprocess: micro,
             docType: docType,
-            authorId: adminUser.id,
-            authorName: adminUser.name,
+            authorId: primaryAssignee,
+            authorName: authorDisplayName,
             assignedTo: primaryAssignee, 
             assignees: assignees,      
             assignedByName: 'Carga Inicial',
@@ -151,10 +164,15 @@ export const HierarchyService = {
         if (overrides[matrixKey]) {
             assigneeIds = overrides[matrixKey];
         } else {
-            const rawNames = namesStr ? namesStr.split('/') : [];
+            const rawNames = namesStr ? namesStr.split(/\/|&| y /) : [];
             rawNames.forEach(name => {
                 const cleanName = name.trim();
                 if (NAME_TO_ID_MAP[cleanName]) assigneeIds.push(NAME_TO_ID_MAP[cleanName]);
+                 else {
+                     // Fallback check
+                     const found = MOCK_USERS.find(u => u.name.includes(cleanName));
+                     if(found) assigneeIds.push(found.id);
+                 }
             });
         }
 
@@ -239,10 +257,19 @@ export const HierarchyService = {
     const docs = await DocumentService.getAll();
     let updatedCount = 0;
     
+    // Also update names for display
+    const allUsers = await UserService.getAll();
+    const newAuthorName = newAssignees.map(aid => allUsers.find(u => u.id === aid)?.name).join(' / ');
+
     const updatedDocs = docs.map(d => {
         if (d.project === project && d.microprocess === micro) {
             updatedCount++;
-            return { ...d, assignees: newAssignees };
+            return { 
+                ...d, 
+                assignees: newAssignees, 
+                assignedTo: newAssignees[0],
+                authorName: newAuthorName || d.authorName
+            };
         }
         return d;
     });
@@ -630,43 +657,50 @@ export const DatabaseService = {
         const macro = cols[2]?.trim();
         const process = cols[3]?.trim();
         const micro = cols[4]?.trim();
-        const analystName = cols[5]?.trim();
+        const analystNameRaw = cols[5]?.trim();
 
-        // Resolve Assignee
-        let assigneeId = adminUser.id;
-        let assigneeName = adminUser.name;
+        // Resolve Assignee(s) handling multiple names separated by / or &
+        let assignees: string[] = [];
         
-        // Identify User Logic
-        // 1. Try Map
-        if (analystName) {
-             if (NAME_TO_ID_MAP[analystName]) {
-                assigneeId = NAME_TO_ID_MAP[analystName];
-            } else {
-                // 2. Try finding by name in existing users
-                const directUser = users.find(u => u.name.trim().toLowerCase() === analystName.toLowerCase());
-                if (directUser) {
-                    assigneeId = directUser.id;
+        if (analystNameRaw) {
+            const splitNames = analystNameRaw.split(/\/|&| y /); // Regex split for /, &, or " y "
+            splitNames.forEach(raw => {
+                const clean = raw.trim();
+                if (NAME_TO_ID_MAP[clean]) {
+                    assignees.push(NAME_TO_ID_MAP[clean]);
+                } else {
+                    const directUser = users.find(u => u.name.trim().toLowerCase() === clean.toLowerCase() || u.nickname === clean);
+                    if (directUser) assignees.push(directUser.id);
                 }
-            }
+            });
         }
         
-        // Update name object based on resolved ID
-        const u = users.find(user => user.id === assigneeId);
-        if (u) assigneeName = u.name;
+        // Fallback to Admin if no valid assignee found
+        if (assignees.length === 0) {
+            assignees.push(adminUser.id);
+        }
+
+        // Construct composite display name
+        const authorDisplayName = assignees.map(aid => {
+            const u = users.find(user => user.id === aid);
+            return u ? u.name : 'Desconocido';
+        }).join(' / ');
+
+        const primaryAssignee = assignees[0];
 
         // STORE MATRIX ASSIGNMENT
-        if (project && micro && assigneeId !== adminUser.id) {
+        if (project && micro && primaryAssignee !== adminUser.id) {
             const matrixKey = `${project}|${micro}`;
-            newMatrixOverrides[matrixKey] = [assigneeId];
+            newMatrixOverrides[matrixKey] = assignees;
         }
 
         const baseDoc = {
             project, macroprocess: macro, process, microprocess: micro,
-            // CHANGE: Use assigneeId/Name for author as well to reflect ownership in migration
-            authorId: assigneeId, 
-            authorName: assigneeName,
-            assignedTo: assigneeId, 
-            assignees: [assigneeId],
+            // Use primary ID for single-value compatibility, but full list in assignees
+            authorId: primaryAssignee, 
+            authorName: authorDisplayName, // Composite name
+            assignedTo: primaryAssignee, 
+            assignees: assignees,
             assignedByName: 'Migración Histórica',
             files: []
         };

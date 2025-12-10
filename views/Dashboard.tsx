@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService, HierarchyService } from '../services/mockBackend';
+import { DocumentService, HierarchyService, UserService } from '../services/mockBackend';
 import { Document, User, UserRole, DocState, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
@@ -17,6 +17,7 @@ type QuickFilterType = 'ALL' | 'REQUIRED' | 'IN_PROCESS' | 'REFERENT' | 'CONTROL
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
   const [requiredMap, setRequiredMap] = useState<Record<string, DocType[]>>({});
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filter States
@@ -42,12 +43,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const loadData = async () => {
     setLoading(true);
-    const [data, reqs] = await Promise.all([
+    const [data, reqs, users] = await Promise.all([
         DocumentService.getAll(),
-        HierarchyService.getRequiredTypesMap()
+        HierarchyService.getRequiredTypesMap(),
+        UserService.getAll()
     ]);
     setDocs(data);
     setRequiredMap(reqs);
+    setAllUsers(users);
     setLoading(false);
   };
 
@@ -64,6 +67,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       const requiredTypes = requiredMap[key];
       if (!requiredTypes) return false; 
       return doc.docType ? requiredTypes.includes(doc.docType) : false;
+  };
+
+  // Helper to get formatted assignees names
+  const getAssigneesNames = (doc: Document) => {
+      if (!doc.assignees || doc.assignees.length === 0) return doc.authorName; // Fallback
+      return doc.assignees
+          .map(id => allUsers.find(u => u.id === id)?.name)
+          .filter(name => name)
+          .join(' / ');
   };
 
   const handleQuickFilterClick = (type: QuickFilterType) => {
@@ -104,7 +116,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         filtered = filtered.filter(d => d.state === filterState);
     }
     if (filterAnalyst) {
-        filtered = filtered.filter(d => d.authorName === filterAnalyst);
+        filtered = filtered.filter(d => {
+            const names = getAssigneesNames(d);
+            return names.includes(filterAnalyst) || d.authorName === filterAnalyst;
+        });
     }
 
     // 3. Quick Filters (Stat Cards)
@@ -203,16 +218,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       .map(d => d.docType).filter(Boolean)
   )) as string[];
 
+  // This list logic is tricky with multiple assignees. Simplified to showing authorName which now contains combined strings
   const uniqueAnalysts = Array.from(new Set(
       baseDocs.filter(d => 
         (!filterProject || d.project === filterProject) && 
         (!filterMacro || d.macroprocess === filterMacro)
       )
-      .map(d => d.authorName).filter(Boolean)
+      .map(d => getAssigneesNames(d)).filter(Boolean)
   )).sort() as string[];
   
   // Calculate Stats based on BASE filtered documents (ignoring quick filter for the counts themselves to stay static relative to dropdowns)
-  // Logic: The stats cards should reflect the counts of the current Dropdown Context, not filter themselves out.
   const contextDocs = (() => {
       let d = docs;
       if (user.role === UserRole.ANALYST) {
@@ -222,7 +237,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       if (filterMacro) d = d.filter(doc => doc.macroprocess === filterMacro);
       if (filterProcess) d = d.filter(doc => doc.process === filterProcess);
       if (filterDocType) d = d.filter(doc => doc.docType === filterDocType);
-      if (filterAnalyst) d = d.filter(doc => doc.authorName === filterAnalyst);
+      if (filterAnalyst) d = d.filter(doc => getAssigneesNames(doc) === filterAnalyst);
       return d.filter(doc => isDocRequired(doc));
   })();
 
@@ -489,6 +504,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                 const rowClass = isRequired 
                                     ? "border-b border-slate-50 hover:bg-slate-50 transition-colors" 
                                     : "border-b border-slate-50 bg-slate-100/50 text-slate-400 hover:bg-slate-100 transition-colors";
+                                
+                                const assigneesDisplay = getAssigneesNames(doc);
 
                                 return (
                                     <tr key={doc.id} className={rowClass}>
@@ -504,7 +521,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                             {!isRequired && <div className="text-[10px] text-slate-400 font-normal mt-0.5">(No Requerido)</div>}
                                             {showAnalystFilter && (
                                                 <div className="text-[10px] text-indigo-600 mt-1 flex items-center gap-1">
-                                                    <Users size={10} /> {doc.authorName}
+                                                    <Users size={10} /> {assigneesDisplay}
                                                 </div>
                                             )}
                                         </td>
