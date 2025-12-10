@@ -4,8 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService } from '../services/mockBackend';
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { parseDocumentFilename, checkVersionRules } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, ChevronRight, Activity, Paperclip, AlertOctagon, Info, Layers, Users, RotateCcw, Send, Mail, MessageSquare } from 'lucide-react';
+import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -23,9 +23,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Reference for hidden file input triggered by Action Buttons
-  const actionFileRef = useRef<HTMLInputElement>(null);
+  // Response Modal State
+  const [showResponseModal, setShowResponseModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'APPROVE' | 'REJECT' | null>(null);
+  const [responseFile, setResponseFile] = useState<File | undefined>(undefined);
+  const [responseFileError, setResponseFileError] = useState<string | null>(null);
+  const modalFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (id) loadData(id);
@@ -41,18 +44,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     setDoc(d);
     setHistory(h);
 
-    // Find Coordinator Email
     const coordinator = allUsers.find(u => u.role === UserRole.COORDINATOR);
-    if (coordinator) {
-        setCoordinatorEmail(coordinator.email);
-    }
+    if (coordinator) setCoordinatorEmail(coordinator.email);
 
-    // Find Author Email (for notifications back to analyst)
     if (d) {
         const author = allUsers.find(u => u.id === d.authorId);
-        if (author) {
-            setAuthorEmail(author.email);
-        }
+        if (author) setAuthorEmail(author.email);
     }
 
     if (d && d.assignees && d.assignees.length > 0) {
@@ -64,14 +61,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     setLoading(false);
   };
 
-  // 1. Standard File Upload (Just adding attachments, no state change)
+  // Standard File Upload (Just adding attachments)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !doc) return;
     const file = e.target.files[0];
-    
-    const analisis = parseDocumentFilename(
-        file.name, doc.project, doc.microprocess, doc.docType 
-    );
+    const analisis = parseDocumentFilename(file.name, doc.project, doc.microprocess, doc.docType);
 
     if (!analisis.valido) {
       alert(`Error en nomenclatura:\n${analisis.errores.join('\n')}`);
@@ -88,12 +82,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       await DocumentService.uploadFile(doc.id, file, user);
       await loadData(doc.id);
     } catch (err: any) { alert(err.message); }
-    finally {
-        e.target.value = '';
-    }
+    finally { e.target.value = ''; }
   };
 
-  // 2. Action Trigger (Check prerequisites)
+  // Trigger Action Flow
   const handleActionClick = (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'REQUEST_APPROVAL' | 'COMMENT') => {
       if (!doc) return;
 
@@ -117,50 +109,53 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           return;
       }
 
-      // For APPROVE or REJECT, we MUST open file dialog to select the response file
+      // For APPROVE or REJECT, Open Modal
       if (action === 'APPROVE' || action === 'REJECT') {
           if (action === 'REJECT' && !comment) {
               alert('Por favor agrega un comentario/observación antes de rechazar.');
               return;
           }
           setPendingAction(action);
-          if (actionFileRef.current) actionFileRef.current.click();
+          setResponseFile(undefined);
+          setResponseFileError(null);
+          setShowResponseModal(true);
       }
   };
 
-  // 3. Handle File Selection for Approve/Reject
-  const handleActionFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!e.target.files || !e.target.files[0] || !doc || !pendingAction) return;
-      const file = e.target.files[0];
-      
-      // Basic Syntax Check
-      const analisis = parseDocumentFilename(
-        file.name, doc.project, doc.microprocess, doc.docType 
-      );
-      if (!analisis.valido) {
-          alert(`El archivo seleccionado no cumple con la nomenclatura del proyecto:\n${analisis.errores.join('\n')}`);
-          e.target.value = '';
-          return;
-      }
+  const handleResponseFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0] && doc && pendingAction) {
+          const file = e.target.files[0];
+          setResponseFile(file);
+          
+          // 1. Basic Structure Validation
+          const analisis = parseDocumentFilename(file.name, doc.project, doc.microprocess, doc.docType);
+          if (!analisis.valido) {
+              setResponseFileError(`Nomenclatura inválida: ${analisis.errores[0]}`);
+              return;
+          }
 
-      const newVersion = analisis.nomenclatura || '';
+          // 2. Strict Coordinator Rule Validation
+          const ruleCheck = validateCoordinatorRules(file.name, doc.version, doc.state, pendingAction);
+          if (!ruleCheck.valid) {
+              setResponseFileError(ruleCheck.error || 'Error de validación');
+              return;
+          }
 
-      // Check Rules
-      const ruleCheck = checkVersionRules(doc.version, newVersion, pendingAction);
-      if (!ruleCheck.valid) {
-          alert(`Error de lógica de versiones para ${pendingAction}:\n\n${ruleCheck.error}`);
-          e.target.value = '';
-          return;
+          setResponseFileError(null);
       }
+  };
 
-      // All good, execute
-      if (window.confirm(`Confirma ${pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR'} subiendo el archivo versión ${newVersion}?`)) {
-          await executeTransition(pendingAction, file, newVersion);
+  const handleSubmitResponse = async () => {
+      if (!doc || !pendingAction || !responseFile || responseFileError) return;
+
+      // Extract Clean Version
+      const parts = responseFile.name.replace(/\.[^/.]+$/, "").split(' - ');
+      const newVersion = parts[parts.length - 1];
+
+      if (window.confirm(`Confirma ${pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR'} con archivo ${newVersion}?`)) {
+          setShowResponseModal(false);
+          await executeTransition(pendingAction, responseFile, newVersion);
       }
-      
-      // Reset
-      e.target.value = '';
-      setPendingAction(null);
   };
 
   const executeTransition = async (action: any, file: File | null, customVersion: string | null) => {
@@ -184,54 +179,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const handleGmailNotification = () => {
     if (!doc || !coordinatorEmail) return;
-    
-    const subject = encodeURIComponent(`Solicitud de Aprobación SGD: ${doc.project} - ${doc.microprocess} - ${doc.docType}`);
-    const body = encodeURIComponent(
-        `Estimado Coordinador,\n\n` +
-        `Se informa que se ha generado una solicitud de revisión para el siguiente documento:\n\n` +
-        `INFORMACIÓN DEL DOCUMENTO:\n` +
-        `--------------------------------------------------\n` +
-        `Proyecto: ${doc.project || 'N/A'}\n` +
-        `Macroproceso: ${doc.macroprocess || 'N/A'}\n` +
-        `Proceso: ${doc.process || 'N/A'}\n` +
-        `Microproceso: ${doc.microprocess || doc.title}\n` +
-        `Tipo de Documento: ${doc.docType || 'N/A'}\n` +
-        `Versión Actual: ${doc.version}\n` +
-        `Estado: ${STATE_CONFIG[doc.state].label}\n` +
-        `--------------------------------------------------\n\n` +
-        `DATOS DEL ANALISTA SOLICITANTE:\n` +
-        `Nombre: ${user.name}\n` +
-        `Correo: ${user.email}\n\n` +
-        `Se solicita su gestión en la plataforma.\n\n` +
-        `Atentamente,\n${user.name}`
-    );
-
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`;
-    window.open(gmailUrl, '_blank');
+    const subject = encodeURIComponent(`Solicitud de Aprobación SGD: ${doc.project} - ${doc.microprocess}`);
+    const body = encodeURIComponent(`Estimado Coordinador,\n\nSolicitud de revisión para ${doc.title}.\nVersión: ${doc.version}\n\nAtentamente,\n${user.name}`);
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
   const handleNotifyAnalyst = () => {
       if (!doc || !authorEmail) return;
-
       const subject = encodeURIComponent(`Respuesta Solicitud SGD: ${doc.project} - ${doc.microprocess}`);
-      const body = encodeURIComponent(
-          `Estimado/a ${doc.authorName},\n\n` +
-          `Se ha revisado su documento con los siguientes detalles:\n\n` +
-          `INFORMACIÓN DEL DOCUMENTO:\n` +
-          `--------------------------------------------------\n` +
-          `Proyecto: ${doc.project || 'N/A'}\n` +
-          `Macroproceso: ${doc.macroprocess || 'N/A'}\n` +
-          `Microproceso: ${doc.microprocess || doc.title}\n` +
-          `Tipo: ${doc.docType || 'N/A'}\n` +
-          `Estado Resultante: ${STATE_CONFIG[doc.state].label}\n` +
-          `--------------------------------------------------\n\n` +
-          `OBSERVACIONES:\n` +
-          `${comment || 'Ver en plataforma.'}\n\n` +
-          `Atentamente,\n${user.name} (${user.role})`
-      );
-
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}&su=${subject}&body=${body}`;
-      window.open(gmailUrl, '_blank');
+      const body = encodeURIComponent(`Estimado/a ${doc.authorName},\n\nRevisión completada.\nEstado: ${STATE_CONFIG[doc.state].label}\nObservaciones: ${comment}\n\nAtentamente,\n${user.name}`);
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
   if (loading || !doc) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
@@ -239,25 +196,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const config = STATE_CONFIG[doc.state];
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
-
-  // General write permission check
   const hasWriteAccess = (user.role === UserRole.ANALYST && (isAssignee || isAuthor)) || user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
-
   const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
-  
-  // Logic updated: Request Approval checks nomenclature internally
-  const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && 
-    (doc.state === DocState.IN_PROCESS || doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT);
-
+  const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && (doc.state === DocState.IN_PROCESS || doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT);
   const canRestart = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.REJECTED;
-  
-  const canApprove = (
-      (user.role === UserRole.COORDINATOR && doc.hasPendingRequest && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) ||
-      (user.role === UserRole.ADMIN && doc.hasPendingRequest && doc.state === DocState.SENT_TO_CONTROL)
-  );
-
-  const canReject = canApprove; // Same permissions for reject
-
+  const canApprove = ((user.role === UserRole.COORDINATOR && doc.hasPendingRequest && (doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT)) || (user.role === UserRole.ADMIN && doc.hasPendingRequest && doc.state === DocState.SENT_TO_CONTROL));
+  const canReject = canApprove;
   const canNotifyCoordinator = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = (user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN) && authorEmail && doc.authorId !== user.id;
 
@@ -266,14 +210,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       <button onClick={() => navigate('/')} className="flex items-center text-slate-500 hover:text-slate-800 text-sm">
         <ArrowLeft size={16} className="mr-1" /> Volver al Dashboard
       </button>
-
-      {/* Hidden input for Approve/Reject Actions */}
-      <input 
-        type="file" 
-        ref={actionFileRef} 
-        className="hidden" 
-        onChange={handleActionFileSelected} 
-      />
 
       {/* Header Card */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -293,55 +229,19 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             </div>
         </div>
 
-        {/* Process Metadata */}
-        {doc.macroprocess && (
-            <div className="mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div className="flex items-start gap-2">
-                    <Layers size={18} className="text-slate-400 mt-1" />
-                    <div><p className="text-xs text-slate-400 uppercase font-bold">Macroproceso</p><p className="text-sm text-slate-700">{doc.macroprocess}</p></div>
-                 </div>
-                 <div className="flex items-start gap-2">
-                    <Layers size={18} className="text-slate-400 mt-1" />
-                    <div><p className="text-xs text-slate-400 uppercase font-bold">Proceso</p><p className="text-sm text-slate-700">{doc.process}</p></div>
-                 </div>
-                 <div className="flex items-start gap-2 md:col-span-2">
-                    <Layers size={18} className="text-slate-400 mt-1" />
-                    <div><p className="text-xs text-slate-400 uppercase font-bold">Microproceso</p><p className="text-sm text-slate-700 font-medium">{doc.microprocess}</p></div>
-                 </div>
-            </div>
-        )}
-
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border-t border-slate-100 pt-4">
-            <div>
-                <p className="text-slate-500">Analistas</p>
-                {assigneeNames.map((name, i) => <p key={i} className="font-medium text-slate-800">{name}</p>)}
-            </div>
-            <div>
-                <p className="text-slate-500">Versión Actual</p>
-                <p className="font-mono text-slate-800 font-bold">{doc.version}</p>
-            </div>
-            <div>
-                <p className="text-slate-500">Progreso</p>
-                <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-slate-200 rounded-full h-2 w-20">
-                        <div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${doc.progress}%` }}></div>
-                    </div>
-                    <span className="font-medium">{doc.progress}%</span>
-                </div>
-            </div>
-            <div>
-                <p className="text-slate-500">Actualizado</p>
-                <p className="text-slate-800">{new Date(doc.updatedAt).toLocaleDateString()}</p>
-            </div>
+            <div><p className="text-slate-500">Analistas</p>{assigneeNames.map((name, i) => <p key={i} className="font-medium text-slate-800">{name}</p>)}</div>
+            <div><p className="text-slate-500">Versión Actual</p><p className="font-mono text-slate-800 font-bold">{doc.version}</p></div>
+            <div><p className="text-slate-500">Progreso</p><div className="flex items-center gap-2"><div className="flex-1 bg-slate-200 rounded-full h-2 w-20"><div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${doc.progress}%` }}></div></div><span className="font-medium">{doc.progress}%</span></div></div>
+            <div><p className="text-slate-500">Actualizado</p><p className="text-slate-800">{new Date(doc.updatedAt).toLocaleDateString()}</p></div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
+            {/* Archivos Adjuntos */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
-                    <Paperclip size={18} className="mr-2 text-indigo-500" /> Archivos Adjuntos
-                </h3>
+                <h3 className="font-semibold text-slate-800 mb-4 flex items-center"><Paperclip size={18} className="mr-2 text-indigo-500" /> Archivos Adjuntos</h3>
                 <ul className="space-y-2 mb-4">
                     {doc.files.map(file => (
                         <li key={file.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm border border-slate-100">
@@ -353,7 +253,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     ))}
                     {doc.files.length === 0 && <p className="text-sm text-slate-400 italic">No hay archivos.</p>}
                 </ul>
-
                 {canUpload && (
                     <label className="block p-4 border-2 border-dashed border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer text-center text-indigo-600">
                         <input type="file" onChange={handleFileUpload} className="hidden" />
@@ -363,6 +262,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 )}
             </div>
 
+            {/* Acciones */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                  <h3 className="font-semibold text-slate-800 mb-4">Acciones de Flujo</h3>
                  <textarea 
@@ -372,62 +272,19 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                  />
-
                  <div className="flex flex-wrap gap-3">
-                    {/* Botón para guardar solo observación - Disponible para cualquiera con acceso de escritura */}
-                    {hasWriteAccess && (
-                        <button 
-                            onClick={() => handleActionClick('COMMENT')} 
-                            disabled={actionLoading} 
-                            className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium shadow-sm transition-colors"
-                            title="Guarda el comentario sin cambiar el estado del documento"
-                        >
-                            <MessageSquare size={16} className="mr-2" /> Guardar Observación
-                        </button>
-                    )}
-
-                    {canNotifyCoordinator && (
-                         <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
-                            <Mail size={16} className="mr-2" /> Notificar Coord.
-                        </button>
-                    )}
-
-                    {canNotifyAuthor && (
-                        <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
-                            <Mail size={16} className="mr-2" /> Notificar Analista
-                        </button>
-                    )}
-
-                    {canRequestApproval && (
-                         <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm">
-                            <Send size={16} className="mr-2" /> Solicitar Aprobación
-                        </button>
-                    )}
-                    
-                    {canRestart && (
-                         <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">
-                            <RotateCcw size={16} className="mr-2" /> Reiniciar Flujo
-                        </button>
-                    )}
-
-                    {canApprove && (
-                        <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm">
-                            <CheckCircle size={16} className="mr-2" /> Aprobar
-                        </button>
-                    )}
-
-                    {canReject && (
-                        <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium border border-red-200">
-                            <XCircle size={16} className="mr-2" /> Rechazar
-                        </button>
-                    )}
-
-                    {doc.state === DocState.APPROVED && <p className="text-sm text-green-600 font-bold flex items-center"><CheckCircle size={16} className="mr-2"/> Proceso Finalizado</p>}
+                    {hasWriteAccess && <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium shadow-sm transition-colors"><MessageSquare size={16} className="mr-2" /> Guardar Observación</button>}
+                    {canNotifyCoordinator && <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Coord.</button>}
+                    {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
+                    {canRequestApproval && <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><Send size={16} className="mr-2" /> Solicitar Aprobación</button>}
+                    {canRestart && <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">Reiniciar Flujo</button>}
+                    {canApprove && <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><CheckCircle size={16} className="mr-2" /> Aprobar</button>}
+                    {canReject && <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium border border-red-200"><XCircle size={16} className="mr-2" /> Rechazar</button>}
                  </div>
-                 {(canApprove || canReject) && <p className="text-xs text-slate-400 mt-2 italic">* Aprobar o Rechazar requerirá subir el archivo con la nueva versión correspondiente.</p>}
             </div>
         </div>
 
+        {/* Historial (Right Column) */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-fit max-h-[600px] overflow-y-auto">
             <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Historial</h3>
             <div className="space-y-6 pl-4 border-l-2 border-slate-100 relative">
@@ -442,6 +299,86 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             </div>
         </div>
       </div>
+
+      {/* MODAL DE RESPUESTA (APROBAR/RECHAZAR) */}
+      {showResponseModal && pendingAction && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+                  <div className={`p-5 border-b border-slate-100 flex justify-between items-center ${pendingAction === 'APPROVE' ? 'bg-green-50' : 'bg-red-50'}`}>
+                      <h3 className={`text-lg font-bold flex items-center gap-2 ${pendingAction === 'APPROVE' ? 'text-green-800' : 'text-red-800'}`}>
+                          {pendingAction === 'APPROVE' ? <CheckCircle size={24} /> : <XCircle size={24} />}
+                          {pendingAction === 'APPROVE' ? 'Aprobar Documento' : 'Rechazar Documento'}
+                      </h3>
+                      <button onClick={() => setShowResponseModal(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                  </div>
+                  
+                  <div className="p-6 space-y-4">
+                        <p className="text-sm text-slate-600">
+                            Para completar esta acción, debe subir la versión correspondiente del documento.
+                        </p>
+
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-3">
+                            <Info size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                                <p className="text-xs font-bold text-blue-800 uppercase mb-1">Nomenclatura Requerida</p>
+                                <p className="text-sm font-mono font-bold text-blue-900">
+                                    {getCoordinatorRuleHint(doc.state, pendingAction)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-colors
+                            ${responseFileError ? 'border-red-300 bg-red-50' : responseFile ? 'border-green-300 bg-green-50' : 'border-slate-300 hover:bg-slate-50'}`}>
+                            
+                            <input 
+                                type="file" 
+                                ref={modalFileRef}
+                                className="hidden"
+                                onChange={handleResponseFileSelect}
+                            />
+
+                            {responseFile ? (
+                                <div>
+                                    {responseFileError ? (
+                                        <>
+                                            <FileX size={32} className="text-red-500 mx-auto mb-2" />
+                                            <p className="font-bold text-red-700">{responseFile.name}</p>
+                                            <p className="text-xs text-red-600 mt-1">{responseFileError}</p>
+                                            <button onClick={() => modalFileRef.current?.click()} className="text-xs underline text-red-800 mt-2">Cambiar archivo</button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileCheck size={32} className="text-green-500 mx-auto mb-2" />
+                                            <p className="font-bold text-green-700">{responseFile.name}</p>
+                                            <p className="text-xs text-green-600 mt-1">Archivo válido</p>
+                                            <button onClick={() => modalFileRef.current?.click()} className="text-xs underline text-green-800 mt-2">Cambiar archivo</button>
+                                        </>
+                                    )}
+                                </div>
+                            ) : (
+                                <div onClick={() => modalFileRef.current?.click()} className="cursor-pointer">
+                                    <Upload size={32} className="text-slate-400 mx-auto mb-2" />
+                                    <p className="text-sm font-medium text-slate-600">Click para subir archivo</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4">
+                            <button onClick={() => setShowResponseModal(false)} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm">Cancelar</button>
+                            <button 
+                                onClick={handleSubmitResponse}
+                                disabled={!responseFile || !!responseFileError}
+                                className={`px-4 py-2 rounded-lg text-white text-sm font-bold shadow-sm transition-all
+                                    ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+                                    disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                                Confirmar {pendingAction === 'APPROVE' ? 'Aprobación' : 'Rechazo'}
+                            </button>
+                        </div>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

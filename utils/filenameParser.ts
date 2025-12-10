@@ -1,5 +1,6 @@
 
 import { ParsedFilenameResult } from '../types';
+import { DocState } from '../types';
 
 /**
  * Parsea y valida el nombre de archivo según la norma institucional estricta.
@@ -72,7 +73,7 @@ export const parseDocumentFilename = (
   }
   result.tipo = tipoCodigo;
 
-  // 7. Analizar Versión y Reglas de Solicitud (Paridad)
+  // 7. Analizar Versión y Reglas de Solicitud (Paridad) para ANALISTA (Solicitud)
   result.nomenclatura = version;
 
   // Regex básicos
@@ -120,9 +121,8 @@ export const parseDocumentFilename = (
       }
   }
 
-  // Logic map for state detection (CORRECTED)
+  // Logic map for state detection
   if (result.errores.length === 0) {
-      // Logic for creating requests / inferring state based on filename suffixes
       if (version.endsWith('ACG')) {
           result.estado = 'Aprobado';
           result.porcentaje = 100;
@@ -130,11 +130,9 @@ export const parseDocumentFilename = (
           result.estado = 'Enviado a Control de Gestión'; // v1.nAR
           result.porcentaje = 90;
       } else if (version.startsWith('v1.') && !version.includes('AR') && (version.split('.').length > 2)) {
-          // v1.n.i -> Revisión Referente (Flujo activo)
           result.estado = 'Revisión con referentes';
           result.porcentaje = 80;
       } else if (version.startsWith('v1.') && !version.includes('AR')) {
-          // v1.n -> Enviado a Referente (o aprobado v1.0)
           result.estado = 'Enviado a Referente'; 
           result.porcentaje = 80;
       } else if (version.startsWith('v0.')) {
@@ -151,33 +149,102 @@ export const parseDocumentFilename = (
 };
 
 /**
- * Valida las reglas de transición de versiones.
- * Se ha simplificado para priorizar la validación de formato y dejar que la lógica de estado (Backend) 
- * decida el destino basado en el sufijo (ACG, AR, etc).
+ * Valida las reglas de transición de versiones para el COORDINADOR (Aprobar/Rechazar).
  */
-export const checkVersionRules = (currentVersion: string, newVersion: string, action: 'REQUEST' | 'APPROVE' | 'REJECT'): { valid: boolean; error?: string } => {
+export const validateCoordinatorRules = (
+    filename: string,
+    currentVersion: string, 
+    currentState: DocState,
+    action: 'APPROVE' | 'REJECT'
+): { valid: boolean; error?: string; hint?: string } => {
     
-    // Si no hay nueva versión (ej: request sin cambio de archivo), pasar.
-    if (!newVersion) return { valid: true };
+    // 1. Basic Parse to get nomenclature
+    const parts = filename.replace(/\.[^/.]+$/, "").split(' - ');
+    if (parts.length < 4) return { valid: false, error: 'Formato de nombre inválido.' };
+    const newVersion = parts[parts.length - 1];
 
-    const cur = currentVersion.trim();
-    const nev = newVersion.trim();
+    // Helper Regex
+    const regexInternal = /^v0\.(\d+)$/;          // v0.n
+    const regexReferent = /^v1\.(\d+)\.(\d+)$/;   // v1.n.i
+    const regexControl = /^v1\.(\d+)\.(\d+)AR$/;  // v1.n.iAR
+    const regexApprovedInternal = /^v(\d+)\.0$/;   // v1.0
+    const regexApprovedReferent = /^v1\.(\d+)$/;   // v1.n
+    const regexApprovedControl = /^v1\.(\d+)AR$/;  // v1.nAR
 
-    if (cur === nev) {
-        return { valid: false, error: 'La nueva versión debe ser diferente a la actual.' };
-    }
-
-    // Reglas de formato básicas
-    if (action === 'APPROVE') {
-        // Para aprobar, generalmente esperamos un avance de versión o un sufijo
-        // Validamos simplemente que sea un formato válido, el backend decide el estado.
-        return { valid: true };
-    }
-
+    // --- RECHAZAR (Feedback Loop) ---
     if (action === 'REJECT') {
-        // Para rechazar, se sube una nueva versión (con comentarios) pero el estado retrocede.
-        return { valid: true };
+        if (currentState === DocState.INTERNAL_REVIEW) {
+            // Caso A: v0.n -> n debe ser PAR
+            const match = newVersion.match(regexInternal);
+            if (!match) return { valid: false, error: 'Formato incorrecto. Para rechazar Revisión Interna use: v0.n' };
+            const n = parseInt(match[1]);
+            if (n % 2 !== 0) return { valid: false, error: `Para rechazar, "n" (${n}) debe ser PAR (ej: v0.2, v0.4).` };
+            return { valid: true };
+        }
+        
+        if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) {
+             // Caso B: v1.n.i -> i debe ser PAR
+             const match = newVersion.match(regexReferent);
+             if (!match) return { valid: false, error: 'Formato incorrecto. Para rechazar Referente use: v1.n.i' };
+             const i = parseInt(match[2]);
+             if (i % 2 !== 0) return { valid: false, error: `Para rechazar, "i" (${i}) debe ser PAR (ej: v1.0.2).` };
+             return { valid: true };
+        }
+
+        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
+            // Caso C: v1.n.iAR -> i debe ser PAR
+            const match = newVersion.match(regexControl);
+            if (!match) return { valid: false, error: 'Formato incorrecto. Para rechazar Control use: v1.n.iAR' };
+            const i = parseInt(match[2]);
+             if (i % 2 !== 0) return { valid: false, error: `Para rechazar, "i" (${i}) debe ser PAR (ej: v1.0.2AR).` };
+             return { valid: true };
+        }
     }
 
-    return { valid: true }; 
+    // --- APROBAR (Advance) ---
+    if (action === 'APPROVE') {
+        if (currentState === DocState.INTERNAL_REVIEW) {
+            // Caso A: 0 incrementa en 1 (v0.x -> v1.0)
+            const match = newVersion.match(regexApprovedInternal);
+            if (!match) return { valid: false, error: 'Formato incorrecto. Para aprobar Interna debe ser v1.0, v2.0, etc.' };
+            const major = parseInt(match[1]);
+            // Optional: Check if major > 0. Usually v1.0.
+            return { valid: true };
+        }
+
+        if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) {
+            // Caso B: v1.n.i -> n incrementa en 1 (v1.n)
+            // Example: v1.0.1 -> v1.1
+            const match = newVersion.match(regexApprovedReferent);
+            if (!match) return { valid: false, error: 'Formato incorrecto. Para aprobar Referente debe ser v1.n (ej: v1.1, v1.2).' };
+            return { valid: true };
+        }
+
+        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
+            // Caso C: v1.n.iAR -> n incrementa en 1, termina en AR
+            // Example: v1.0.1AR -> v1.1AR
+            const match = newVersion.match(regexApprovedControl);
+            if (!match) return { valid: false, error: 'Formato incorrecto. Para aprobar Control debe ser v1.nAR (ej: v1.1AR).' };
+            return { valid: true };
+        }
+    }
+
+    // Fallback
+    return { valid: true };
+}
+
+/**
+ * Genera el texto de ayuda para el modal
+ */
+export const getCoordinatorRuleHint = (currentState: DocState, action: 'APPROVE' | 'REJECT'): string => {
+    if (action === 'REJECT') {
+        if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v0.n (n es PAR). Ej: v0.2, v0.4';
+        if (currentState === DocState.SENT_TO_REFERENT) return 'Formato: v1.n.i (i es PAR). Ej: v1.0.2';
+        if (currentState === DocState.SENT_TO_CONTROL) return 'Formato: v1.n.iAR (i es PAR). Ej: v1.0.2AR';
+    } else {
+        if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v1.0 (Incremento de entero)';
+        if (currentState === DocState.SENT_TO_REFERENT) return 'Formato: v1.n (n incrementa). Ej: v1.1';
+        if (currentState === DocState.SENT_TO_CONTROL) return 'Formato: v1.nAR (n incrementa). Ej: v1.1AR';
+    }
+    return 'Formato estándar';
 };
