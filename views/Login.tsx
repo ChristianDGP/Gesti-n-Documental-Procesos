@@ -68,7 +68,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     placeholder="••••••"
                 />
             </div>
-            <p className="text-xs text-slate-400 mt-1">Default: 'admin' o 'dgp2026'</p>
+            <p className="text-xs text-slate-400 mt-1">Default: 'dgp2026'</p>
           </div>
 
           {error && (
