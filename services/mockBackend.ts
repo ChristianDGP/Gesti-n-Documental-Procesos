@@ -573,6 +573,7 @@ export const DatabaseService = {
     const adminUser = users.find(u => u.role === UserRole.ADMIN) || MOCK_USERS[0];
     const newDocs: Document[] = [];
     const errors: string[] = [];
+    const newMatrixOverrides: Record<string, string[]> = {}; // Store Assignments
 
     // Helper parsers
     const parseLegacyDate = (d: string) => {
@@ -634,10 +635,18 @@ export const DatabaseService = {
         // Resolve Assignee
         let assigneeId = adminUser.id;
         let assigneeName = adminUser.name;
+        
+        // Identify User
         if (analystName && NAME_TO_ID_MAP[analystName]) {
             assigneeId = NAME_TO_ID_MAP[analystName];
             const u = users.find(user => user.id === assigneeId);
             if (u) assigneeName = u.name;
+        }
+
+        // STORE MATRIX ASSIGNMENT
+        if (project && micro && assigneeId !== adminUser.id) {
+            const matrixKey = `${project}|${micro}`;
+            newMatrixOverrides[matrixKey] = [assigneeId];
         }
 
         const baseDoc = {
@@ -730,6 +739,8 @@ export const DatabaseService = {
     localStorage.setItem(STORAGE_KEYS.DOCS, JSON.stringify(newDocs));
     // Optionally clean history to avoid orphan logs for deleted documents
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify([]));
+    // CRITICAL: Update Matrix Assignments with the data extracted from CSV
+    localStorage.setItem(STORAGE_KEYS.MATRIX_OVERRIDES, JSON.stringify(newMatrixOverrides));
     
     return { imported: newDocs.length, errors };
   }
