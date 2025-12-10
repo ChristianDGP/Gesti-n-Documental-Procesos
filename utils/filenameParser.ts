@@ -167,10 +167,27 @@ export const validateCoordinatorRules = (
     const regexInternal = /^v0\.(\d+)$/;          // v0.n
     const regexReferent = /^v1\.(\d+)\.(\d+)$/;   // v1.n.i
     const regexControl = /^v1\.(\d+)\.(\d+)AR$/;  // v1.n.iAR
-    const regexApprovedInternal = /^v(\d+)\.0$/;   // v1.0
-    const regexApprovedReferent = /^v1\.(\d+)$/;   // v1.n
-    const regexApprovedControl = /^v1\.(\d+)AR$/;  // v1.nAR
-    const regexApprovedFinal = /^v1\.(\d+)ACG$/;   // v1.nACG
+    
+    // Approval Regexes (Strict)
+    const regexApproveInterna = /^v1\.0$/; // A. v1.0 Strict
+    
+    // B. Referente Output: v1.n (consolidate) OR v1.nAR (control)
+    const regexApproveReferentConsolidate = /^v1\.(\d+)$/; 
+    const regexApproveReferentControl = /^v1\.(\d+)AR$/;
+
+    // C. Control Output: v1.nACG (Finish)
+    const regexApproveControlFinal = /^v1\.(\d+)ACG$/;
+
+    // Extract 'n' from current version for logic checks
+    let currentN = 0;
+    // Try parse v0.n
+    let matchN = currentVersion.match(/^v0\.(\d+)/);
+    if (!matchN) matchN = currentVersion.match(/^v1\.(\d+)/);
+    
+    if (matchN) {
+        currentN = parseInt(matchN[1]);
+    }
+
 
     // --- RECHAZAR (Feedback Loop) ---
     if (action === 'REJECT') {
@@ -202,39 +219,56 @@ export const validateCoordinatorRules = (
         }
     }
 
-    // --- APROBAR (Advance) ---
+    // --- APROBAR (Advance - Logic from User Prompt) ---
     if (action === 'APPROVE') {
+        
+        // A. Aprobación Revisión Interna
         if (currentState === DocState.INTERNAL_REVIEW) {
-            // Caso A: 0 incrementa en 1 (v0.x -> v1.0)
-            const match = newVersion.match(regexApprovedInternal);
-            if (!match) return { valid: false, error: 'Formato incorrecto. Para aprobar Interna debe ser v1.0, v2.0, etc.' };
+            // Regla: v1.0 Estricto
+            if (!regexApproveInterna.test(newVersion)) {
+                return { valid: false, error: 'Para aprobar Revisión Interna el archivo debe ser estrictamente "v1.0".' };
+            }
             return { valid: true };
         }
 
+        // B. Aprobación Referente
         if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) {
-            // Caso B - Opción 1: v1.n (Consolidación / Incremento)
-            const matchIncrement = newVersion.match(regexApprovedReferent);
+            // Opciones:
+            // 1. Consolidar: v1.x (n avanza en 1 o se mantiene) - NOTA: Usualmente avanza al consolidar, pero permitimos ambos según prompt.
+            // 2. Control: v1.xAR (n avanza en 1 o se mantiene)
             
-            // Caso B - Opción 2: v1.nAR (Paso directo a Control)
-            const matchControl = newVersion.match(regexApprovedControl);
+            const matchConsolidate = newVersion.match(regexApproveReferentConsolidate);
+            const matchControl = newVersion.match(regexApproveReferentControl);
 
-            if (matchIncrement) return { valid: true };
-            if (matchControl) return { valid: true };
+            if (matchConsolidate) {
+                const newN = parseInt(matchConsolidate[1]);
+                if (newN < currentN) return { valid: false, error: `La versión v1.${newN} es inferior a la actual v1.${currentN}.` };
+                return { valid: true };
+            }
 
-            return { valid: false, error: 'Formato incorrecto. Opciones válidas: v1.n (Siguiente Versión) O v1.nAR (Paso a Control).' };
+            if (matchControl) {
+                const newN = parseInt(matchControl[1]);
+                if (newN < currentN) return { valid: false, error: `La versión v1.${newN}AR es inferior a la actual v1.${currentN}.` };
+                return { valid: true };
+            }
+
+            return { valid: false, error: 'Formato inválido. Use v1.n (Consolidar) o v1.nAR (Paso a Control).' };
         }
 
+        // C. Aprobación Control Gestión
         if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
-            // Caso C - Opción 1: v1.nAR (Incremento dentro de control)
-            const matchIncrement = newVersion.match(regexApprovedControl);
+            // Opciones:
+            // 1. Finalizar: v1.xACG (n avanza en 1 o se mantiene)
+            
+            const matchFinal = newVersion.match(regexApproveControlFinal);
 
-            // Caso C - Opción 2: v1.nACG (Aprobación Final)
-            const matchFinal = newVersion.match(regexApprovedFinal);
+            if (matchFinal) {
+                const newN = parseInt(matchFinal[1]);
+                if (newN < currentN) return { valid: false, error: `La versión v1.${newN}ACG es inferior a la actual v1.${currentN}AR.` };
+                return { valid: true };
+            }
 
-            if (matchIncrement) return { valid: true };
-            if (matchFinal) return { valid: true };
-
-            return { valid: false, error: 'Formato incorrecto. Opciones: v1.nAR (Incremento) O v1.nACG (Final).' };
+            return { valid: false, error: 'Formato inválido. Para aprobar Control de Gestión use v1.nACG.' };
         }
     }
 
@@ -247,13 +281,13 @@ export const validateCoordinatorRules = (
  */
 export const getCoordinatorRuleHint = (currentState: DocState, action: 'APPROVE' | 'REJECT'): string => {
     if (action === 'REJECT') {
-        if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v0.n (n es PAR). Ej: v0.2, v0.4';
+        if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v0.n (n es PAR). Ej: v0.2';
         if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) return 'Formato: v1.n.i (i es PAR). Ej: v1.0.2';
         if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) return 'Formato: v1.n.iAR (i es PAR). Ej: v1.0.2AR';
     } else {
-        if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v1.0 (Incremento de entero)';
-        if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) return 'Opción 1: v1.n (Incremento) | Opción 2: v1.nAR (Paso a Control)';
-        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) return 'Opción 1: v1.nAR (Incremento) | Opción 2: v1.nACG (Final)';
+        if (currentState === DocState.INTERNAL_REVIEW) return 'Formato Estricto: v1.0';
+        if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) return 'Opciones: v1.n (Consolidar) o v1.nAR (Paso a Control). n >= actual.';
+        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) return 'Formato: v1.nACG (Final). n >= actual.';
     }
     return 'Formato estándar';
 };
