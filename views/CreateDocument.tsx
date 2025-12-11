@@ -253,13 +253,9 @@ ${user.name}
 
     setLoading(true);
     
-    // Create a promise that rejects after 60 seconds (Increased from 15s to allow slower uploads)
-    const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Tiempo de espera agotado (60s). Verifique su conexión o el tamaño del archivo.")), 60000);
-    });
-
+    // Eliminado el Promise.race / timeout porque ya no subimos archivos, es solo registro
     try {
-      const createPromise = DocumentService.create(
+      const newDoc = await DocumentService.create(
           title, 
           description, 
           user,
@@ -276,15 +272,13 @@ ${user.name}
           }
       );
 
-      // Race between the creation logic and the timeout
-      const doc = await Promise.race([createPromise, timeoutPromise]) as any;
-      
       // NOTIFICATION LOGIC: Only for Approval Flows
       if (['INTERNAL', 'REFERENT', 'CONTROL'].includes(requestType as string)) {
           sendCoordinatorNotification();
       }
 
-      navigate(`/doc/${doc.id}`);
+      // CAMBIO: Ir al detalle del documento creado
+      navigate(`/doc/${newDoc.id}`);
     } catch (error: any) {
       console.error(error);
       alert('Error al crear documento: ' + error.message);
@@ -492,7 +486,7 @@ ${user.name}
                                     <Upload size={40} className="mx-auto mb-3" />
                                     <p className="font-medium">Click para seleccionar archivo</p>
                                     <p className="text-xs mt-2 text-slate-400">
-                                        El nombre debe coincidir con la nomenclatura para {requestType}
+                                        El nombre debe coincidir con la nomenclatura para {requestType} (Solo validación, no se sube)
                                     </p>
                                 </div>
                             )}

@@ -1,3 +1,4 @@
+
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp 
@@ -218,13 +219,17 @@ export const DocumentService = {
     const docId = docRef.id;
 
     if (file) {
-       const fileRef = ref(storage, `documents/${docId}/${file.name}`);
-       await uploadBytes(fileRef, file);
-       const url = await getDownloadURL(fileRef);
+       // --- MODIFICACIÓN: "NO SUBIR NADA" ---
+       // En lugar de usar storage.uploadBytes, simplemente creamos el registro del archivo.
+       // Se asigna URL '#' para indicar que es un registro local/virtual.
        
        const newFile: DocFile = {
-           id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
-           url: url, uploadedAt: new Date().toISOString()
+           id: `file-${Date.now()}`, 
+           name: file.name, 
+           size: file.size, 
+           type: file.type,
+           url: '#', // URL ficticia, no hay subida física
+           uploadedAt: new Date().toISOString()
        };
        
        await updateDoc(docRef, {
@@ -233,7 +238,7 @@ export const DocumentService = {
        newDocData.files = [newFile];
     }
 
-    await HistoryService.log(docId, author, 'Creación', state, state, 'Documento creado.');
+    await HistoryService.log(docId, author, 'Creación', state, state, 'Documento creado (Registro de versión).');
     return { id: docId, ...newDocData } as Document;
   },
 
@@ -243,13 +248,15 @@ export const DocumentService = {
       if(!docSnap.exists()) throw new Error("Doc not found");
       const currentDoc = docSnap.data() as Document;
 
-      const fileRef = ref(storage, `documents/${docId}/${Date.now()}_${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-
+      // --- MODIFICACIÓN: "NO SUBIR NADA" ---
+      // Misma lógica: registro del nombre del archivo sin subida física.
       const newFile: DocFile = {
-          id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
-          url: url, uploadedAt: new Date().toISOString()
+          id: `file-${Date.now()}`, 
+          name: file.name, 
+          size: file.size, 
+          type: file.type,
+          url: '#', // URL ficticia
+          uploadedAt: new Date().toISOString()
       };
 
       const updatedFiles = [...(currentDoc.files || []), newFile];
@@ -287,12 +294,10 @@ export const DocumentService = {
       let updatedFiles = [...currentDoc.files];
 
       if (file) {
-          const fileRef = ref(storage, `documents/${docId}/${Date.now()}_${file.name}`);
-          await uploadBytes(fileRef, file);
-          const url = await getDownloadURL(fileRef);
+          // Si por alguna razón llega un archivo aquí (aunque en el front lo evitamos), tampoco lo subimos.
           updatedFiles.push({
               id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
-              url, uploadedAt: new Date().toISOString()
+              url: '#', uploadedAt: new Date().toISOString()
           });
       }
 
