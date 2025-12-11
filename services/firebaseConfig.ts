@@ -6,7 +6,7 @@ import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDp79-utro8hCKE-0ddglfdfVRBTcvMJp0",
+  apiKey: "AIzaSyCMlO85AL8DBFfL1ldqCOKWP1mCO7NE3h0",
   authDomain: "gestion-documental-procesos.firebaseapp.com",
   databaseURL: "https://gestion-documental-procesos-default-rtdb.firebaseio.com",
   projectId: "gestion-documental-procesos",
