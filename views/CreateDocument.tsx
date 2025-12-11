@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DocumentService, HierarchyService } from '../services/firebaseBackend';
+import { DocumentService, HierarchyService, UserService } from '../services/firebaseBackend';
 import { User, DocState, DocType, UserHierarchy, UserRole } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, PlayCircle } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, Send, FilePlus } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -26,6 +26,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedMicro, setSelectedMicro] = useState<string>('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
   const [requestType, setRequestType] = useState<RequestType | ''>('');
+  const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
 
   // File Upload State
   const [file, setFile] = useState<File | undefined>(undefined);
@@ -43,10 +44,11 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [detectedProgress, setDetectedProgress] = useState(10);
 
   useEffect(() => {
-      loadHierarchy();
+      loadData();
   }, []);
 
-  const loadHierarchy = async () => {
+  const loadData = async () => {
+      // 1. Cargar Jerarquía
       // Si es Admin, cargamos la jerarquía completa transformada a formato simple
       if (user.role === UserRole.ADMIN) {
            const full = await HierarchyService.getFullHierarchy();
@@ -68,6 +70,12 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           const hierarchy = await HierarchyService.getUserHierarchy(user.id);
           setUserHierarchy(hierarchy);
       }
+
+      // 2. Cargar Coordinador para notificaciones
+      const users = await UserService.getAll();
+      const coord = users.find(u => u.role === UserRole.COORDINATOR);
+      if (coord) setCoordinatorEmail(coord.email);
+
       setInitializing(false);
   };
 
@@ -212,6 +220,33 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       }
   };
 
+  // --- LOGIC FOR NOTIFICATION ---
+  const sendCoordinatorNotification = () => {
+      if (!coordinatorEmail || !file) return;
+      
+      const subject = encodeURIComponent(`Solicitud de Aprobación SGD: ${selectedProject} - ${selectedMicro}`);
+      
+      let stageLabel = "";
+      if (requestType === 'INTERNAL') stageLabel = "Revisión Interna";
+      if (requestType === 'REFERENT') stageLabel = "Revisión con Referente";
+      if (requestType === 'CONTROL') stageLabel = "Control de Gestión";
+
+      const body = encodeURIComponent(
+`Estimado Coordinador,
+
+Se ha generado una nueva solicitud de revisión en el sistema.
+
+Documento: ${title}
+Tipo de Solicitud: ${stageLabel}
+Versión: ${detectedVersion}
+Archivo: ${file.name}
+
+Atentamente,
+${user.name}
+`);
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !description || !file || !isFileValid || !selectedMicro || !selectedDocType) return;
@@ -244,6 +279,11 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       // Race between the creation logic and the timeout
       const doc = await Promise.race([createPromise, timeoutPromise]) as any;
       
+      // NOTIFICATION LOGIC: Only for Approval Flows
+      if (['INTERNAL', 'REFERENT', 'CONTROL'].includes(requestType as string)) {
+          sendCoordinatorNotification();
+      }
+
       navigate(`/doc/${doc.id}`);
     } catch (error: any) {
       console.error(error);
@@ -261,6 +301,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const processes = getProcesses() as string[];
   const micros = getMicros() as string[];
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
+
+  const isApprovalFlow = ['INTERNAL', 'REFERENT', 'CONTROL'].includes(requestType as string);
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
@@ -497,12 +539,18 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                             <button 
                                 type="submit" 
                                 disabled={loading}
-                                className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md font-medium"
+                                className={`flex items-center px-6 py-3 text-white rounded-lg disabled:opacity-50 transition-colors shadow-md font-medium
+                                    ${isApprovalFlow ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'}`}
                             >
-                                {loading ? 'Enviando...' : (
+                                {loading ? 'Enviando...' : isApprovalFlow ? (
                                     <>
-                                        <Save size={18} className="mr-2" />
+                                        <Send size={18} className="mr-2" />
                                         Crear Solicitud de Aprobación
+                                    </>
+                                ) : (
+                                    <>
+                                        <FilePlus size={18} className="mr-2" />
+                                        Cargar Documento / Guardar Avance
                                     </>
                                 )}
                             </button>

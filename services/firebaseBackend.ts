@@ -1,4 +1,3 @@
-
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp 
@@ -428,8 +427,6 @@ export const HierarchyService = {
     getUserHierarchy: async (userId: string): Promise<any> => {
         const full = await HierarchyService.getFullHierarchy();
         
-        // Removed Super Analyst check logic completely
-        
         const userTree: any = {};
         Object.keys(full).forEach(proj => {
             Object.keys(full[proj]).forEach(macro => {
@@ -492,11 +489,41 @@ export const HierarchyService = {
         });
         
         const matrixKey = `${project}|${microName}`;
+        
+        // 1. Save Matrix Configurations
         await HierarchyService.updateMatrixAssignment(matrixKey, assignees);
         const ref = doc(db, "config", "required_types");
         const snap = await getDoc(ref);
         const data = snap.exists() ? snap.data() : {};
         await setDoc(ref, { ...data, [matrixKey]: requiredTypes });
+
+        // 2. AUTO-CREATE STARTER DOCUMENT (Inbox Feature)
+        // This ensures the assigned analyst sees the item in their "Bandeja de Entrada" immediately.
+        // We pick the first required type (usually AS IS) as the starter.
+        const starterType = requiredTypes.length > 0 ? requiredTypes[0] : 'AS IS';
+        
+        const starterDocData: Omit<Document, 'id'> = {
+            title: `${microName} - ${starterType}`,
+            description: 'Asignación Inicial automática. Pendiente de carga.',
+            authorId: assignees.length > 0 ? assignees[0] : 'admin',
+            authorName: 'Sistema (Asignación)',
+            assignedTo: assignees.length > 0 ? assignees[0] : 'admin',
+            assignees: assignees,
+            state: DocState.INITIATED,
+            version: '0.0',
+            progress: 10,
+            hasPendingRequest: false,
+            files: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            project: project,
+            macroprocess: macro,
+            process: process,
+            microprocess: microName,
+            docType: starterType
+        };
+        
+        await addDoc(collection(db, "documents"), starterDocData);
     },
 
     deleteMicroprocess: async (project: string, microName: string) => {

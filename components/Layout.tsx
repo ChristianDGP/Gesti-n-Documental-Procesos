@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { User, UserRole, DocState, Document } from '../types';
+import { DocumentService } from '../services/firebaseBackend';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,18 +13,58 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [inboxCount, setInboxCount] = useState(0);
   const location = useLocation();
 
   const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
-  const NavItem = ({ to, icon: Icon, label }: { to: string, icon: any, label: string }) => (
+  // Fetch Inbox Count Logic
+  useEffect(() => {
+    const fetchCount = async () => {
+        try {
+            const docs = await DocumentService.getAll();
+            let count = 0;
+            
+            const scope = user.role === UserRole.ANALYST 
+                ? docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id)))
+                : docs;
+
+            if (user.role === UserRole.COORDINATOR) {
+                count = scope.filter(d => 
+                    d.hasPendingRequest === true && 
+                    (d.state === DocState.INTERNAL_REVIEW || d.state === DocState.SENT_TO_REFERENT)
+                ).length;
+            } else if (user.role === UserRole.ANALYST) {
+                count = scope.filter(d => 
+                    d.state === DocState.REJECTED || 
+                    d.state === DocState.INITIATED ||
+                    d.state === DocState.IN_PROCESS
+                ).length;
+            } else if (user.role === UserRole.ADMIN) {
+                count = scope.filter(d => d.hasPendingRequest === true).length;
+            }
+            setInboxCount(count);
+        } catch (e) {
+            console.error("Error fetching inbox count", e);
+        }
+    };
+    
+    fetchCount();
+  }, [location.pathname]); // Re-fetch on navigation
+
+  const NavItem = ({ to, icon: Icon, label, badge }: { to: string, icon: any, label: string, badge?: number }) => (
     <Link
       to={to}
       onClick={() => setIsSidebarOpen(false)}
       className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive(to)}`}
     >
       <Icon size={20} />
-      <span className="font-medium">{label}</span>
+      <span className="font-medium flex-1">{label}</span>
+      {badge !== undefined && badge > 0 && (
+          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-auto">
+              {badge}
+          </span>
+      )}
     </Link>
   );
 
@@ -52,7 +93,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
           <nav className="flex-1 px-4 py-6 space-y-2">
             <NavItem to="/" icon={BarChart2} label="Dashboard" />
-            <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" />
+            <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
             <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
             
             {/* Assignments for Coordinator and Admin */}

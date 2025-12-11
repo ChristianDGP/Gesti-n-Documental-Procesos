@@ -148,16 +148,16 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const notifyAssignees = (assigneesIds: string[], project: string, micro: string) => {
       if (assigneesIds.length === 0) return;
       
-      const emails = allUsers
-          .filter(u => assigneesIds.includes(u.id))
-          .map(u => u.email)
+      const emails = assigneesIds
+          .map(id => allUsers.find(u => u.id === id)?.email)
+          .filter(email => !!email)
           .join(',');
 
       if (!emails) return;
 
       const subject = encodeURIComponent(`Nueva Asignación SGD: ${project} - ${micro}`);
       const body = encodeURIComponent(
-          `Estimado(a),\n\nSe le ha asignado el microproceso "${micro}" del proyecto ${project} en la plataforma de Gestión Documental.\n\nPor favor, ingrese al sistema para iniciar la carga de documentos (Iniciado 0.0).\n\nAtentamente,\nAdministración SGD`
+          `Estimado(a),\n\nSe le ha asignado el microproceso "${micro}" del proyecto ${project} en la plataforma de Gestión Documental.\n\nPor favor, ingrese al sistema para iniciar la carga de documentos (Estado Iniciado 0.0).\n\nAtentamente,\nAdministración SGD`
       );
 
       if (window.confirm("¿Desea notificar a los analistas asignados por correo electrónico ahora?")) {

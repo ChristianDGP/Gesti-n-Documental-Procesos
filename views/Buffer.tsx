@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { DocumentService } from '../services/firebaseBackend';
 import { Document, User, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Inbox, CheckCircle, Clock, AlertCircle, Send, Paperclip, FileText } from 'lucide-react';
+import { Inbox, CheckCircle, Clock, AlertCircle, Send, Paperclip, FileText, PlayCircle, FastForward } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -40,8 +40,14 @@ const Buffer: React.FC<Props> = ({ user }) => {
         );
     }
     if (user.role === UserRole.ANALYST) {
-        // Analyst Actionable Items: Rejected docs needing correction
-        return scope.filter(d => d.state === DocState.REJECTED);
+        // Analyst Actionable Items: 
+        // 1. Rejected docs needing correction
+        // 2. Initiated (0.0) or In Process (0.n) docs (My Tasks)
+        return scope.filter(d => 
+            d.state === DocState.REJECTED || 
+            d.state === DocState.INITIATED ||
+            d.state === DocState.IN_PROCESS
+        );
     }
     if (user.role === UserRole.ADMIN) {
         // Admin Actionable Items: See ALL pending requests to supervise flow
@@ -53,13 +59,13 @@ const Buffer: React.FC<Props> = ({ user }) => {
   const bufferDocs = getBufferDocs();
   
   const getEmptyMessage = () => {
-      if (user.role === UserRole.ANALYST) return "No tienes documentos rechazados pendientes de corrección.";
+      if (user.role === UserRole.ANALYST) return "No tienes tareas pendientes ni documentos rechazados.";
       if (user.role === UserRole.COORDINATOR) return "No tienes solicitudes pendientes de revisión.";
       return "No hay solicitudes pendientes en el sistema.";
   };
 
   const getHeaderTitle = () => {
-      if (user.role === UserRole.ANALYST) return "Documentos Rechazados / A Corregir";
+      if (user.role === UserRole.ANALYST) return "Mis Tareas y Correcciones";
       if (user.role === UserRole.COORDINATOR) return "Solicitudes de Revisión Pendientes";
       return "Supervisión de Solicitudes (Admin)";
   };
@@ -98,7 +104,8 @@ const Buffer: React.FC<Props> = ({ user }) => {
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 transition-all hover:shadow-md hover:border-indigo-300 relative overflow-hidden">
                         {/* Status Stripe */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 
-                            ${doc.state === DocState.REJECTED ? 'bg-red-500' : 'bg-indigo-500'}`} 
+                            ${doc.state === DocState.REJECTED ? 'bg-red-500' : 
+                              doc.state === DocState.INITIATED ? 'bg-slate-400' : 'bg-indigo-500'}`} 
                         />
                         
                         <div className="flex flex-col gap-4 pl-3">
@@ -139,8 +146,16 @@ const Buffer: React.FC<Props> = ({ user }) => {
                                 {/* Version & Status Badge */}
                                  <div className="flex flex-col items-end gap-1">
                                     <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>
-                                        {user.role === UserRole.ANALYST && doc.state === DocState.REJECTED ? (
-                                            <span className="flex items-center gap-1"><AlertCircle size={12} /> Requiere Atención</span>
+                                        {user.role === UserRole.ANALYST ? (
+                                             doc.state === DocState.REJECTED ? (
+                                                <span className="flex items-center gap-1"><AlertCircle size={12} /> Corregir</span>
+                                             ) : doc.state === DocState.INITIATED ? (
+                                                <span className="flex items-center gap-1"><PlayCircle size={12} /> Iniciar Gestión</span>
+                                             ) : doc.state === DocState.IN_PROCESS ? (
+                                                 <span className="flex items-center gap-1"><FastForward size={12} /> Continuar</span>
+                                             ) : (
+                                                STATE_CONFIG[doc.state].label.split('(')[0]
+                                             )
                                         ) : (
                                             STATE_CONFIG[doc.state].label.split('(')[0]
                                         )}

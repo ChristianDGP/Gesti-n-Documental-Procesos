@@ -73,7 +73,7 @@ export const parseDocumentFilename = (
   }
   result.tipo = tipoCodigo;
 
-  // 7. Analizar Versión y Reglas de Solicitud (Paridad) para ANALISTA (Solicitud)
+  // 7. Analizar Versión y Reglas de Solicitud
   result.nomenclatura = version;
 
   // Regex básicos
@@ -87,16 +87,16 @@ export const parseDocumentFilename = (
   if (expectedRequestType) {
       if (expectedRequestType === 'INITIATED') {
           if (!regexInitiated.test(version)) {
-              result.errores.push('Para "Iniciado" la versión debe ser exactamente "0.0".');
+              result.errores.push('Para estado "Iniciado" la versión debe ser estrictamente "0.0".');
           }
       } else if (expectedRequestType === 'IN_PROCESS') {
           const match = version.match(regexInProcess);
           if (!match) {
-              result.errores.push('Para "En Proceso" el formato debe ser "0.n" sin la letra "v" (ej: 0.1, 0.2).');
+              result.errores.push('Para "En Proceso" el formato debe ser "0.n" (ej: 0.1, 0.2) sin la letra "v".');
           } else {
                const n = parseInt(match[1]);
                if (n === 0) {
-                   result.errores.push('Para 0.0 utilice la opción "Iniciado".');
+                   result.errores.push('La versión 0.0 corresponde a "Iniciado". Para "En Proceso" n debe ser mayor a 0 (ej: 0.1).');
                }
           }
       } else if (expectedRequestType === 'INTERNAL') {
@@ -133,14 +133,14 @@ export const parseDocumentFilename = (
   } else {
       // Validación genérica si no hay tipo de solicitud explícito
       if (!regexStandard.test(version)) {
-          // Intentamos ser permisivos con 0.0 y 0.n si no hay expectedType
+          // Intentamos ser permisivos con 0.0 y 0.n si no hay expectedType pero validamos formato general
           if (!regexInitiated.test(version) && !regexInProcess.test(version)) {
              result.errores.push(`Formato de versión inválido: ${version}`);
           }
       }
   }
 
-  // Logic map for state detection
+  // Logic map for state detection (Auto-detect if not enforced)
   if (result.errores.length === 0) {
       if (version.endsWith('ACG')) {
           result.estado = 'Aprobado';
