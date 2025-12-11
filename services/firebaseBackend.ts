@@ -473,32 +473,6 @@ export const DatabaseService = {
         const currentUser = await AuthService.getCurrentUser();
         const adminId = currentUser?.id || 'admin';
 
-        // --- Helper: Generate User Data (Nickname & Email) ---
-        const generateUserData = (fullName: string) => {
-            const cleanName = fullName.trim();
-            // Normalize: remove accents, special chars, lower case
-            const normalized = cleanName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-            const parts = normalized.split(/\s+/); // split by whitespace
-
-            let nickname = '';
-            if (parts.length >= 2) {
-                // First initial + Last Name (e.g. c + araya = caraya)
-                nickname = `${parts[0].charAt(0)}${parts[1]}`;
-            } else {
-                nickname = parts[0];
-            }
-
-            // EXCEPTION RULE: caraya -> carayag
-            if (nickname === 'caraya') {
-                nickname = 'carayag';
-            }
-
-            return {
-                nickname,
-                email: `${nickname}@ugp-ssmso.cl` // FORCE DOMAIN
-            };
-        };
-
         const parseLegacyDate = (d: string) => {
             if (!d || d.trim() === '') return new Date().toISOString();
             const parts = d.trim().split('-');
@@ -524,6 +498,13 @@ export const DatabaseService = {
             if (!p) return 0;
             return parseInt(p.replace('%', '').trim()) || 0;
         };
+
+        const mapRole = (roleStr: string): UserRole => {
+             const normalized = roleStr?.trim().toUpperCase();
+             if (normalized === 'ADMIN') return UserRole.ADMIN;
+             if (normalized === 'COORDINATOR' || normalized === 'COORDINADOR') return UserRole.COORDINATOR;
+             return UserRole.ANALYST;
+        };
         
         // Delete existing docs (CAUTION)
         const q = query(collection(db, "documents"));
@@ -534,56 +515,54 @@ export const DatabaseService = {
         const errors: string[] = [];
         const newMatrixOverrides: Record<string, string[]> = {};
 
+        // Skip Header (i=1)
         for (let i = 1; i < lines.length; i++) {
             const cols = lines[i].split(';');
             if (cols.length < 5) continue;
 
-            // Updated Column Mapping: Project is 0, Analyst is 4
-            const project = cols[0];
-            const macro = cols[1];
-            const process = cols[2];
-            const micro = cols[3];
-            const analystName = cols[4];
+            // Updated Column Mapping based on new structure:
+            // 0: ID, 1: PROJECT, 2: MACRO, 3: PROCESS, 4: MICRO
+            // 5: Name, 6: Email, 7: Role
+            const project = cols[1];
+            const macro = cols[2];
+            const process = cols[3];
+            const micro = cols[4];
             
-            // Resolve Assignee Logic (Create User if not exists)
+            const rawName = cols[5]?.trim();
+            const rawEmail = cols[6]?.trim();
+            const rawRole = cols[7]?.trim();
+
+            // Resolve Assignee Logic
             let assignees: string[] = [adminId];
             let authorName = 'Admin (Migración)';
 
-            if (analystName && analystName.trim() !== '') {
-                 const rawName = analystName.trim();
-                 
-                 // 1. Try to find existing user by Name or Nickname
-                 const generated = generateUserData(rawName);
-                 
-                 let foundUser = users.find(u => 
-                    u.name.toLowerCase() === rawName.toLowerCase() || 
-                    u.nickname === generated.nickname ||
-                    u.email === generated.email
-                 );
+            if (rawEmail && rawEmail !== '') {
+                 // 1. Try to find existing user by Email
+                 let foundUser = users.find(u => u.email.toLowerCase() === rawEmail.toLowerCase());
 
                  if (!foundUser) {
                      // 2. Create New User Profile in Firestore
-                     // We use the generated nickname as ID suffix to keep it clean
-                     const newId = `user-${generated.nickname}-${Date.now()}`;
+                     // We use a sanitized email prefix or unique string for ID to ensure we can find it later
+                     const generatedId = `user-${rawEmail.replace(/[^a-zA-Z0-9]/g, '')}`;
                      
                      const newUser: User = {
-                         id: newId,
-                         name: rawName,
-                         email: generated.email,
-                         nickname: generated.nickname,
-                         role: UserRole.ANALYST,
+                         id: generatedId,
+                         name: rawName || rawEmail.split('@')[0],
+                         email: rawEmail,
+                         nickname: rawEmail.split('@')[0],
+                         role: mapRole(rawRole),
                          organization: 'Procesos (Importado)',
-                         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(rawName)}&background=random`,
-                         // Password removed as requested for Google Auth flow
+                         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(rawName || 'U')}&background=random`,
                      };
 
                      try {
-                        await setDoc(doc(db, "users", newId), newUser);
+                        await setDoc(doc(db, "users", generatedId), newUser);
                         // Add to local cache to avoid duplicates in loop
                         users.push(newUser);
                         foundUser = newUser;
                      } catch (e) {
-                         console.error("Error auto-creating user from CSV:", e);
+                         console.error("Error creating user from CSV:", e);
+                         errors.push(`Error creando usuario ${rawEmail}: ${e}`);
                      }
                  }
 
@@ -621,10 +600,15 @@ export const DatabaseService = {
                 }
             }
 
-            await createLegacyDoc('AS IS', cols[6], cols[7], cols[8], cols[9]);
-            await createLegacyDoc('FCE', cols[10], cols[11], cols[12], cols[13]);
-            await createLegacyDoc('PM', cols[14], cols[15], cols[16], cols[17]);
-            await createLegacyDoc('TO BE', cols[18], cols[19], cols[20], cols[21]);
+            // New Indices for Document Columns
+            // AS IS: 8, 9, 10, 11
+            await createLegacyDoc('AS IS', cols[8], cols[9], cols[10], cols[11]);
+            // FCE: 12, 13, 14, 15
+            await createLegacyDoc('FCE', cols[12], cols[13], cols[14], cols[15]);
+            // PM: 16, 17, 18, 19
+            await createLegacyDoc('PM', cols[16], cols[17], cols[18], cols[19]);
+            // TO BE: 20, 21, 22, 23
+            await createLegacyDoc('TO BE', cols[20], cols[21], cols[22], cols[23]);
         }
         
         await setDoc(doc(db, "config", "matrix_overrides"), newMatrixOverrides);
