@@ -253,9 +253,9 @@ ${user.name}
 
     setLoading(true);
     
-    // Create a promise that rejects after 15 seconds
+    // Create a promise that rejects after 60 seconds (Increased from 15s to allow slower uploads)
     const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Tiempo de espera agotado. Verifique su conexión.")), 15000);
+        setTimeout(() => reject(new Error("Tiempo de espera agotado (60s). Verifique su conexión o el tamaño del archivo.")), 60000);
     });
 
     try {

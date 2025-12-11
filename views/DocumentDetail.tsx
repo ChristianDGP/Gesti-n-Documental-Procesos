@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService } from '../services/fireba
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2 } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2, MousePointerClick } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -28,10 +28,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   // Response Modal State
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'APPROVE' | 'REJECT' | null>(null);
-  const [approvalType, setApprovalType] = useState<ApprovalContext | ''>(''); // New selector state
-  const [responseFile, setResponseFile] = useState<File | undefined>(undefined);
-  const [responseFileError, setResponseFileError] = useState<string | null>(null);
-  const modalFileRef = useRef<HTMLInputElement>(null);
+  const [approvalType, setApprovalType] = useState<ApprovalContext | ''>(''); 
+  
+  // Validation State for Modal
+  const [validationFile, setValidationFile] = useState<File | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [extractedVersion, setExtractedVersion] = useState<string>('');
 
   useEffect(() => {
     if (id) loadData(id);
@@ -75,7 +77,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
-  // Standard File Upload (Just adding attachments)
+  // Standard File Upload (This one DOES upload attachments, used in the main view)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !doc) return;
     const file = e.target.files[0];
@@ -130,8 +132,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               return;
           }
           setPendingAction(action);
-          setResponseFile(undefined);
-          setResponseFileError(null);
+          setValidationFile(null);
+          setValidationError(null);
+          setExtractedVersion('');
 
           // Auto-detect approval type if based on current state (Legacy behavior fallback)
           let autoType: ApprovalContext | '' = '';
@@ -144,49 +147,57 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
-  const handleResponseFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0] && doc && pendingAction) {
-          const file = e.target.files[0];
-          setResponseFile(file);
-          
-          // 1. Basic Structure Validation
-          const analisis = parseDocumentFilename(file.name, doc.project, doc.microprocess, doc.docType);
-          if (!analisis.valido) {
-              setResponseFileError(`Nomenclatura inválida: ${analisis.errores[0]}`);
-              return;
-          }
+  // Logic for Modal File Selection (Validation ONLY, NO UPLOAD)
+  const handleValidationFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!doc || !pendingAction || !e.target.files || !e.target.files[0]) return;
+      
+      const file = e.target.files[0];
+      setValidationFile(file);
 
-          // Determine Mock State for Validation based on Dropdown
-          let mockStateForValidation = doc.state;
-          if (approvalType === 'INTERNAL') mockStateForValidation = DocState.INTERNAL_REVIEW;
-          else if (approvalType === 'REFERENT') mockStateForValidation = DocState.SENT_TO_REFERENT;
-          else if (approvalType === 'CONTROL') mockStateForValidation = DocState.SENT_TO_CONTROL;
+      // 1. Basic Parse: Is it a valid filename structure for this document?
+      // We pass the expected project, micro and type to ensure it matches the current document context
+      const parseResult = parseDocumentFilename(file.name, doc.project, doc.microprocess, doc.docType);
+      
+      if (!parseResult.valido) {
+          setValidationError(parseResult.errores[0]); // Show first error
+          setExtractedVersion('');
+          return;
+      }
 
-          // 2. Strict Coordinator Rule Validation
-          const ruleCheck = validateCoordinatorRules(file.name, doc.version, mockStateForValidation, pendingAction);
-          if (!ruleCheck.valid) {
-              setResponseFileError(ruleCheck.error || 'Error de validación');
-              return;
-          }
+      const rawVersion = parseResult.nomenclatura || '';
+      // Remove extension just in case parseDocumentFilename didn't clean it fully (it usually does based on ' - ' split)
+      // The parser returns the last part which might include .docx if not handled, but let's ensure it here.
+      const version = rawVersion.replace(/\.[^/.]+$/, ""); 
 
-          setResponseFileError(null);
+      setExtractedVersion(version);
+
+      // 2. Logic Validation: Does this version match the Coordinator Rules for the current action?
+      let mockStateForValidation = doc.state;
+      if (approvalType === 'INTERNAL') mockStateForValidation = DocState.INTERNAL_REVIEW;
+      else if (approvalType === 'REFERENT') mockStateForValidation = DocState.SENT_TO_REFERENT;
+      else if (approvalType === 'CONTROL') mockStateForValidation = DocState.SENT_TO_CONTROL;
+
+      const ruleCheck = validateCoordinatorRules(file.name, doc.version, mockStateForValidation, pendingAction);
+      
+      if (!ruleCheck.valid) {
+          setValidationError(ruleCheck.error || 'Error de validación de reglas.');
+      } else {
+          setValidationError(null);
       }
   };
 
   const handleSubmitResponse = async () => {
-      if (!doc || !pendingAction || !responseFile || responseFileError) return;
+      if (!doc || !pendingAction || !validationFile || validationError || !extractedVersion) return;
       if (pendingAction === 'APPROVE' && !approvalType) {
           alert('Debe seleccionar un Tipo de Aprobación.');
           return;
       }
 
-      // Extract Clean Version
-      const parts = responseFile.name.replace(/\.[^/.]+$/, "").split(' - ');
-      const newVersion = parts[parts.length - 1];
-
-      if (window.confirm(`Confirma ${pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR'} con archivo ${newVersion}?`)) {
+      if (window.confirm(`Confirma ${pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR'} usando la versión ${extractedVersion} detectada en el archivo?\n\nNOTA: El archivo NO se subirá, solo se registrará el cambio de estado.`)) {
           setShowResponseModal(false);
-          await executeTransition(pendingAction, responseFile, newVersion);
+          
+          // CRITICAL: We pass NULL as the file to avoid uploading, but we pass extractedVersion
+          await executeTransition(pendingAction, null, extractedVersion);
       }
   };
 
@@ -196,7 +207,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       try {
         await DocumentService.transitionState(
             doc.id, user, action, 
-            comment || (action === 'REQUEST_APPROVAL' ? 'Solicitud de Aprobación Enviada' : 'Cambio de estado'),
+            comment || (action === 'REQUEST_APPROVAL' ? 'Solicitud de Aprobación Enviada' : `Gestión realizada. Nueva versión establecida: ${customVersion || 'N/A'}`),
             file || undefined,
             customVersion || undefined
         );
@@ -243,14 +254,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && (doc.state === DocState.IN_PROCESS || doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT);
   const canRestart = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.REJECTED;
   
-  // LOGIC UPDATE: Allow Coordinator/Admin to approve proactively OR if request is pending
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
   const isDocActive = doc.state !== DocState.APPROVED;
-  
-  // MODIFICATION: Allow Analysts (Author/Assignee) to also use the Approve button to trigger validation modal
-  // This satisfies both Coordinator/Admin power-use AND Analyst workflow
   const canApprove = (isCoordinatorOrAdmin || (user.role === UserRole.ANALYST && (isAssignee || isAuthor))) && isDocActive;
-
   const canReject = canApprove;
   const canNotifyCoordinator = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
@@ -373,7 +379,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                   </div>
                   
                   <div className="p-6 space-y-4">
-                        {/* SELECTOR DE CONTEXTO (NUEVO) */}
+                        {/* SELECTOR DE CONTEXTO */}
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
                                 <ListFilter size={14} /> Tipo de Aprobación / Contexto
@@ -382,8 +388,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 value={approvalType} 
                                 onChange={(e) => {
                                     setApprovalType(e.target.value as ApprovalContext);
-                                    setResponseFile(undefined); // Reset file to force re-validation
-                                    setResponseFileError(null);
+                                    setValidationFile(null);
+                                    setValidationError(null);
+                                    setExtractedVersion('');
                                 }}
                                 className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
@@ -404,53 +411,52 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             </div>
                         </div>
 
-                        <div className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-colors
-                            ${!approvalType ? 'bg-slate-50 border-slate-200 cursor-not-allowed opacity-60' : 
-                               responseFileError ? 'border-red-300 bg-red-50' : 
-                               responseFile ? 'border-green-300 bg-green-50' : 
-                               'border-slate-300 hover:bg-slate-50 hover:border-indigo-300 cursor-pointer'}`}>
+                        {/* SELECTOR DE ARCHIVO (SOLO VALIDACIÓN) */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+                                <MousePointerClick size={14} /> Validar Archivo (No se subirá)
+                            </label>
                             
-                            <input 
-                                type="file" 
-                                ref={modalFileRef}
-                                className="hidden"
-                                disabled={!approvalType}
-                                onChange={handleResponseFileSelect}
-                            />
-
-                            {responseFile ? (
-                                <div>
-                                    {responseFileError ? (
-                                        <>
-                                            <FileX size={32} className="text-red-500 mx-auto mb-2" />
-                                            <p className="font-bold text-red-700">{responseFile.name}</p>
-                                            <p className="text-xs text-red-600 mt-1">{responseFileError}</p>
-                                            <button onClick={() => modalFileRef.current?.click()} className="text-xs underline text-red-800 mt-2">Cambiar archivo</button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <FileCheck size={32} className="text-green-500 mx-auto mb-2" />
-                                            <p className="font-bold text-green-700">{responseFile.name}</p>
-                                            <p className="text-xs text-green-600 mt-1">Archivo válido</p>
-                                            <button onClick={() => modalFileRef.current?.click()} className="text-xs underline text-green-800 mt-2">Cambiar archivo</button>
-                                        </>
-                                    )}
-                                </div>
-                            ) : (
-                                <div onClick={() => approvalType && modalFileRef.current?.click()} className={approvalType ? "cursor-pointer" : ""}>
-                                    <Upload size={32} className="text-slate-400 mx-auto mb-2" />
-                                    <p className="text-sm font-medium text-slate-600">
-                                        {approvalType ? 'Click para subir archivo' : 'Seleccione un Tipo primero'}
-                                    </p>
-                                </div>
-                            )}
+                            <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer relative
+                                ${validationError ? 'border-red-300 bg-red-50' : 
+                                  validationFile ? 'border-green-300 bg-green-50' : 
+                                  'border-slate-300 hover:bg-slate-50'}`}
+                            >
+                                <input 
+                                    type="file" 
+                                    onChange={handleValidationFileSelect}
+                                    disabled={!approvalType}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                                />
+                                
+                                {!validationFile ? (
+                                    <div className="text-slate-400 text-sm">
+                                        <Upload size={24} className="mx-auto mb-2 opacity-50" />
+                                        <p>Click para seleccionar el archivo final.</p>
+                                        <p className="text-xs mt-1">(Esto validará el nombre, pero no lo subirá al servidor)</p>
+                                    </div>
+                                ) : (
+                                    <div className={validationError ? "text-red-700" : "text-green-700"}>
+                                        {validationError ? <FileX size={24} className="mx-auto mb-2" /> : <FileCheck size={24} className="mx-auto mb-2" />}
+                                        <p className="font-semibold text-sm truncate">{validationFile.name}</p>
+                                        
+                                        {validationError ? (
+                                            <p className="text-xs mt-1 font-bold">{validationError}</p>
+                                        ) : (
+                                            <p className="text-xs mt-1 font-bold">
+                                                Versión detectada: <span className="bg-white px-1 rounded border border-green-200">{extractedVersion}</span>
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="flex justify-end gap-3 pt-4">
                             <button onClick={() => setShowResponseModal(false)} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm">Cancelar</button>
                             <button 
                                 onClick={handleSubmitResponse}
-                                disabled={!responseFile || !!responseFileError || !approvalType}
+                                disabled={!validationFile || !!validationError || !extractedVersion || !approvalType}
                                 className={`px-4 py-2 rounded-lg text-white text-sm font-bold shadow-sm transition-all
                                     ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
                                     disabled:opacity-50 disabled:cursor-not-allowed`}
