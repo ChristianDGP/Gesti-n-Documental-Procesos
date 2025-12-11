@@ -464,7 +464,7 @@ export const HierarchyService = {
 };
 
 export const DatabaseService = {
-    importLegacyFromCSV: async (csvContent: string) => {
+    importLegacyFromCSV: async (csvContent: string, onProgress?: (percent: number) => void) => {
         const lines = csvContent.split(/\r?\n/).filter(line => line.trim() !== '');
         if (lines.length < 2) throw new Error('CSV vacío');
         
@@ -514,9 +514,18 @@ export const DatabaseService = {
         let imported = 0;
         const errors: string[] = [];
         const newMatrixOverrides: Record<string, string[]> = {};
+        const newRequiredTypes: Record<string, DocType[]> = {}; 
+
+        const totalLines = lines.length - 1;
 
         // Skip Header (i=1)
         for (let i = 1; i < lines.length; i++) {
+            
+            // Progress Calculation
+            if (onProgress) {
+                onProgress(Math.round((i / totalLines) * 100));
+            }
+
             const cols = lines[i].split(';');
             if (cols.length < 5) continue;
 
@@ -573,7 +582,23 @@ export const DatabaseService = {
             }
             
             if (project && micro) {
-                newMatrixOverrides[`${project}|${micro}`] = assignees;
+                const matrixKey = `${project}|${micro}`;
+                newMatrixOverrides[matrixKey] = assignees;
+
+                // Lookup Required Types from Matrix (Constants)
+                const configRow = REQUIRED_DOCS_MATRIX.find(r => r[0] === project && r[1] === micro);
+                let typesForMicro: DocType[] = [];
+                
+                if (configRow) {
+                    if (configRow[2] === 1) typesForMicro.push('AS IS');
+                    if (configRow[3] === 1) typesForMicro.push('FCE');
+                    if (configRow[4] === 1) typesForMicro.push('PM');
+                    if (configRow[5] === 1) typesForMicro.push('TO BE');
+                } else {
+                    // Fallback to all required if not defined in matrix
+                    typesForMicro = ['AS IS', 'FCE', 'PM', 'TO BE'];
+                }
+                newRequiredTypes[matrixKey] = typesForMicro;
             }
 
             const baseDoc = {
@@ -612,6 +637,8 @@ export const DatabaseService = {
         }
         
         await setDoc(doc(db, "config", "matrix_overrides"), newMatrixOverrides);
+        await setDoc(doc(db, "config", "required_types"), newRequiredTypes);
+        
         return { imported, errors };
     },
     exportData: async () => { return "Función no disponible en versión nube (contactar admin DB)"; },

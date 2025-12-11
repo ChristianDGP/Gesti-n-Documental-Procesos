@@ -7,6 +7,7 @@ const AdminDatabase: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isLegacyImporting, setIsLegacyImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0); // Progress state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const legacyInputRef = useRef<HTMLInputElement>(null);
 
@@ -68,11 +69,16 @@ const AdminDatabase: React.FC = () => {
     }
 
     setIsLegacyImporting(true);
+    setImportProgress(0); // Reset progress
+
     const reader = new FileReader();
     reader.onload = async (event) => {
         try {
             const content = event.target?.result as string;
-            const result = await DatabaseService.importLegacyFromCSV(content);
+            // Pass progress callback
+            const result = await DatabaseService.importLegacyFromCSV(content, (percent) => {
+                setImportProgress(percent);
+            });
             alert(`Importación completada exitosamente.\n\nBase de datos limpiada y regenerada.\nDocumentos creados: ${result.imported}\nErrores: ${result.errors.length}`);
             window.location.reload();
         } catch (error: any) {
@@ -176,7 +182,7 @@ const AdminDatabase: React.FC = () => {
                         <li>Se recomienda guardar el Excel como "CSV (delimitado por punto y coma)" antes de subir.</li>
                     </ul>
                 </div>
-                <div className="flex items-center justify-center md:w-1/3">
+                <div className="flex flex-col justify-center items-center md:w-1/3 gap-4">
                      <input 
                         type="file" 
                         ref={legacyInputRef}
@@ -196,6 +202,23 @@ const AdminDatabase: React.FC = () => {
                             </>
                         )}
                     </button>
+                    
+                    {/* Progress Bar */}
+                    {isLegacyImporting && (
+                        <div className="w-full animate-fadeIn">
+                             <div className="flex justify-between text-xs text-blue-700 font-bold mb-1">
+                                <span>Progreso</span>
+                                <span>{importProgress}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div 
+                                    className="bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-out" 
+                                    style={{ width: `${importProgress}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-center text-[10px] text-slate-400 mt-1">Esto puede tomar unos momentos...</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
