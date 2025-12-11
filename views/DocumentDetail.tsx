@@ -256,8 +256,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
   const isDocActive = doc.state !== DocState.APPROVED;
-  const canApprove = (isCoordinatorOrAdmin || (user.role === UserRole.ANALYST && (isAssignee || isAuthor))) && isDocActive;
-  const canReject = canApprove;
+
+  // MODIFICACIÓN: La aprobación y rechazo es EXCLUSIVA de Coordinadores y Admins
+  const canApprove = isCoordinatorOrAdmin && isDocActive;
+  const canReject = isCoordinatorOrAdmin && isDocActive;
+
   const canNotifyCoordinator = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
 
