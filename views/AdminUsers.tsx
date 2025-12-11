@@ -66,10 +66,10 @@ const AdminUsers: React.FC = () => {
     e.preventDefault();
     if (!name || !email || !organization) return;
     
-    // Auto-append domain if missing for ease of use (only if not editing or if user typed it out)
+    // Auto-append domain if missing for ease of use
     let finalEmail = email;
-    if (!finalEmail.includes('@') && !email.includes('.')) {
-        finalEmail += '@empresa.com';
+    if (!finalEmail.includes('@')) {
+        finalEmail += '@ugp-ssmso.cl';
     }
 
     try {
@@ -88,18 +88,15 @@ const AdminUsers: React.FC = () => {
             await UserService.update(editingUserId, updatePayload);
         } else {
             // Create
-            if (!password) {
-                alert('La contraseña es obligatoria para nuevos usuarios.');
-                return;
-            }
             await UserService.create({
+                id: `user-${Date.now()}`, // Generate basic ID for manual creation
                 name,
                 email: finalEmail,
                 nickname: nickname || undefined,
                 role,
                 organization,
-                password
-            } as User); // Adjusted typing for creation
+                password: password || undefined // Password optional for Google Auth users
+            } as User);
         }
         
         setShowForm(false);
@@ -147,7 +144,8 @@ const AdminUsers: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                        <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="usuario@empresa.com" />
+                        <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="usuario@ugp-ssmso.cl" />
+                        <p className="text-[10px] text-slate-400 mt-1">Si omite el dominio, se agregará @ugp-ssmso.cl automáticamente.</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Usuario Corto / Nickname</label>
@@ -164,7 +162,7 @@ const AdminUsers: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">
                             Contraseña
-                            {editingUserId && <span className="text-slate-400 font-normal ml-2">(Dejar en blanco para no cambiar)</span>}
+                            <span className="text-slate-400 font-normal ml-2">(Opcional si usa Google)</span>
                         </label>
                         <div className="relative">
                             <input 
@@ -172,8 +170,7 @@ const AdminUsers: React.FC = () => {
                                 value={password} 
                                 onChange={(e) => setPassword(e.target.value)} 
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                                placeholder={editingUserId ? "••••••••" : "Establecer contraseña"}
-                                required={!editingUserId}
+                                placeholder={editingUserId ? "••••••••" : "Opcional"}
                             />
                         </div>
                     </div>

@@ -1,5 +1,5 @@
 
-import { initializeApp } from "firebase/app";
+import firebase from "firebase/compat/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getStorage } from "firebase/storage";
@@ -16,7 +16,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Use compat check to prevent duplicate initialization in dev environments and cast to any for modular SDK compatibility
+const app = (firebase.apps.length > 0 ? firebase.app() : firebase.initializeApp(firebaseConfig)) as any;
 
 // Export services
 export const db = getFirestore(app);

@@ -55,28 +55,19 @@ export const AuthService = {
       if (userSnap.exists()) {
         return userSnap.data() as User;
       } else {
-        // First time login: Create User Profile
-        // Security Rule: You can hardcode your email here to be ADMIN automatically
-        // e.g. firebaseUser.email === 'admin@domain.com'
-        const isSuperAdmin = firebaseUser.email === 'carayag@ugp-ssm.cl' || firebaseUser.email === 'tu-email@gmail.com';
-        
-        const newUser: User = {
+        // First time login logic is handled in useAuthStatus hook now for consistency
+        // returning mock object until hook updates
+        return {
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
           name: firebaseUser.displayName || 'Usuario',
-          nickname: firebaseUser.email?.split('@')[0] || 'user',
-          role: isSuperAdmin ? UserRole.ADMIN : UserRole.ANALYST, // Default role
-          avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${firebaseUser.displayName}`,
+          role: UserRole.ANALYST,
+          avatar: firebaseUser.photoURL || '',
           organization: 'SSM'
-        };
-        
-        await setDoc(userRef, newUser);
-        return newUser;
+        } as User;
       }
     } catch (error: any) {
-      // Ensure we log the error for debugging purposes
       console.error("AuthService Login Error:", error);
-      // Re-throw so UI catches it (especially auth/unauthorized-domain)
       throw error;
     }
   },
@@ -91,7 +82,6 @@ export const AuthService = {
     localStorage.removeItem('sgd_user_cache');
   },
 
-  // Helper to sync user session
   syncSession: async (callback: (u: User | null) => void) => {
     onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -102,10 +92,6 @@ export const AuthService = {
           localStorage.setItem('sgd_user_cache', JSON.stringify(userData));
           callback(userData);
         } else {
-          // User authenticated in Firebase but not in Firestore yet?
-          // This edge case might happen if creation fails.
-          // For now, treat as not logged in or trigger creation?
-          // We'll treat as null and let them login again which triggers creation logic
           callback(null);
         }
       } else {
@@ -129,7 +115,6 @@ export const UserService = {
     return updatedSnap.data() as User;
   },
   create: async (userData: User): Promise<User> => {
-      // Manual creation by Admin
       await setDoc(doc(db, "users", userData.id), userData);
       return userData;
   },
@@ -169,11 +154,9 @@ export const DocumentService = {
       project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
     };
 
-    // 1. Create Document Ref
     const docRef = await addDoc(collection(db, "documents"), newDocData);
     const docId = docRef.id;
 
-    // 2. Upload File if exists
     if (file) {
        const fileRef = ref(storage, `documents/${docId}/${file.name}`);
        await uploadBytes(fileRef, file);
@@ -200,7 +183,6 @@ export const DocumentService = {
       if(!docSnap.exists()) throw new Error("Doc not found");
       const currentDoc = docSnap.data() as Document;
 
-      // Upload
       const fileRef = ref(storage, `documents/${docId}/${Date.now()}_${file.name}`);
       await uploadBytes(fileRef, file);
       const url = await getDownloadURL(fileRef);
@@ -216,7 +198,6 @@ export const DocumentService = {
           updatedAt: new Date().toISOString() 
       };
 
-      // Auto-update metadata
       const parts = file.name.replace(/\.[^/.]+$/, "").split(' - ');
       if (parts.length >= 4) {
           const newVersion = parts[parts.length - 1];
@@ -232,7 +213,6 @@ export const DocumentService = {
 
   delete: async (id: string) => {
       await deleteDoc(doc(db, "documents", id));
-      // Note: Ideally delete files from Storage too
   },
 
   transitionState: async (docId: string, user: User, action: 'ADVANCE' | 'REJECT' | 'APPROVE' | 'REQUEST_APPROVAL' | 'COMMENT', comment: string, file?: File, customVersion?: string): Promise<void> => {
@@ -322,22 +302,18 @@ export const HistoryService = {
 
 export const HierarchyService = {
     getFullHierarchy: async (): Promise<FullHierarchy> => {
-        // Fetch custom nodes from Firestore
         const q = query(collection(db, "custom_microprocesses"));
         const snapshot = await getDocs(q);
         const customNodes = snapshot.docs.map(d => d.data());
 
-        // Fetch overrides
         const matrixDoc = await getDoc(doc(db, "config", "matrix_overrides"));
         const overrides = matrixDoc.exists() ? matrixDoc.data() : {};
 
-        // Fetch required types
         const typesDoc = await getDoc(doc(db, "config", "required_types"));
         const requiredTypesMap = typesDoc.exists() ? typesDoc.data() : {};
 
         const tree: FullHierarchy = {};
         
-        // 1. Initial Load (Static)
         INITIAL_DATA_LOAD.forEach(row => {
             if (!row || row.length < 5) return;
             const [project, macro, process, micro, namesStr] = row;
@@ -347,8 +323,6 @@ export const HierarchyService = {
             if (overrides[matrixKey]) {
                 assigneeIds = overrides[matrixKey];
             } else {
-                 // Default logic: do not use NAME_TO_ID_MAP on backend as it's static
-                 // Just return empty or use initial seed logic if we had user access
                  assigneeIds = []; 
             }
 
@@ -366,12 +340,10 @@ export const HierarchyService = {
             }
         });
 
-        // 2. Custom Nodes
         customNodes.forEach((node: any) => {
              const { project, macro, process, micro, assignees, requiredTypes } = node;
              const matrixKey = `${project}|${micro}`;
              
-             // Merge with overrides
              const finalAssignees = overrides[matrixKey] || assignees || [];
              const finalTypes = requiredTypesMap[matrixKey] || requiredTypes || [];
 
@@ -437,7 +409,6 @@ export const HierarchyService = {
         
         await setDoc(ref, { ...data, [matrixKey]: newAssignees });
 
-        // Update existing documents linked to this microprocess
         const [proj, micro] = matrixKey.split('|');
         const q = query(collection(db, "documents"), where("project", "==", proj), where("microprocess", "==", micro));
         const docs = await getDocs(q);
@@ -464,14 +435,12 @@ export const HierarchyService = {
     },
 
     deleteMicroprocess: async (project: string, microName: string) => {
-        // 1. Delete from custom_microprocesses
         const q = query(collection(db, "custom_microprocesses"), where("project", "==", project), where("micro", "==", microName));
         const snapshot = await getDocs(q);
         await Promise.all(snapshot.docs.map(d => deleteDoc(d.ref)));
 
         const matrixKey = `${project}|${microName}`;
 
-        // 2. Remove from matrix_overrides
         const overridesRef = doc(db, "config", "matrix_overrides");
         const overridesSnap = await getDoc(overridesRef);
         if (overridesSnap.exists()) {
@@ -482,7 +451,6 @@ export const HierarchyService = {
             }
         }
 
-        // 3. Remove from required_types
         const typesRef = doc(db, "config", "required_types");
         const typesSnap = await getDoc(typesRef);
         if (typesSnap.exists()) {
@@ -496,14 +464,40 @@ export const HierarchyService = {
 };
 
 export const DatabaseService = {
-    // Keep legacy import but adapted for Firestore Batching
     importLegacyFromCSV: async (csvContent: string) => {
         const lines = csvContent.split(/\r?\n/).filter(line => line.trim() !== '');
         if (lines.length < 2) throw new Error('CSV vacío');
         
-        const users = await UserService.getAll();
+        // Load current users to check for duplicates/linkages
+        let users = await UserService.getAll();
         const currentUser = await AuthService.getCurrentUser();
         const adminId = currentUser?.id || 'admin';
+
+        // --- Helper: Generate User Data (Nickname & Email) ---
+        const generateUserData = (fullName: string) => {
+            const cleanName = fullName.trim();
+            // Normalize: remove accents, special chars, lower case
+            const normalized = cleanName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const parts = normalized.split(/\s+/); // split by whitespace
+
+            let nickname = '';
+            if (parts.length >= 2) {
+                // First initial + Last Name (e.g. c + araya = caraya)
+                nickname = `${parts[0].charAt(0)}${parts[1]}`;
+            } else {
+                nickname = parts[0];
+            }
+
+            // EXCEPTION RULE: caraya -> carayag
+            if (nickname === 'caraya') {
+                nickname = 'carayag';
+            }
+
+            return {
+                nickname,
+                email: `${nickname}@ugp-ssmso.cl` // FORCE DOMAIN
+            };
+        };
 
         const parseLegacyDate = (d: string) => {
             if (!d || d.trim() === '') return new Date().toISOString();
@@ -544,16 +538,60 @@ export const DatabaseService = {
             const cols = lines[i].split(';');
             if (cols.length < 5) continue;
 
-            const [_, project, macro, process, micro, analystName] = cols;
+            // Updated Column Mapping: Project is 0, Analyst is 4
+            const project = cols[0];
+            const macro = cols[1];
+            const process = cols[2];
+            const micro = cols[3];
+            const analystName = cols[4];
             
-            // Resolve Assignee Logic
+            // Resolve Assignee Logic (Create User if not exists)
             let assignees: string[] = [adminId];
-            if (analystName) {
-                 const clean = analystName.trim();
-                 const match = users.find(u => u.name === clean || u.nickname === clean);
-                 if (match) assignees = [match.id];
+            let authorName = 'Admin (Migración)';
+
+            if (analystName && analystName.trim() !== '') {
+                 const rawName = analystName.trim();
+                 
+                 // 1. Try to find existing user by Name or Nickname
+                 const generated = generateUserData(rawName);
+                 
+                 let foundUser = users.find(u => 
+                    u.name.toLowerCase() === rawName.toLowerCase() || 
+                    u.nickname === generated.nickname ||
+                    u.email === generated.email
+                 );
+
+                 if (!foundUser) {
+                     // 2. Create New User Profile in Firestore
+                     // We use the generated nickname as ID suffix to keep it clean
+                     const newId = `user-${generated.nickname}-${Date.now()}`;
+                     
+                     const newUser: User = {
+                         id: newId,
+                         name: rawName,
+                         email: generated.email,
+                         nickname: generated.nickname,
+                         role: UserRole.ANALYST,
+                         organization: 'Procesos (Importado)',
+                         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(rawName)}&background=random`,
+                         // Password removed as requested for Google Auth flow
+                     };
+
+                     try {
+                        await setDoc(doc(db, "users", newId), newUser);
+                        // Add to local cache to avoid duplicates in loop
+                        users.push(newUser);
+                        foundUser = newUser;
+                     } catch (e) {
+                         console.error("Error auto-creating user from CSV:", e);
+                     }
+                 }
+
+                 if (foundUser) {
+                     assignees = [foundUser.id];
+                     authorName = foundUser.name;
+                 }
             }
-            const authorName = assignees[0] === adminId ? 'Admin (Migración)' : (users.find(u => u.id === assignees[0])?.name || 'Desconocido');
             
             if (project && micro) {
                 newMatrixOverrides[`${project}|${micro}`] = assignees;
