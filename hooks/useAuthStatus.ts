@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, deleteDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, query, collection, where, getDocs, updateDoc } from 'firebase/firestore';
 import { User, UserRole } from '../types';
+import { UserService } from '../services/firebaseBackend';
 
 export const useAuthStatus = () => {
     const [user, setUser] = useState<User | null>(null);
@@ -15,14 +16,28 @@ export const useAuthStatus = () => {
                 try {
                     const userRef = doc(db, "users", firebaseUser.uid);
                     const userSnap = await getDoc(userRef);
+                    const email = firebaseUser.email || '';
+                    
+                    // Lista de correos que SIEMPRE deben ser Admin
+                    const adminEmails = ['admin@empresa.com'];
+                    const shouldBeAdmin = adminEmails.includes(email) || email.toLowerCase().startsWith('admin');
 
                     if (userSnap.exists()) {
-                        // 1. El usuario ya tiene perfil con su UID (Login normal)
-                        setUser(userSnap.data() as User);
+                        // 1. El usuario ya tiene perfil
+                        const userData = userSnap.data() as User;
+                        
+                        // Auto-fix: Corregir roles según configuración dura (solo admins reales)
+                        if (shouldBeAdmin && userData.role !== UserRole.ADMIN) {
+                            console.log("Upgrading user to ADMIN.");
+                            const updatedUser = { ...userData, role: UserRole.ADMIN, organization: 'Administración Sistema' };
+                            await updateDoc(userRef, { role: UserRole.ADMIN, organization: 'Administración Sistema' });
+                            setUser(updatedUser);
+                        } else {
+                            setUser(userData);
+                        }
                     } else {
-                        // 2. Nuevo Login con Google.
+                        // 2. Nuevo Login o Migración
                         // Verificar si existe un perfil "Pre-cargado" (importado por CSV) con este email.
-                        const email = firebaseUser.email || '';
                         let existingProfile: User | null = null;
                         let oldDocRef = null;
 
@@ -43,28 +58,30 @@ export const useAuthStatus = () => {
                             const migratedUser: User = {
                                 ...existingProfile,
                                 id: firebaseUser.uid, // Actualizamos ID
-                                avatar: firebaseUser.photoURL || existingProfile.avatar // Preferir foto de Google si existe
+                                avatar: firebaseUser.photoURL || existingProfile.avatar, // Preferir foto de Google si existe
+                                role: shouldBeAdmin ? UserRole.ADMIN : existingProfile.role // Enforce admin check
                             };
                             
-                            // Guardar con nuevo ID
+                            // A. Crear nuevo usuario con ID de Google
                             await setDoc(userRef, migratedUser);
-                            // Eliminar documento antiguo para evitar duplicados
+                            
+                            // B. Ejecutar migración profunda de referencias (Documentos, Matrices, Configs)
+                            await UserService.migrateLegacyReferences(existingProfile.id, firebaseUser.uid);
+
+                            // C. Eliminar documento antiguo para evitar duplicados
                             await deleteDoc(oldDocRef);
                             
                             setUser(migratedUser);
                         } else {
                             // CREACIÓN NUEVA (Si no existía en CSV)
-                            const isAdmin = email.toLowerCase().startsWith('admin') || 
-                                            email === 'carayag@ugp-ssm.cl';
-
                             const newUser: User = {
                                 id: firebaseUser.uid,
                                 email: email,
                                 name: firebaseUser.displayName || email.split('@')[0],
                                 nickname: email.split('@')[0],
-                                role: isAdmin ? UserRole.ADMIN : UserRole.ANALYST,
+                                role: shouldBeAdmin ? UserRole.ADMIN : UserRole.ANALYST,
                                 avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${firebaseUser.displayName || email}`,
-                                organization: isAdmin ? 'Administración Sistema' : 'Sin Asignar' 
+                                organization: shouldBeAdmin ? 'Administración Sistema' : 'Sin Asignar' 
                             };
 
                             await setDoc(userRef, newUser);

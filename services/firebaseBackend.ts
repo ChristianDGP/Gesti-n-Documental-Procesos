@@ -120,6 +120,67 @@ export const UserService = {
   },
   delete: async (id: string) => {
       await deleteDoc(doc(db, "users", id));
+  },
+  migrateLegacyReferences: async (oldId: string, newId: string) => {
+      console.log(`Starting migration from ${oldId} to ${newId}...`);
+      
+      // 1. Update Custom Microprocesses (The Matrix)
+      // This ensures they see the processes in "Nueva Solicitud"
+      const qMatrix = query(collection(db, "custom_microprocesses"), where("assignees", "array-contains", oldId));
+      const snapMatrix = await getDocs(qMatrix);
+      
+      const matrixPromises = snapMatrix.docs.map(async (docSnap) => {
+          const data = docSnap.data();
+          const newAssignees = (data.assignees || []).map((id: string) => id === oldId ? newId : id);
+          await updateDoc(docSnap.ref, { assignees: newAssignees });
+      });
+
+      // 2. Update Documents (Assignees)
+      // This ensures they see documents assigned to them in Dashboard
+      const qDocsAssignees = query(collection(db, "documents"), where("assignees", "array-contains", oldId));
+      const snapDocsAssignees = await getDocs(qDocsAssignees);
+      
+      const docAssigneePromises = snapDocsAssignees.docs.map(async (docSnap) => {
+          const data = docSnap.data();
+          const newAssignees = (data.assignees || []).map((id: string) => id === oldId ? newId : id);
+          const updates: any = { assignees: newAssignees };
+          if (data.assignedTo === oldId) updates.assignedTo = newId;
+          await updateDoc(docSnap.ref, updates);
+      });
+
+      // 3. Update Documents (Author)
+      // This ensures they keep ownership of docs they created (if imported)
+      const qDocsAuthor = query(collection(db, "documents"), where("authorId", "==", oldId));
+      const snapDocsAuthor = await getDocs(qDocsAuthor);
+      
+      const docAuthorPromises = snapDocsAuthor.docs.map(async (docSnap) => {
+          await updateDoc(docSnap.ref, { authorId: newId });
+      });
+
+      // 4. Update Matrix Overrides (Config)
+      // This fixes the underlying config if overrides were used
+      const overridesRef = doc(db, "config", "matrix_overrides");
+      const overridesSnap = await getDoc(overridesRef);
+      if (overridesSnap.exists()) {
+          const data = overridesSnap.data();
+          let needsUpdate = false;
+          const newData = { ...data };
+
+          Object.keys(newData).forEach(key => {
+              const assignees = newData[key] as string[];
+              if (assignees.includes(oldId)) {
+                  newData[key] = assignees.map(id => id === oldId ? newId : id);
+                  needsUpdate = true;
+              }
+          });
+
+          if (needsUpdate) {
+              await setDoc(overridesRef, newData);
+          }
+      }
+
+      await Promise.all([...matrixPromises, ...docAssigneePromises, ...docAuthorPromises]);
+      console.log("Migration completed.");
   }
 };
 
@@ -366,12 +427,16 @@ export const HierarchyService = {
 
     getUserHierarchy: async (userId: string): Promise<any> => {
         const full = await HierarchyService.getFullHierarchy();
+        
+        // Removed Super Analyst check logic completely
+        
         const userTree: any = {};
         Object.keys(full).forEach(proj => {
             Object.keys(full[proj]).forEach(macro => {
                 Object.keys(full[proj][macro]).forEach(proc => {
                     const nodes = full[proj][macro][proc];
                     nodes.forEach(node => {
+                        // Strict check: Only assigned users can see the node
                         if (node.assignees.includes(userId)) {
                             if(!userTree[proj]) userTree[proj] = {};
                             if(!userTree[proj][macro]) userTree[proj][macro] = {};
@@ -591,7 +656,7 @@ export const DatabaseService = {
                          email: rawEmail,
                          nickname: rawEmail.split('@')[0],
                          role: mapRole(rawRole),
-                         organization: 'Procesos (Importado)',
+                         organization: 'Procesos', // <-- CHANGED HERE
                          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(rawName || 'U')}&background=random`,
                      };
 

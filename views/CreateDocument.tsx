@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/firebaseBackend';
-import { User, DocState, DocType, UserHierarchy } from '../types';
+import { User, DocState, DocType, UserHierarchy, UserRole } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
 import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, PlayCircle } from 'lucide-react';
 
@@ -46,8 +46,27 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   }, []);
 
   const loadHierarchy = async () => {
-      const hierarchy = await HierarchyService.getUserHierarchy(user.id);
-      setUserHierarchy(hierarchy);
+      // Si es Admin, cargamos la jerarquía completa transformada a formato simple
+      if (user.role === UserRole.ADMIN) {
+           const full = await HierarchyService.getFullHierarchy();
+           const adminTree: UserHierarchy = {};
+           
+           // Convertir FullHierarchy (nodos complejos) a UserHierarchy (solo nombres)
+           Object.keys(full).forEach(p => {
+               adminTree[p] = {};
+               Object.keys(full[p]).forEach(m => {
+                   adminTree[p][m] = {};
+                   Object.keys(full[p][m]).forEach(proc => {
+                       adminTree[p][m][proc] = full[p][m][proc].map(n => n.name);
+                   });
+               });
+           });
+           setUserHierarchy(adminTree);
+      } else {
+          // Si es Analista, solo lo asignado
+          const hierarchy = await HierarchyService.getUserHierarchy(user.id);
+          setUserHierarchy(hierarchy);
+      }
       setInitializing(false);
   };
 
