@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DocumentService, HierarchyService } from '../services/mockBackend';
+import { DocumentService, HierarchyService } from '../services/firebaseBackend';
 import { User, DocState, DocType, UserHierarchy } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
 import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, PlayCircle } from 'lucide-react';

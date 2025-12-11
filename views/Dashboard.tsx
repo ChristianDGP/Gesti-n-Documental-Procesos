@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService, HierarchyService, UserService } from '../services/mockBackend';
+import { DocumentService, HierarchyService, UserService } from '../services/firebaseBackend';
 import { Document, User, UserRole, DocState, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
@@ -43,15 +43,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const loadData = async () => {
     setLoading(true);
-    const [data, reqs, users] = await Promise.all([
-        DocumentService.getAll(),
-        HierarchyService.getRequiredTypesMap(),
-        UserService.getAll()
-    ]);
-    setDocs(data);
-    setRequiredMap(reqs);
-    setAllUsers(users);
-    setLoading(false);
+    try {
+        const [data, reqs, users] = await Promise.all([
+            DocumentService.getAll(),
+            HierarchyService.getRequiredTypesMap(),
+            UserService.getAll()
+        ]);
+        setDocs(data);
+        setRequiredMap(reqs);
+        setAllUsers(users);
+    } catch (error) {
+        console.error("Error loading dashboard data:", error);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleDeleteDoc = async (id: string, e: React.MouseEvent) => {

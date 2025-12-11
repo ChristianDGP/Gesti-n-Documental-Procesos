@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserService } from '../services/mockBackend';
+import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
 import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil } from 'lucide-react';
 

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService } from '../services/mockBackend';
+import { DocumentService } from '../services/firebaseBackend';
 import { Document, User, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { Inbox, CheckCircle, Clock, AlertCircle, Send, Paperclip, FileText } from 'lucide-react';

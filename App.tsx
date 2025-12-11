@@ -1,4 +1,4 @@
-// src/App.tsx
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -11,35 +11,25 @@ import AdminAssignments from './views/AdminAssignments';
 import AdminDatabase from './views/AdminDatabase';
 import Buffer from './views/Buffer';
 import Profile from './views/Profile';
-
-// ELIMINAMOS la dependencia de AuthService (Mock Backend)
-// Mantenemos estas interfaces para la lógica de rutas
 import { UserRole } from './types'; 
 import { logoutUser } from './services/firebaseAuthService'; 
 import { useAuthStatus } from './hooks/useAuthStatus'; 
-import ListaDocumentos from './components/ListaDocumentos';
-
 
 const App: React.FC = () => {
-    // ==========================================================
-    // CORRECCIÓN TS2339: Desestructuramos correctamente el hook
-    // ==========================================================
     const { user, cargando } = useAuthStatus(); 
 
-    // Usamos 'user' directamente en las rutas para la validación
     const handleLogout = async () => {
         await logoutUser(); 
+        // Forzar recarga o limpieza si es necesario, auth state listener se encargará del resto
     };
     
-    // Si el hook está cargando, mostramos un estado de espera.
     if (cargando) {
-        return <div>Cargando autenticación...</div>;
+        return <div className="flex h-screen items-center justify-center text-slate-500">Cargando aplicación...</div>;
     }
 
     return (
         <HashRouter>
             <Routes>
-                {/* Login ya no necesita onLogin */}
                 <Route 
                     path="/login" 
                     element={!user ? <Login /> : <Navigate to="/" />} 
@@ -51,18 +41,15 @@ const App: React.FC = () => {
                         user ? (
                             <Layout user={user} onLogout={handleLogout}>
                                 <Routes>
-                                    {/* RUTA DE PRUEBA TEMPORAL: Asegúrate que tienes esta línea para probar Firestore */}
-                                    <Route path="/" element={<ListaDocumentos />} /> 
-                                    {/* <Route path="/" element={<Dashboard user={user} />} /> <-- La original */}
+                                    <Route path="/" element={<Dashboard user={user} />} />
                                     
                                     <Route path="/inbox" element={<Buffer user={user} />} />
                                     <Route path="/new" element={<CreateDocument user={user} />} />
                                     <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
                                     
-                                    {/* CORRECCIÓN TS2741: Eliminamos la prop onUpdate que Firebase no necesita */}
-                                    <Route path="/profile" element={<Profile user={user} />} /> 
+                                    <Route path="/profile" element={<Profile user={user} onUpdate={() => window.location.reload()} />} /> 
 
-                                    {/* El resto de las rutas de admin son correctas */}
+                                    {/* Rutas de Administración */}
                                     <Route 
                                         path="/admin/users" 
                                         element={user.role === UserRole.ADMIN ? <AdminUsers /> : <Navigate to="/" />} 

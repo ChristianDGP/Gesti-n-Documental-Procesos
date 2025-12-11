@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { DatabaseService } from '../services/mockBackend';
+import { DatabaseService } from '../services/firebaseBackend';
 import { Download, Upload, Database, AlertTriangle, CheckCircle, Save, FileSpreadsheet } from 'lucide-react';
 
 const AdminDatabase: React.FC = () => {

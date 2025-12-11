@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HierarchyService, UserService } from '../services/mockBackend';
+import { HierarchyService, UserService } from '../services/firebaseBackend';
 import { User, UserRole, FullHierarchy, ProcessNode, DocType } from '../types';
 import { 
   FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Trash2, FileText, CheckSquare, Square, Save, Layers, Filter

@@ -430,7 +430,7 @@ export const HierarchyService = {
         await setDoc(ref, { ...data, [matrixKey]: types });
     },
 
-    updateMatrixAssignment: async (matrixKey: string, newAssignees: string[]) => {
+    updateMatrixAssignment: async (matrixKey: string, newAssignees: string[], updatedBy?: string) => {
         const ref = doc(db, "config", "matrix_overrides");
         const snap = await getDoc(ref);
         const data = snap.exists() ? snap.data() : {};
@@ -442,12 +442,12 @@ export const HierarchyService = {
         const q = query(collection(db, "documents"), where("project", "==", proj), where("microprocess", "==", micro));
         const docs = await getDocs(q);
         
-        docs.forEach(async (d) => {
+        await Promise.all(docs.docs.map(async (d) => {
              await updateDoc(doc(db, "documents", d.id), {
                  assignees: newAssignees,
                  assignedTo: newAssignees[0]
              });
-        });
+        }));
     },
 
     addMicroprocess: async (project: string, macro: string, process: string, microName: string, assignees: string[], requiredTypes: DocType[]) => {
@@ -461,6 +461,37 @@ export const HierarchyService = {
         const snap = await getDoc(ref);
         const data = snap.exists() ? snap.data() : {};
         await setDoc(ref, { ...data, [matrixKey]: requiredTypes });
+    },
+
+    deleteMicroprocess: async (project: string, microName: string) => {
+        // 1. Delete from custom_microprocesses
+        const q = query(collection(db, "custom_microprocesses"), where("project", "==", project), where("micro", "==", microName));
+        const snapshot = await getDocs(q);
+        await Promise.all(snapshot.docs.map(d => deleteDoc(d.ref)));
+
+        const matrixKey = `${project}|${microName}`;
+
+        // 2. Remove from matrix_overrides
+        const overridesRef = doc(db, "config", "matrix_overrides");
+        const overridesSnap = await getDoc(overridesRef);
+        if (overridesSnap.exists()) {
+            const data = overridesSnap.data();
+            if (data[matrixKey]) {
+                const { [matrixKey]: _, ...rest } = data;
+                await setDoc(overridesRef, rest);
+            }
+        }
+
+        // 3. Remove from required_types
+        const typesRef = doc(db, "config", "required_types");
+        const typesSnap = await getDoc(typesRef);
+        if (typesSnap.exists()) {
+            const data = typesSnap.data();
+            if (data[matrixKey]) {
+                const { [matrixKey]: _, ...rest } = data;
+                await setDoc(typesRef, rest);
+            }
+        }
     }
 };
 
