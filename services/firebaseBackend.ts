@@ -506,15 +506,37 @@ export const DatabaseService = {
              return UserRole.ANALYST;
         };
         
-        // 1. Clear existing 'documents'
+        // === 1. DEEP CLEAN START ===
+        
+        // A. Clear 'documents'
         const qDocs = query(collection(db, "documents"));
         const snapDocs = await getDocs(qDocs);
         await Promise.all(snapDocs.docs.map(d => deleteDoc(d.ref)));
 
-        // 2. Clear existing 'custom_microprocesses' (to ensure Matrix is clean)
+        // B. Clear 'custom_microprocesses' (Matrix)
         const qMicro = query(collection(db, "custom_microprocesses"));
         const snapMicro = await getDocs(qMicro);
         await Promise.all(snapMicro.docs.map(d => deleteDoc(d.ref)));
+
+        // C. Clear 'history' (optional but cleaner)
+        const qHist = query(collection(db, "history"));
+        const snapHist = await getDocs(qHist);
+        await Promise.all(snapHist.docs.map(d => deleteDoc(d.ref)));
+
+        // D. Clear 'users' (EXCEPT the current admin to prevent lockout)
+        const qUsers = query(collection(db, "users"));
+        const snapUsers = await getDocs(qUsers);
+        await Promise.all(snapUsers.docs.map(async (uDoc) => {
+            const uData = uDoc.data();
+            // Safety check: Don't delete self, don't delete 'admin' mock, don't delete explicit admins if needed
+            if (uDoc.id !== adminId && uData.email !== 'admin@empresa.com' && uData.role !== 'ADMIN') {
+                 await deleteDoc(uDoc.ref);
+            }
+        }));
+
+        // Refresh users list after deletion to ensure we don't duplicate against deleted ones
+        users = await UserService.getAll();
+        // === 1. DEEP CLEAN END ===
 
         let imported = 0;
         const errors: string[] = [];
