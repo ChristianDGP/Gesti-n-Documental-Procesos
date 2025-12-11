@@ -205,8 +205,14 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
     if (!title || !description || !file || !isFileValid || !selectedMicro || !selectedDocType) return;
 
     setLoading(true);
+    
+    // Create a promise that rejects after 15 seconds
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Tiempo de espera agotado. Verifique su conexión.")), 15000);
+    });
+
     try {
-      const doc = await DocumentService.create(
+      const createPromise = DocumentService.create(
           title, 
           description, 
           user,
@@ -222,11 +228,16 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               docType: selectedDocType
           }
       );
+
+      // Race between the creation logic and the timeout
+      const doc = await Promise.race([createPromise, timeoutPromise]) as any;
+      
       navigate(`/doc/${doc.id}`);
     } catch (error: any) {
       console.error(error);
       alert('Error al crear documento: ' + error.message);
     } finally {
+      // Always reset loading state so the user can try again
       setLoading(false);
     }
   };

@@ -44,11 +44,8 @@ const Buffer: React.FC<Props> = ({ user }) => {
         return scope.filter(d => d.state === DocState.REJECTED);
     }
     if (user.role === UserRole.ADMIN) {
-        // Admin Actionable Items: Pending Request Flag + Sent to Control
-        return scope.filter(d => 
-            d.hasPendingRequest === true &&
-            d.state === DocState.SENT_TO_CONTROL
-        );
+        // Admin Actionable Items: See ALL pending requests to supervise flow
+        return scope.filter(d => d.hasPendingRequest === true);
     }
     return [];
   };
@@ -58,13 +55,13 @@ const Buffer: React.FC<Props> = ({ user }) => {
   const getEmptyMessage = () => {
       if (user.role === UserRole.ANALYST) return "No tienes documentos rechazados pendientes de corrección.";
       if (user.role === UserRole.COORDINATOR) return "No tienes solicitudes pendientes de revisión.";
-      return "No hay solicitudes pendientes de control de gestión.";
+      return "No hay solicitudes pendientes en el sistema.";
   };
 
   const getHeaderTitle = () => {
       if (user.role === UserRole.ANALYST) return "Documentos Rechazados / A Corregir";
       if (user.role === UserRole.COORDINATOR) return "Solicitudes de Revisión Pendientes";
-      return "Solicitudes de Control de Gestión";
+      return "Supervisión de Solicitudes (Admin)";
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando bandeja...</div>;

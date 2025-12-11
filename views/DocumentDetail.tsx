@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService } from '../services/fireba
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2 } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -62,6 +62,17 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         setAssigneeNames(names);
     }
     setLoading(false);
+  };
+
+  const handleDelete = async () => {
+      if (!doc) return;
+      if (!window.confirm('¿Estás seguro de que quieres eliminar este documento permanentemente? Esta acción no se puede deshacer.')) return;
+      try {
+          await DocumentService.delete(doc.id);
+          navigate('/');
+      } catch (e: any) {
+          alert(e.message);
+      }
   };
 
   // Standard File Upload (Just adding attachments)
@@ -237,6 +248,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isDocActive = doc.state !== DocState.APPROVED;
   
   // MODIFICATION: Allow Analysts (Author/Assignee) to also use the Approve button to trigger validation modal
+  // This satisfies both Coordinator/Admin power-use AND Analyst workflow
   const canApprove = (isCoordinatorOrAdmin || (user.role === UserRole.ANALYST && (isAssignee || isAuthor))) && isDocActive;
 
   const canReject = canApprove;
@@ -245,9 +257,19 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      <button onClick={() => navigate('/')} className="flex items-center text-slate-500 hover:text-slate-800 text-sm">
-        <ArrowLeft size={16} className="mr-1" /> Volver al Dashboard
-      </button>
+      <div className="flex justify-between items-center">
+        <button onClick={() => navigate('/')} className="flex items-center text-slate-500 hover:text-slate-800 text-sm">
+            <ArrowLeft size={16} className="mr-1" /> Volver al Dashboard
+        </button>
+        {user.role === UserRole.ADMIN && (
+            <button 
+                onClick={handleDelete}
+                className="flex items-center text-red-500 hover:text-red-700 text-sm font-medium px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+            >
+                <Trash2 size={16} className="mr-1" /> Eliminar Documento
+            </button>
+        )}
+      </div>
 
       {/* Header Card */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
