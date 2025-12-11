@@ -506,15 +506,23 @@ export const DatabaseService = {
              return UserRole.ANALYST;
         };
         
-        // Delete existing docs (CAUTION)
-        const q = query(collection(db, "documents"));
-        const snap = await getDocs(q);
-        await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+        // 1. Clear existing 'documents'
+        const qDocs = query(collection(db, "documents"));
+        const snapDocs = await getDocs(qDocs);
+        await Promise.all(snapDocs.docs.map(d => deleteDoc(d.ref)));
+
+        // 2. Clear existing 'custom_microprocesses' (to ensure Matrix is clean)
+        const qMicro = query(collection(db, "custom_microprocesses"));
+        const snapMicro = await getDocs(qMicro);
+        await Promise.all(snapMicro.docs.map(d => deleteDoc(d.ref)));
 
         let imported = 0;
         const errors: string[] = [];
         const newMatrixOverrides: Record<string, string[]> = {};
         const newRequiredTypes: Record<string, DocType[]> = {}; 
+        
+        // Accumulator for unique hierarchy nodes
+        const uniqueMicros = new Map<string, any>();
 
         const totalLines = lines.length - 1;
 
@@ -545,7 +553,8 @@ export const DatabaseService = {
             let assignees: string[] = [adminId];
             let authorName = 'Admin (Migración)';
 
-            if (rawEmail && rawEmail !== '') {
+            // Strict Validation: Only create user if email looks like an email
+            if (rawEmail && rawEmail.includes('@') && rawEmail.length > 3) {
                  // 1. Try to find existing user by Email
                  let foundUser = users.find(u => u.email.toLowerCase() === rawEmail.toLowerCase());
 
@@ -599,6 +608,15 @@ export const DatabaseService = {
                     typesForMicro = ['AS IS', 'FCE', 'PM', 'TO BE'];
                 }
                 newRequiredTypes[matrixKey] = typesForMicro;
+
+                // Store unique hierarchy node to populate 'custom_microprocesses' later
+                if (!uniqueMicros.has(matrixKey)) {
+                    uniqueMicros.set(matrixKey, {
+                        project, macro, process, micro,
+                        assignees,
+                        requiredTypes: typesForMicro
+                    });
+                }
             }
 
             const baseDoc = {
@@ -636,6 +654,13 @@ export const DatabaseService = {
             await createLegacyDoc('TO BE', cols[20], cols[21], cols[22], cols[23]);
         }
         
+        // 3. Populate 'custom_microprocesses' so Matrix View works
+        const batchPromises: any[] = [];
+        uniqueMicros.forEach((data) => {
+            batchPromises.push(addDoc(collection(db, "custom_microprocesses"), data));
+        });
+        await Promise.all(batchPromises);
+
         await setDoc(doc(db, "config", "matrix_overrides"), newMatrixOverrides);
         await setDoc(doc(db, "config", "required_types"), newRequiredTypes);
         
