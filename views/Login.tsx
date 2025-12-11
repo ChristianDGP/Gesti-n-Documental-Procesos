@@ -1,13 +1,14 @@
-// src/views/Login.tsx
+
 import React, { useState } from 'react';
-import { loginUser } from '../services/firebaseAuthService'; 
-import { Lock, User, Key, AlertCircle, TrendingUp } from 'lucide-react'; // Añadimos TrendingUp
+import { loginUser, registerUser } from '../services/firebaseAuthService'; 
+import { Lock, User, Key, AlertCircle, TrendingUp, Mail, UserPlus, LogIn } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
-import { auth } from '../firebaseConfig'; // <-- NECESARIO PARA GOOGLE SIGN-IN
-import { GoogleAuthProvider, signInWithPopup, UserCredential } from 'firebase/auth'; // <-- NECESARIO PARA GOOGLE
+import { auth } from '../services/firebaseConfig'; 
+import { GoogleAuthProvider, signInWithPopup, UserCredential } from 'firebase/auth'; 
 
 const Login: React.FC = () => {
-    // ... (El estado para email, password, error, loading es el mismo)
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -19,45 +20,131 @@ const Login: React.FC = () => {
         setError('');
         setLoading(true);
         try {
-            await loginUser(email, password); 
-            navigate('/'); 
+            if (isRegistering) {
+                if (!name) throw new Error("El nombre es obligatorio para registrarse.");
+                await registerUser(email, password, name);
+                // El hook useAuthStatus detectará el nuevo usuario y creará el perfil en DB
+                // No navegamos manualmente aquí para permitir que el hook termine su proceso si es necesario, 
+                // pero Firebase Auth actualiza el estado rápidamente.
+                navigate('/');
+            } else {
+                await loginUser(email, password); 
+                navigate('/'); 
+            }
         } catch (err: any) {
-            let mensajeError = 'Error de autenticación. Verifica tus credenciales.';
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+            console.error(err);
+            let mensajeError = 'Error de autenticación.';
+            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
                 mensajeError = 'Usuario o contraseña incorrectos.';
+            } else if (err.code === 'auth/email-already-in-use') {
+                mensajeError = 'Este correo electrónico ya está registrado.';
+            } else if (err.code === 'auth/weak-password') {
+                mensajeError = 'La contraseña debe tener al menos 6 caracteres.';
+            } else if (err.message) {
+                mensajeError = err.message;
             }
             setError(mensajeError);
             setLoading(false);
         }
     };
 
-    // NUEVA FUNCIÓN PARA GOOGLE SIGN-IN
     const handleGoogleSignIn = async () => {
         setError('');
         setLoading(true);
         try {
             const provider = new GoogleAuthProvider();
-            const result: UserCredential = await signInWithPopup(auth, provider);
-            // El listener en useAuthStatus detectará el login
+            await signInWithPopup(auth, provider);
             navigate('/');
         } catch (err: any) {
             console.error(err);
-            setError("Error al iniciar sesión con Google. Revisa Dominios Autorizados.");
+            setError("Error al iniciar sesión con Google.");
             setLoading(false);
         }
     };
     
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-100 font-sans">
+        <div className="min-h-screen flex items-center justify-center bg-slate-100 font-sans p-4">
             <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-slate-200">
-                {/* ... (Header y Títulos son iguales) ... */}
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-slate-900">SGD</h1>
+                    <p className="text-slate-500 mt-2">Sistema de Gestión Documental</p>
+                </div>
                 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* ... (Campos de Email y Password son iguales) ... */}
+                <div className="flex justify-center mb-6 bg-slate-100 p-1 rounded-lg">
+                    <button 
+                        onClick={() => { setIsRegistering(false); setError(''); }}
+                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isRegistering ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Iniciar Sesión
+                    </button>
+                    <button 
+                        onClick={() => { setIsRegistering(true); setError(''); }}
+                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Crear Cuenta
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {isRegistering && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <User size={18} className="text-slate-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
+                                    placeholder="Ej: Juan Pérez"
+                                    required={isRegistering}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico</label>
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Mail size={18} className="text-slate-400" />
+                            </div>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
+                                placeholder={isRegistering ? "admin@empresa.com" : "usuario@empresa.com"}
+                                required
+                            />
+                        </div>
+                         {isRegistering && (
+                            <p className="text-[10px] text-slate-400 mt-1">Tip: Usa un correo que empiece con 'admin' para obtener permisos totales.</p>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Lock size={18} className="text-slate-400" />
+                            </div>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
+                                placeholder="••••••••"
+                                required
+                            />
+                        </div>
+                    </div>
                     
                     {error && (
                         <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
-                            <AlertCircle size={16} />
+                            <AlertCircle size={16} className="flex-shrink-0" />
                             <span>{error}</span>
                         </div>
                     )}
@@ -65,15 +152,18 @@ const Login: React.FC = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-md font-medium disabled:opacity-70"
+                        className="w-full bg-indigo-600 text-white py-2.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-md font-medium disabled:opacity-70 flex items-center justify-center gap-2"
                     >
-                        {loading ? 'Ingresando...' : 'Iniciar Sesión'}
+                        {loading ? 'Procesando...' : isRegistering ? (
+                            <><UserPlus size={18} /> Registrarse</>
+                        ) : (
+                            <><LogIn size={18} /> Iniciar Sesión</>
+                        )}
                     </button>
                     
-                    {/* BOTÓN DE GOOGLE AÑADIDO TEMPORALMENTE */}
-                    <div className="relative flex items-center justify-center">
+                    <div className="relative flex items-center justify-center py-2">
                         <div className="flex-grow border-t border-slate-200"></div>
-                        <span className="flex-shrink mx-4 text-slate-400 text-sm">O</span>
+                        <span className="flex-shrink mx-4 text-slate-400 text-xs uppercase font-semibold">O continuar con</span>
                         <div className="flex-grow border-t border-slate-200"></div>
                     </div>
 
@@ -81,15 +171,12 @@ const Login: React.FC = () => {
                         type="button"
                         onClick={handleGoogleSignIn}
                         disabled={loading}
-                        className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors shadow-md font-medium disabled:opacity-70 flex items-center justify-center gap-2"
+                        className="w-full bg-white text-slate-700 border border-slate-300 py-2.5 rounded-lg hover:bg-slate-50 transition-colors font-medium disabled:opacity-70 flex items-center justify-center gap-2"
                     >
-                        <TrendingUp size={18} /> Iniciar con Google
+                        <TrendingUp size={18} className="text-red-500" /> Google
                     </button>
-                    {/* FIN DEL BOTÓN DE GOOGLE */}
 
                 </form>
-                
-                {/* ... (Footer es igual) ... */}
             </div>
         </div>
     );

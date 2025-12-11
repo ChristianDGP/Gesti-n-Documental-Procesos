@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
-// Configuración unificada con la NUEVA API KEY proporcionada
+// Configuración unificada
 const firebaseConfig = {
   apiKey: "AIzaSyDp79-utro8hCKE-0ddglfdfVRBTcvMJp0", 
   authDomain: "gestion-documental-procesos.firebaseapp.com",

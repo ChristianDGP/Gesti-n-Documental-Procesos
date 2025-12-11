@@ -1,8 +1,8 @@
 
 import { useState, useEffect } from 'react';
-import { auth, db } from '../services/firebaseConfig'; // Apuntar al config unificado
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../services/firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { User, UserRole } from '../types';
 
 export const useAuthStatus = () => {
@@ -13,29 +13,37 @@ export const useAuthStatus = () => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
                 try {
-                    // Intentar obtener el perfil completo de Firestore
                     const userRef = doc(db, "users", firebaseUser.uid);
                     const userSnap = await getDoc(userRef);
 
                     if (userSnap.exists()) {
-                        // Usuario existe en DB: Usar sus datos reales (Rol, Organización, etc.)
+                        // El usuario ya existe en Firestore, usamos sus datos
                         setUser(userSnap.data() as User);
                     } else {
-                        // Usuario no existe en DB (Primer login o error): Crear objeto temporal
-                        // Nota: AuthService.loginWithGoogle en firebaseBackend debería manejar la creación
-                        const tempUser: User = {
+                        // Nuevo usuario (Google o Registro Email): Lo creamos en Firestore
+                        const email = firebaseUser.email || '';
+                        
+                        // Lógica de Bootstrap: Si el email empieza con 'admin', es ADMIN
+                        // También incluimos el email del desarrollador por si acaso
+                        const isAdmin = email.toLowerCase().startsWith('admin') || 
+                                        email === 'carayag@ugp-ssm.cl';
+
+                        const newUser: User = {
                             id: firebaseUser.uid,
-                            email: firebaseUser.email || '',
-                            name: firebaseUser.displayName || 'Usuario',
-                            nickname: firebaseUser.email?.split('@')[0],
-                            role: UserRole.ANALYST, // Rol por defecto temporal
-                            avatar: firebaseUser.photoURL || '',
-                            organization: 'Sin Asignar' 
+                            email: email,
+                            name: firebaseUser.displayName || email.split('@')[0],
+                            nickname: email.split('@')[0],
+                            role: isAdmin ? UserRole.ADMIN : UserRole.ANALYST,
+                            avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${firebaseUser.displayName || email}`,
+                            organization: isAdmin ? 'Administración Sistema' : 'Sin Asignar' 
                         };
-                        setUser(tempUser);
+
+                        await setDoc(userRef, newUser);
+                        setUser(newUser);
+                        console.log("Usuario creado en Firestore automáticamente:", newUser);
                     }
                 } catch (error) {
-                    console.error("Error fetching user profile:", error);
+                    console.error("Error fetching/creating user profile:", error);
                     setUser(null);
                 }
             } else {
