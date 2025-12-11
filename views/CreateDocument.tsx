@@ -542,7 +542,7 @@ ${user.name}
                                 className={`flex items-center px-6 py-3 text-white rounded-lg disabled:opacity-50 transition-colors shadow-md font-medium
                                     ${isApprovalFlow ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'}`}
                             >
-                                {loading ? 'Enviando...' : isApprovalFlow ? (
+                                {loading ? (isApprovalFlow ? 'Enviando Solicitud...' : 'Guardando...') : isApprovalFlow ? (
                                     <>
                                         <Send size={18} className="mr-2" />
                                         Crear Solicitud de Aprobación
