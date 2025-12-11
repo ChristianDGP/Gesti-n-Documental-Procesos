@@ -10,7 +10,8 @@ interface Props {
   user: User;
 }
 
-type RequestType = 'INTERNAL' | 'REFERENT' | 'CONTROL';
+// Updated Request Types to include early stages
+type RequestType = 'INITIATED' | 'IN_PROCESS' | 'INTERNAL' | 'REFERENT' | 'CONTROL';
 
 const CreateDocument: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
@@ -157,6 +158,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   };
 
   const getVersionHint = () => {
+      if (requestType === 'INITIATED') return '[0.0]';
+      if (requestType === 'IN_PROCESS') return '[0.n] (sin "v")';
       if (requestType === 'INTERNAL') return '[v0.n] donde n es IMPAR';
       if (requestType === 'REFERENT') return '[v1.n.i] donde i es IMPAR';
       if (requestType === 'CONTROL') return '[v1.n.iAR] donde i es IMPAR';
@@ -185,7 +188,16 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               const cleanMicro = result.microproceso || selectedMicro;
               const cleanType = result.tipo || selectedDocType;
               setTitle(`${cleanMicro} - ${cleanType}`);
-              setDescription(`Solicitud de ${requestType === 'INTERNAL' ? 'Revisión Interna' : requestType === 'REFERENT' ? 'Revisión Referente' : 'Control de Gestión'}`);
+              
+              // Auto-description based on Type
+              let desc = "Documento cargado";
+              if (requestType === 'INITIATED') desc = "Carga Inicial (Inicio de Gestión)";
+              else if (requestType === 'IN_PROCESS') desc = "Avance de trabajo (En Proceso)";
+              else if (requestType === 'INTERNAL') desc = "Solicitud de Revisión Interna";
+              else if (requestType === 'REFERENT') desc = "Solicitud de Revisión Referente";
+              else if (requestType === 'CONTROL') desc = "Control de Gestión";
+              
+              setDescription(desc);
               
               if (result.estado) setDetectedState(mapParserStateToEnum(result.estado));
               if (result.nomenclatura) setDetectedVersion(result.nomenclatura);
@@ -340,9 +352,11 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 className="w-full p-2.5 border border-indigo-200 bg-indigo-50/50 text-indigo-900 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
                             >
                                 <option value="">-- Seleccionar Tipo de Solicitud --</option>
-                                <option value="INTERNAL">Revisión Interna (Inicio de Flujo)</option>
-                                <option value="REFERENT">Revisión con Referente</option>
-                                <option value="CONTROL">Control de Gestión</option>
+                                <option value="INITIATED">Iniciado (Carga Inicial 0.0)</option>
+                                <option value="IN_PROCESS">En Proceso (Avance 0.n sin revisión)</option>
+                                <option value="INTERNAL">Revisión Interna (Inicio de Flujo v0.n)</option>
+                                <option value="REFERENT">Revisión con Referente (v1.n)</option>
+                                <option value="CONTROL">Control de Gestión (v1.nAR)</option>
                             </select>
                         </div>
 

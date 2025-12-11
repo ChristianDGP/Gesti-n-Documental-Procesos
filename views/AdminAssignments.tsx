@@ -145,6 +145,26 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       }
   };
 
+  const notifyAssignees = (assigneesIds: string[], project: string, micro: string) => {
+      if (assigneesIds.length === 0) return;
+      
+      const emails = allUsers
+          .filter(u => assigneesIds.includes(u.id))
+          .map(u => u.email)
+          .join(',');
+
+      if (!emails) return;
+
+      const subject = encodeURIComponent(`Nueva Asignación SGD: ${project} - ${micro}`);
+      const body = encodeURIComponent(
+          `Estimado(a),\n\nSe le ha asignado el microproceso "${micro}" del proyecto ${project} en la plataforma de Gestión Documental.\n\nPor favor, ingrese al sistema para iniciar la carga de documentos (Iniciado 0.0).\n\nAtentamente,\nAdministración SGD`
+      );
+
+      if (window.confirm("¿Desea notificar a los analistas asignados por correo electrónico ahora?")) {
+          window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${emails}&su=${subject}&body=${body}`, '_blank');
+      }
+  };
+
   const handleSubmitCreate = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!newProject || !newMacro || !newProcess || !newMicroName) {
@@ -155,6 +175,12 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
           await HierarchyService.addMicroprocess(
               newProject, newMacro, newProcess, newMicroName, newAssignees, newRequiredTypes
           );
+          
+          // Trigger notification flow
+          if (newAssignees.length > 0) {
+              notifyAssignees(newAssignees, newProject, newMicroName);
+          }
+
           setShowCreateModal(false);
           resetCreateForm();
           await loadData();

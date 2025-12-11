@@ -12,7 +12,7 @@ export const parseDocumentFilename = (
   expectedProject?: string,
   expectedMicro?: string,
   expectedType?: string,
-  expectedRequestType?: 'INTERNAL' | 'REFERENT' | 'CONTROL'
+  expectedRequestType?: 'INITIATED' | 'IN_PROCESS' | 'INTERNAL' | 'REFERENT' | 'CONTROL'
 ): ParsedFilenameResult => {
   const result: ParsedFilenameResult = {
     valido: false,
@@ -77,16 +77,32 @@ export const parseDocumentFilename = (
   result.nomenclatura = version;
 
   // Regex básicos
-  const regexInternal = /^v0\.(\d+)$/;          // v0.n
+  const regexInitiated = /^0\.0$/;              // 0.0 (Estricto)
+  const regexInProcess = /^0\.(\d+)$/;          // 0.n (Sin 'v', n > 0)
+  const regexInternal = /^v0\.(\d+)$/;          // v0.n (Con 'v', impar)
   const regexReferent = /^v1\.(\d+)\.(\d+)$/;   // v1.n.i
   const regexControl = /^v1\.(\d+)\.(\d+)AR$/;  // v1.n.iAR
   const regexStandard = /^v?\d+(\.\d+)*([A-Z]+)?$/;
 
   if (expectedRequestType) {
-      if (expectedRequestType === 'INTERNAL') {
+      if (expectedRequestType === 'INITIATED') {
+          if (!regexInitiated.test(version)) {
+              result.errores.push('Para "Iniciado" la versión debe ser exactamente "0.0".');
+          }
+      } else if (expectedRequestType === 'IN_PROCESS') {
+          const match = version.match(regexInProcess);
+          if (!match) {
+              result.errores.push('Para "En Proceso" el formato debe ser "0.n" sin la letra "v" (ej: 0.1, 0.2).');
+          } else {
+               const n = parseInt(match[1]);
+               if (n === 0) {
+                   result.errores.push('Para 0.0 utilice la opción "Iniciado".');
+               }
+          }
+      } else if (expectedRequestType === 'INTERNAL') {
           const match = version.match(regexInternal);
           if (!match) {
-              result.errores.push('Para Revisión Interna el formato debe ser "v0.n" (ej: v0.1).');
+              result.errores.push('Para Revisión Interna el formato debe ser "v0.n" (con v).');
           } else {
               const n = parseInt(match[1]);
               if (n % 2 === 0) {
@@ -117,7 +133,10 @@ export const parseDocumentFilename = (
   } else {
       // Validación genérica si no hay tipo de solicitud explícito
       if (!regexStandard.test(version)) {
-          result.errores.push(`Formato de versión inválido: ${version}`);
+          // Intentamos ser permisivos con 0.0 y 0.n si no hay expectedType
+          if (!regexInitiated.test(version) && !regexInProcess.test(version)) {
+             result.errores.push(`Formato de versión inválido: ${version}`);
+          }
       }
   }
 
@@ -138,6 +157,12 @@ export const parseDocumentFilename = (
       } else if (version.startsWith('v0.')) {
           result.estado = 'En revisión interna'; 
           result.porcentaje = 60;
+      } else if (version === '0.0') {
+          result.estado = 'Iniciado';
+          result.porcentaje = 10;
+      } else if (/^0\.\d+$/.test(version)) {
+          result.estado = 'En Proceso';
+          result.porcentaje = 30;
       } else {
           result.estado = 'En Proceso'; 
           result.porcentaje = 30;
