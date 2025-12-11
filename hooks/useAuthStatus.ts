@@ -2,21 +2,20 @@
 import { useState, useEffect } from 'react';
 import { auth } from '../firebaseConfig'; 
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { User, UserRole } from '../types'; // Importamos tu interfaz User de types.ts
+import { User, UserRole } from '../types'; // Importamos tu interfaz User y Enum UserRole
 
 // Función auxiliar para transformar el usuario de Firebase en tu tipo de usuario local
 const transformUser = (firebaseUser: FirebaseUser): User => {
-    // ⚠️ ATENCIÓN: Esta es la asignación de rol TEMPORAL para que el routing funcione.
-    // Asignamos un rol base (USER) para evitar errores de tipado.
+    // ⚠️ Importante: Asignamos un rol base (USER) para que el routing funcione.
+    // **Si tu enum en types.ts usa "UserRole.USER", déjalo así. Si usa minúsculas, cámbialo.**
     const tempRole = UserRole.USER; 
     
-    // Esto simula la estructura de tu objeto User:
     return {
         id: firebaseUser.uid,
         email: firebaseUser.email || '',
         name: firebaseUser.displayName || 'Usuario DGP',
         role: tempRole, 
-        // Si tu interfaz User necesita más campos, añádelos aquí.
+        // Nota: Agrega cualquier otro campo que tu interfaz 'User' requiera aquí
     } as User; 
 };
 
@@ -26,10 +25,8 @@ export const useAuthStatus = () => {
     const [cargando, setCargando] = useState(true);
 
     useEffect(() => {
-        // Listener de Firebase que se ejecuta al inicio de la app, login, o logout
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
-                // Transformamos el objeto de Firebase al objeto User que tu app espera
                 const localUser = transformUser(firebaseUser);
                 setUser(localUser);
             } else {
@@ -38,9 +35,9 @@ export const useAuthStatus = () => {
             setCargando(false);
         });
 
-        // Limpia el listener cuando el componente se desmonta (buena práctica)
         return () => unsubscribe(); 
     }, []);
 
-    return { user, cargando };
+    // Exportamos 'user' y 'cargando'
+    return { user, cargando }; 
 };

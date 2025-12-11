@@ -1,4 +1,5 @@
-import React from 'react'; // Ya no necesitamos useState/useEffect aquí
+// src/App.tsx
+import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './views/Login';
@@ -12,27 +13,22 @@ import Buffer from './views/Buffer';
 import Profile from './views/Profile';
 
 // ELIMINAMOS la dependencia de AuthService (Mock Backend)
-// import { AuthService } from './services/mockBackend'; 
-
-import { UserRole } from './types'; // Mantenemos UserRole para la lógica de rutas
-import { logoutUser } from './services/firebaseAuthService'; // Importamos el logout real
-import { useAuthStatus } from './hooks/useAuthStatus'; // Importamos el hook real de Firebase Auth
+// Mantenemos estas interfaces para la lógica de rutas
+import { UserRole } from './types'; 
+import { logoutUser } from './services/firebaseAuthService'; 
+import { useAuthStatus } from './hooks/useAuthStatus'; 
+import ListaDocumentos from './components/ListaDocumentos';
 
 
 const App: React.FC = () => {
     // ==========================================================
-    // 1. REEMPLAZO DEL ESTADO DEL USUARIO CON EL HOOK REAL
+    // CORRECCIÓN TS2339: Desestructuramos correctamente el hook
     // ==========================================================
-    // user (simulado) y cargando (simulado) son reemplazados por el hook
-    const { usuarioFirebase, cargando, userConRoles } = useAuthStatus(); 
+    const { user, cargando } = useAuthStatus(); 
 
-    // Nota: El mockAuthService ya no es necesario, pero mantenemos userConRoles
-    // que simula tener los roles (isAdmin) asignados
-    const user = userConRoles; // Asignación temporal para mantener la sintaxis de rutas
-
-
+    // Usamos 'user' directamente en las rutas para la validación
     const handleLogout = async () => {
-        await logoutUser(); // Usamos la función de logout real de Firebase
+        await logoutUser(); 
     };
     
     // Si el hook está cargando, mostramos un estado de espera.
@@ -43,7 +39,7 @@ const App: React.FC = () => {
     return (
         <HashRouter>
             <Routes>
-                {/* La ruta de login ya no necesita onLogin */}
+                {/* Login ya no necesita onLogin */}
                 <Route 
                     path="/login" 
                     element={!user ? <Login /> : <Navigate to="/" />} 
@@ -52,15 +48,21 @@ const App: React.FC = () => {
                 <Route
                     path="*"
                     element={
-                        // 2. LA LÓGICA DE REDIRECCIÓN AHORA DEPENDE DE 'user' (que viene del hook)
                         user ? (
                             <Layout user={user} onLogout={handleLogout}>
                                 <Routes>
-                                    <Route path="/" element={<Dashboard user={user} />} />
+                                    {/* RUTA DE PRUEBA TEMPORAL: Asegúrate que tienes esta línea para probar Firestore */}
+                                    <Route path="/" element={<ListaDocumentos />} /> 
+                                    {/* <Route path="/" element={<Dashboard user={user} />} /> <-- La original */}
+                                    
                                     <Route path="/inbox" element={<Buffer user={user} />} />
                                     <Route path="/new" element={<CreateDocument user={user} />} />
                                     <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
-                                    <Route path="/profile" element={<Profile user={user} />} /> {/* handleLogin/onUpdate ya no se necesita aquí */}
+                                    
+                                    {/* CORRECCIÓN TS2741: Eliminamos la prop onUpdate que Firebase no necesita */}
+                                    <Route path="/profile" element={<Profile user={user} />} /> 
+
+                                    {/* El resto de las rutas de admin son correctas */}
                                     <Route 
                                         path="/admin/users" 
                                         element={user.role === UserRole.ADMIN ? <AdminUsers /> : <Navigate to="/" />} 

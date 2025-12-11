@@ -1,35 +1,50 @@
+// src/components/ListaDocumentos.tsx
 import React, { useEffect, useState } from 'react';
-// IMPORTANTE: Asegúrate que esta ruta sea correcta para tu archivo de llaves
-import { db } from '../firebaseConfig'; 
-
-// Importa las funciones de Firestore para la lectura
+import { db } from '../firebaseConfig'; // Importa desde el nuevo .ts
 import { collection, getDocs } from 'firebase/firestore';
 
+// ==========================================================
+// CORRECCIÓN TS2345: Definición de la interfaz del documento
+// ==========================================================
+interface Documento {
+    id: string;
+    nombre: string;
+    estado: string;
+    version: number;
+    // Agrega cualquier otro campo que hayas creado en Firestore
+}
+
 function ListaDocumentos() {
-  const [documentos, setDocumentos] = useState([]);
+  // Tipado del estado con la interfaz Documento[]
+  const [documentos, setDocumentos] = useState<Documento[]>([]); 
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState(null);
+  // Tipado del estado de error
+  const [error, setError] = useState<string | null>(null); 
 
   useEffect(() => {
     const obtenerDocumentos = async () => {
       try {
-        // 1. Referencia a la colección 'documentos'
         const documentosCollection = collection(db, 'documentos');
-        
-        // 2. Ejecuta la lectura de la base de datos
         const snapshot = await getDocs(documentosCollection);
         
-        // 3. Mapea los resultados en un array de objetos
-        const documentosList = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        }));
+        // Mapeamos y tipamos el resultado explícitamente
+        const documentosList: Documento[] = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return { 
+                id: doc.id, 
+                nombre: data.nombre || 'N/A',
+                estado: data.estado || 'N/A',
+                version: data.version || 0,
+                // Mapea el resto de tus campos aquí
+            } as Documento;
+        });
         
         setDocumentos(documentosList);
         
       } catch (err) {
         console.error("Error al conectar con Firestore:", err);
-        setError("Error de conexión. Revisa si las claves en firebaseConfig.js son correctas.");
+        // El error es tipado como string
+        setError("Error de conexión. Revisa las claves y reglas de Firebase."); 
       } finally {
         setCargando(false);
       }
@@ -53,9 +68,9 @@ function ListaDocumentos() {
         <p>No hay documentos cargados en la colección 'documentos' de Firestore.</p>
       ) : (
         <ul>
+          {/* Los elementos ahora están tipados como Documento, resolviendo TS2339 */}
           {documentos.map(doc => (
             <li key={doc.id}>
-              {/* Muestra los campos que creaste manualmente */}
               <strong>{doc.nombre}</strong> (Estado: {doc.estado}, Versión: {doc.version})
             </li>
           ))}
