@@ -22,7 +22,7 @@ const App: React.FC = () => {
 
     const handleLogout = async () => {
         await logoutUser(); 
-        window.location.reload();
+        // Eliminado window.location.reload() para permitir redirección suave por estado
     };
     
     if (cargando) {
