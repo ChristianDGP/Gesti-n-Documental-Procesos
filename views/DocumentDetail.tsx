@@ -249,9 +249,39 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const config = STATE_CONFIG[doc.state];
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
+  
+  // Helpers for Action Buttons Logic
   const hasWriteAccess = (user.role === UserRole.ANALYST && (isAssignee || isAuthor)) || user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
   const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
-  const canRequestApproval = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && !doc.hasPendingRequest && (doc.state === DocState.IN_PROCESS || doc.state === DocState.INTERNAL_REVIEW || doc.state === DocState.SENT_TO_REFERENT);
+  
+  // --- STRICT VERSION CHECK FOR APPROVAL REQUEST ---
+  const isValidApprovalVersion = (v: string): boolean => {
+      // Regla 1: "v0.n" donde n es impar
+      const matchInternal = v.match(/^v0\.(\d+)$/);
+      if (matchInternal) {
+          const n = parseInt(matchInternal[1]);
+          return n % 2 !== 0; // n es impar
+      }
+
+      // Regla 2 y 3: "v1.n.i" o "v1.n.iAR" donde n es impar Y i es impar
+      // Se asume que i es el ultimo numero tras el punto
+      const matchAdvanced = v.match(/^v1\.(\d+)\.(\d+)(AR)?$/);
+      if (matchAdvanced) {
+          const n = parseInt(matchAdvanced[1]);
+          const i = parseInt(matchAdvanced[2]);
+          return (n % 2 !== 0) && (i % 2 !== 0); // n e i son impares
+      }
+
+      return false;
+  };
+
+  const isVersionValidForRequest = isValidApprovalVersion(doc.version);
+
+  const canRequestApproval = user.role === UserRole.ANALYST && 
+                             (isAssignee || isAuthor) && 
+                             !doc.hasPendingRequest && // <--- REQUISITO CRÍTICO: No debe haber solicitud vigente
+                             isVersionValidForRequest;
+
   const canRestart = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.REJECTED;
   
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
@@ -400,7 +430,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 <option value="">-- Seleccionar Etapa --</option>
                                 <option value="INTERNAL">Aprobación Revisión Interna (v1.0)</option>
                                 <option value="REFERENT">Aprobación Referente (v1.n / v1.nAR)</option>
-                                <option value="CONTROL">Aprobación Control Gestión (v1.nAR / v1.nACG)</option>
+                                <option value="CONTROL">Aprobación Control Gestión (v1.nACG)</option>
                             </select>
                         </div>
 
