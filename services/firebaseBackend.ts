@@ -21,13 +21,29 @@ import {
 // --- Helpers ---
 const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
     const v = (version || '').trim();
-    if (!v) return { state: DocState.INITIATED, progress: 10 };
+    
+    // 0. Sin Datos / No Iniciado (Guion o Vacío Explicito)
+    if (!v || v === '-') return { state: DocState.NOT_STARTED, progress: 0 };
+
+    // 1. Iniciado Estricto
+    if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
+    
+    // 2. Estados Finales/Control (Siempre tienen sufijo)
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
     if (v.endsWith('AR')) return { state: DocState.SENT_TO_CONTROL, progress: 90 };
+    
+    // 3. Revisión Referente y Control (v1.x) - ESTRICTO CON 'v'
+    // Detecta v1.0, v1.0.1, v1.1, etc.
     if (v.startsWith('v1.') && !v.includes('AR') && !v.includes('ACG')) return { state: DocState.SENT_TO_REFERENT, progress: 80 };
+    
+    // 4. Revisión Interna (v0.x) - ESTRICTO CON 'v'
     if (v.startsWith('v0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
-    if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
-    if (/^0\.\d+$/.test(v) || /^\d+\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
+    
+    // 5. En Proceso (0.x) - SIN 'v'
+    // Si empieza con número (ej: 0.1, 1.0 sin v), se considera trabajo en proceso no formalizado
+    if (/^\d+\./.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
+    
+    // Fallback
     return { state: DocState.IN_PROCESS, progress: 30 };
 };
 
@@ -43,6 +59,7 @@ const mapCodeToDocType = (code: string): DocType | undefined => {
 
 // Robust string normalization for header matching
 export const normalizeHeader = (header: string): string => {
+    if (!header) return '';
     return header
         .trim()
         .toUpperCase()
@@ -52,33 +69,44 @@ export const normalizeHeader = (header: string): string => {
 
 // Generates a deterministic ID for matrix rows to PREVENT DUPLICATES
 export const generateMatrixId = (project: string, micro: string): string => {
-    const p = normalizeHeader(project).replace(/[^A-Z0-9]/g, '');
-    const m = normalizeHeader(micro).replace(/[^A-Z0-9]+/g, '_'); 
+    const p = normalizeHeader(project).replace(/[^A-Z0-9]/g, '').substring(0, 10);
+    const m = normalizeHeader(micro).replace(/[^A-Z0-9]+/g, '_').substring(0, 60); 
     return `MTX_${p}_${m}`;
 };
 
-// Helper to parse DD/MM/YYYY to ISO string
+// Generates a deterministic ID for Documents to PREVENT DUPLICATES during import
+export const generateDocumentId = (project: string, micro: string, type: string): string => {
+    const p = normalizeHeader(project).replace(/[^A-Z0-9]/g, '').substring(0, 10);
+    const m = normalizeHeader(micro).replace(/[^A-Z0-9]+/g, '_').substring(0, 60);
+    const t = normalizeHeader(type).replace(/[^A-Z0-9]/g, '');
+    return `DOC_${p}_${m}_${t}`;
+};
+
+// Helper to parse Dates robustly (DD/MM/YYYY, YYYY-MM-DD)
 const parseDateString = (dateStr: string): string => {
-    if (!dateStr || !dateStr.trim()) return new Date().toISOString();
+    if (!dateStr) return ''; // Empty string if no date provided
+    const clean = dateStr.trim();
+    if (!clean || clean === '-' || clean === '0' || clean === '') return '';
+
     try {
-        const cleanDate = dateStr.trim();
-        // Handle DD/MM/YYYY
-        if (cleanDate.includes('/')) {
-            const parts = cleanDate.split('/');
-            if (parts.length === 3) {
-                 const day = parts[0].padStart(2,'0');
-                 const month = parts[1].padStart(2,'0');
-                 const year = parts[2];
-                 const iso = `${year}-${month}-${day}`;
-                 const d = new Date(iso);
-                 if (!isNaN(d.getTime())) return d.toISOString();
-            }
+        // DD/MM/YYYY or DD-MM-YYYY
+        const ddmmyyyy = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (ddmmyyyy) {
+            return new Date(`${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2,'0')}-${ddmmyyyy[1].padStart(2,'0')}`).toISOString();
         }
-        // Handle normal parsable strings
-        const d = new Date(cleanDate);
+        
+        // YYYY-MM-DD
+        const yyyymmdd = clean.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (yyyymmdd) {
+            return new Date(`${yyyymmdd[1]}-${yyyymmdd[2].padStart(2,'0')}-${yyyymmdd[3].padStart(2,'0')}`).toISOString();
+        }
+
+        // Try standard parsing
+        const d = new Date(clean);
         if (!isNaN(d.getTime())) return d.toISOString();
     } catch(e) {}
-    return new Date().toISOString();
+
+    return ''; // Return empty if parsing fails
 };
 
 // Helper to find user ID by fuzzy name/email match
@@ -369,7 +397,7 @@ export const DocumentService = {
       switch (action) {
         case 'REQUEST_APPROVAL':
             hasPending = true;
-            if (currentDoc.state === DocState.IN_PROCESS || currentDoc.state === DocState.INITIATED || currentDoc.state === DocState.REJECTED) {
+            if (currentDoc.state === DocState.IN_PROCESS || currentDoc.state === DocState.INITIATED || currentDoc.state === DocState.REJECTED || currentDoc.state === DocState.NOT_STARTED) {
                 newState = DocState.INTERNAL_REVIEW;
             }
             break;
@@ -681,17 +709,17 @@ export const DatabaseService = {
               const separator = line.includes(';') ? ';' : ',';
               const cols = line.split(separator);
               
-              // New 12 Column Format:
+              // NEW FORMAT (12 Cols):
               // 0: PROYECTO
-              // 1: MACRO
+              // 1: MACROPROCESO
               // 2: PROCESO
-              // 3: MICRO
-              // 4: AS IS (Ver) | 5: Date
-              // 6: FCE (Ver)   | 7: Date
-              // 8: PM (Ver)    | 9: Date
-              // 10: TO BE (Ver)| 11: Date
+              // 3: MICROPROCESO
+              // 4: Ver AS IS | 5: Fecha AS IS
+              // 6: Ver FCE   | 7: Fecha FCE
+              // 8: Ver PM    | 9: Fecha PM
+              // 10: Ver TO BE| 11: Fecha TO BE
 
-              if (cols.length < 11) continue; 
+              if (cols.length < 12) continue; 
               
               const project = normalizeHeader(cols[0]);
               const micro = normalizeHeader(cols[3]);
@@ -710,6 +738,8 @@ export const DatabaseService = {
               docTypesMap.forEach(dt => {
                    const ver = cols[dt.vIdx]?.trim();
                    const dateStr = cols[dt.dIdx]?.trim();
+                   // STRICT: v must exist and not be empty, '-' or '0.0' unless it matches specific states
+                   // We defer to determineStateFromVersion for strictness
                    if (ver && ver !== '-' && ver !== '') {
                        const { state, progress } = determineStateFromVersion(ver);
                        entry[dt.type] = {
@@ -743,47 +773,41 @@ export const DatabaseService = {
            const separator = line.includes(';') ? ';' : ',';
            const cols = line.split(separator);
            
-           if (cols.length < 6) continue;
+           if (cols.length < 9) continue;
            
-           // Rules Structure:
-           // 0: ID, 1: Macro, 2: Process, 3: Micro, 4: Analyst, 5: Project
-           // 6: AS IS, 7: FCE, 8: PM, 9: TO BE (Flags)
+           // NEW RULES STRUCTURE (9 Cols):
+           // 0: MacroProceso
+           // 1: Proceso
+           // 2: MicroProceso
+           // 3: Analista
+           // 4: PROYECTO
+           // 5: AS IS (Flag 0/1)
+           // 6: FCE (Flag 0/1)
+           // 7: PM (Flag 0/1)
+           // 8: TO BE (Flag 0/1)
 
-           let project = cols[5]?.trim();
-           let macro = cols[1]?.trim() || 'Macroproceso General';
-           let process = cols[2]?.trim() || 'Proceso General';
-           let micro = cols[3]?.trim();
-           const responsableRaw = cols[4]?.trim();
+           const macro = cols[0]?.trim() || 'Macroproceso General';
+           const process = cols[1]?.trim() || 'Proceso General';
+           const micro = cols[2]?.trim();
+           const responsableRaw = cols[3]?.trim();
+           const project = cols[4]?.trim();
+
+           if (!project || !micro) continue;
+           
            let assignees = findUserIdsFromCSV(users, responsableRaw);
            
            let requiredTypes: DocType[] = [];
-           const asis = cols[6]?.trim() === '1';
-           const fce = cols[7]?.trim() === '1';
-           const pm = cols[8]?.trim() === '1';
-           const tobe = cols[9]?.trim() === '1';
+           const asis = cols[5]?.trim() === '1';
+           const fce = cols[6]?.trim() === '1';
+           const pm = cols[7]?.trim() === '1';
+           const tobe = cols[8]?.trim() === '1';
            
            if (asis) requiredTypes.push('AS IS');
            if (fce) requiredTypes.push('FCE');
            if (pm) requiredTypes.push('PM');
            if (tobe) requiredTypes.push('TO BE');
 
-           // Fallback logic for legacy format
-           const col5IsFlag = cols[5]?.trim() === '0' || cols[5]?.trim() === '1';
-           if (col5IsFlag) {
-                project = cols[0].trim();
-                macro = cols[1].trim();
-                process = cols[2].trim();
-                micro = cols[3].trim();
-                requiredTypes = [];
-                if (cols[5]?.trim() === '1') requiredTypes.push('AS IS');
-                if (cols[6]?.trim() === '1') requiredTypes.push('FCE');
-                if (cols[7]?.trim() === '1') requiredTypes.push('PM');
-                if (cols[8]?.trim() === '1') requiredTypes.push('TO BE');
-           }
-           
-           if (!project || !micro) continue;
-
-           // 1. Create Matrix Entry
+           // 1. Create Matrix Entry (Deterministic ID)
            const matrixId = generateMatrixId(project, micro);
            const matrixRef = doc(db, "process_matrix", matrixId);
            
@@ -808,18 +832,29 @@ export const DatabaseService = {
            for (const type of typesToCreate) {
                 const histData = historyRecord ? historyRecord[type] : null;
                 
-                // If not required and no history, skip (unless we want to be safe, but usually skip)
-                // Actually, if it is in typesToCreate it is either required or has history.
+                let state, version, progress, date;
+
+                if (histData) {
+                    // CASE A: History exists
+                    state = histData.state;
+                    version = histData.version;
+                    progress = histData.progress;
+                    date = histData.date;
+                } else {
+                    // CASE B: Required but NO History found -> NOT STARTED
+                    state = DocState.NOT_STARTED;
+                    version = '-';
+                    progress = 0;
+                    date = ''; // Empty string indicates no activity
+                }
                 
-                const version = histData ? histData.version : '0.0';
-                const date = histData ? histData.date : new Date().toISOString();
-                const state = histData ? histData.state : DocState.INITIATED;
-                const progress = histData ? histData.progress : 10;
+                // Use DETERMINISTIC ID to prevent duplicates if rules are re-run or duplicated in CSV
+                const docId = generateDocumentId(project, micro, type);
+                const newDocRef = doc(db, "documents", docId);
                 
-                const newDocRef = doc(collection(db, "documents"));
                 const docData: Omit<Document, 'id'> = {
                     title: `${micro} - ${type}`, // Specific Name
-                    description: histData ? `Migrado desde Histórico (${version})` : 'Documento Inicializado por Regla',
+                    description: histData ? `Migrado desde Histórico (${version})` : 'Documento Requerido (Pendiente)',
                     authorId: assignees[0] || 'admin',
                     authorName: 'Sistema',
                     assignedTo: assignees[0] || 'admin',
@@ -829,8 +864,8 @@ export const DatabaseService = {
                     progress: progress,
                     hasPendingRequest: false,
                     files: [], 
-                    createdAt: date, 
-                    updatedAt: date,
+                    createdAt: date || new Date().toISOString(), 
+                    updatedAt: date || '', // Empty if not started
                     project, macroprocess: macro, process, microprocess: micro, 
                     docType: type // EXPLICIT TYPE
                 };

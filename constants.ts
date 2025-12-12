@@ -3,6 +3,7 @@ import { DocState, UserRole } from './types';
 
 // Maps the business rules to UI properties
 export const STATE_CONFIG: Record<DocState, { label: string; color: string; progress: number }> = {
+  [DocState.NOT_STARTED]: { label: 'No Iniciado', color: 'bg-slate-100 text-slate-400 border border-slate-200', progress: 0 },
   [DocState.INITIATED]: { label: 'Iniciado (0.0)', color: 'bg-gray-100 text-gray-800', progress: 10 },
   [DocState.IN_PROCESS]: { label: 'En Proceso (0.n)', color: 'bg-blue-100 text-blue-800', progress: 30 },
   [DocState.INTERNAL_REVIEW]: { label: 'Revisión Interna (v0.n)', color: 'bg-yellow-100 text-yellow-800', progress: 60 },

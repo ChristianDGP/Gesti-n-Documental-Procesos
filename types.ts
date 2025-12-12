@@ -17,6 +17,7 @@ export interface User {
 }
 
 export enum DocState {
+  NOT_STARTED = 'NOT_STARTED',           // 0.0 - 0% (Sin actividad)
   INITIATED = 'INITIATED',               // 0.0 - 10%
   IN_PROCESS = 'IN_PROCESS',             // 0.n - 30%
   INTERNAL_REVIEW = 'INTERNAL_REVIEW',   // v0.n - 60%

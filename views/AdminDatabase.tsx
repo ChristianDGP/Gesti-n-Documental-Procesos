@@ -238,7 +238,8 @@ const AdminDatabase: React.FC = () => {
                                 {rulesFile ? <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">Cargado</span> : <span className="text-xs text-red-400 font-medium">Requerido</span>}
                             </div>
                             <div className="text-xs text-slate-500 mb-3">
-                                Contiene: Proyecto, Macro, Proceso, Micro, Responsable, Flags (ASIS, FCE...)
+                                <p>Macro; Proceso; Micro; Analista; Proyecto;</p>
+                                <p>ASIS; FCE; PM; TOBE (Flags 0/1)</p>
                             </div>
                             <div className="flex gap-3 items-center">
                                 <input 
@@ -265,7 +266,8 @@ const AdminDatabase: React.FC = () => {
                                 {historyFile ? <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">Cargado</span> : <span className="text-xs text-slate-400 font-medium">Opcional</span>}
                             </div>
                             <div className="text-xs text-slate-500 mb-3">
-                                Contiene: Proyecto, Micro, <b>Versión Actual</b>, <b>Fecha Actualización</b>.
+                                <p>Proyecto; Macro; Proceso; Micro;</p>
+                                <p>Ver/Fecha (ASIS); Ver/Fecha (FCE); ...</p>
                             </div>
                             <div className="flex gap-3 items-center">
                                 <input 

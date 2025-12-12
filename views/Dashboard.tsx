@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { DocumentService, HierarchyService, UserService } from '../services/firebaseBackend';
 import { Document, User, UserRole, DocState, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, PauseCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface DashboardProps {
@@ -12,7 +12,7 @@ interface DashboardProps {
 }
 
 type SortKey = 'project' | 'microprocess' | 'state' | 'updatedAt';
-type QuickFilterType = 'ALL' | 'REQUIRED' | 'IN_PROCESS' | 'REFERENT' | 'CONTROL' | 'FINISHED';
+type QuickFilterType = 'ALL' | 'REQUIRED' | 'NOT_STARTED' | 'IN_PROCESS' | 'REFERENT' | 'CONTROL' | 'FINISHED';
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -41,6 +41,34 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     loadData();
   }, []);
 
+  // Helper to compare versions robustly
+  const isVersionNewer = (v1: string, v2: string): boolean => {
+      if (!v1) return false;
+      if (!v2) return true;
+      if (v1 === '-') return false; // Not Started is always older
+      
+      // Clean versions (remove 'v', 'AR', 'ACG')
+      const cleanV1 = v1.replace(/[^0-9.]/g, '');
+      const cleanV2 = v2.replace(/[^0-9.]/g, '');
+      
+      const parts1 = cleanV1.split('.').map(Number);
+      const parts2 = cleanV2.split('.').map(Number);
+      
+      for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+          const num1 = parts1[i] || 0;
+          const num2 = parts2[i] || 0;
+          if (num1 > num2) return true;
+          if (num1 < num2) return false;
+      }
+      
+      // If numbers are equal, check specific suffixes for priority
+      // Priority: ACG > AR > (none)
+      const weight1 = v1.includes('ACG') ? 3 : v1.includes('AR') ? 2 : 1;
+      const weight2 = v2.includes('ACG') ? 3 : v2.includes('AR') ? 2 : 1;
+      
+      return weight1 > weight2;
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -53,14 +81,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         // DEDUPLICATION LOGIC (Show only latest version)
         // Group by Project + Microprocess + DocType
         const latestDocsMap = new Map<string, Document>();
+        
         data.forEach(doc => {
             const uniqueKey = `${doc.project || 'Gen'}|${doc.microprocess || doc.title}|${doc.docType || 'Gen'}`;
             const existing = latestDocsMap.get(uniqueKey);
-            // Keep the one with the latest updatedAt
-            if (!existing || new Date(doc.updatedAt) > new Date(existing.updatedAt)) {
+            
+            // Logic: Determine which is the "Current Active" document
+            let shouldUseNew = false;
+
+            if (!existing) {
+                shouldUseNew = true;
+            } else {
+                const timeNew = doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0;
+                const timeExisting = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+
+                // 1. Primary check: Date
+                if (timeNew > timeExisting) {
+                    shouldUseNew = true;
+                } 
+                // 2. Secondary check: If dates are effectively equal (common in bulk imports), use Version
+                else if (timeNew === timeExisting) {
+                    if (isVersionNewer(doc.version, existing.version)) {
+                        shouldUseNew = true;
+                    }
+                }
+            }
+
+            if (shouldUseNew) {
                 latestDocsMap.set(uniqueKey, doc);
             }
         });
+        
         const finalDocs = Array.from(latestDocsMap.values());
 
         setDocs(finalDocs);
@@ -108,8 +159,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const getFilteredDocs = () => {
     let filtered = docs;
     
-    // VISIBILITY UPDATE: Analyst can now see everything (Removed Role Filtering)
-    
     // 2. Explicit Filters
     if (filterProject) {
         filtered = filtered.filter(d => d.project === filterProject);
@@ -140,8 +189,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         filtered = filtered.filter(d => isDocRequired(d));
 
         switch (quickFilter) {
+            case 'NOT_STARTED':
+                filtered = filtered.filter(d => d.state === DocState.NOT_STARTED);
+                break;
             case 'IN_PROCESS':
                 filtered = filtered.filter(d => 
+                    // Excluye NOT_STARTED, ya tiene su propia tarjeta
                     d.state === DocState.INITIATED || 
                     d.state === DocState.IN_PROCESS || 
                     d.state === DocState.INTERNAL_REVIEW
@@ -186,7 +239,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           
           switch (sortConfig.key) {
               case 'updatedAt':
-                  return (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) * modifier;
+                  const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+                  const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                  return (timeA - timeB) * modifier;
               case 'project':
                   return (a.project || '').localeCompare(b.project || '') * modifier;
               case 'microprocess':
@@ -250,6 +305,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const stats = {
     totalRequired: contextDocs.length,
+    notStarted: contextDocs.filter(d => d.state === DocState.NOT_STARTED).length,
     inProcess: contextDocs.filter(d => 
         d.state === DocState.INITIATED || 
         d.state === DocState.IN_PROCESS || 
@@ -267,6 +323,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const chartData = [
+    { name: 'No Iniciado', value: stats.notStarted, color: '#cbd5e1' },
     { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' },
     { name: 'Referente', value: stats.referent, color: '#a855f7' },
     { name: 'Control Gestión', value: stats.control, color: '#f97316' },
@@ -321,7 +378,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       </div>
 
       {/* Stats Cards - Interactive */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
         <StatCard 
             title="Doc. Requeridos" 
             value={stats.totalRequired} 
@@ -329,6 +386,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             color="bg-slate-100 text-slate-600" 
             isActive={quickFilter === 'REQUIRED'}
             onClick={() => handleQuickFilterClick('REQUIRED')}
+        />
+        <StatCard 
+            title="No Iniciado" 
+            value={stats.notStarted} 
+            icon={Clock} 
+            color="bg-slate-50 text-slate-400 border-slate-200" 
+            isActive={quickFilter === 'NOT_STARTED'}
+            onClick={() => handleQuickFilterClick('NOT_STARTED')}
         />
         <StatCard 
             title="En Proceso" 
@@ -387,6 +452,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         <span>
                             Filtrando por: <strong>
                                 {quickFilter === 'REQUIRED' && 'Total Requeridos'}
+                                {quickFilter === 'NOT_STARTED' && 'No Iniciados'}
                                 {quickFilter === 'IN_PROCESS' && 'En Proceso'}
                                 {quickFilter === 'REFERENT' && 'En Referente'}
                                 {quickFilter === 'CONTROL' && 'Control de Gestión'}
@@ -513,6 +579,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     ? "border-b border-slate-50 hover:bg-slate-50 transition-colors" 
                                     : "border-b border-slate-50 bg-slate-100/50 text-slate-400 hover:bg-slate-100 transition-colors";
                                 
+                                const isNotStarted = doc.state === DocState.NOT_STARTED;
+
                                 return (
                                     <tr key={doc.id} className={rowClass}>
                                         <td className="px-4 py-3 font-bold">
@@ -552,7 +620,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                     </span>
                                                 )}
                                                 <Link to={`/doc/${doc.id}`} className={`text-sm flex items-center hover:underline ${isRequired ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-500 hover:text-slate-700'}`}>
-                                                    Ver Detalle <ArrowRight size={12} className="ml-1" />
+                                                    {isNotStarted ? 'Iniciar' : 'Ver Detalle'} <ArrowRight size={12} className="ml-1" />
                                                 </Link>
                                             </div>
                                         </td>
@@ -561,19 +629,32 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>
                                                     {STATE_CONFIG[doc.state].label.split('(')[0]}
                                                 </span>
-                                                <span className="text-xs font-mono ml-1">
-                                                    Ver: {doc.version} ({doc.progress}%)
-                                                </span>
+                                                {!isNotStarted && (
+                                                    <span className="text-xs font-mono ml-1">
+                                                        Ver: {doc.version} ({doc.progress}%)
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <div className="flex items-center gap-1.5">
-                                                <Calendar size={14} className={isRequired ? "text-slate-400" : "text-slate-300"} />
-                                                <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
-                                            </div>
-                                            <div className="text-xs pl-5 opacity-70">
-                                                {new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </div>
+                                            {doc.updatedAt ? (
+                                                <>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Calendar size={14} className={isRequired ? "text-slate-400" : "text-slate-300"} />
+                                                        <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
+                                                    </div>
+                                                    <div className="text-xs pl-5 opacity-70">
+                                                        {new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) !== 'Invalid Date' 
+                                                            ? new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                            : ''
+                                                        }
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="text-xs text-slate-400 italic flex items-center gap-1">
+                                                    <Clock size={12} /> Sin actividad
+                                                </div>
+                                            )}
                                         </td>
                                         {user.role === UserRole.ADMIN && (
                                             <td className="px-4 py-3 text-right">
@@ -636,6 +717,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     <li className="flex justify-between border-b border-indigo-200 pb-1">
                         <span>Total Requeridos:</span>
                         <span className="font-bold">{stats.totalRequired}</span>
+                    </li>
+                    <li className="flex justify-between border-b border-indigo-200 pb-1">
+                        <span>No Iniciados:</span>
+                        <span className="font-bold text-slate-500">{stats.notStarted}</span>
                     </li>
                     <li className="flex justify-between border-b border-indigo-200 pb-1">
                         <span>Terminados:</span>
