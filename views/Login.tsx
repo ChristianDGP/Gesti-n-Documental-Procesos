@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { loginUser, registerUser } from '../services/firebaseAuthService'; 
-import { Lock, User, Key, AlertCircle, TrendingUp, Mail, UserPlus, LogIn } from 'lucide-react'; 
+import { Lock, User, Key, AlertCircle, TrendingUp, Mail, UserPlus, LogIn, Info } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
 import { auth } from '../services/firebaseConfig'; 
 import { GoogleAuthProvider, signInWithPopup, UserCredential } from 'firebase/auth'; 
@@ -77,7 +77,7 @@ const Login: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-100 font-sans p-4">
             <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-slate-200">
-                <div className="text-center mb-8">
+                <div className="text-center mb-6">
                     <h1 className="text-3xl font-bold text-slate-900">SGD</h1>
                     <p className="text-slate-500 mt-2">Sistema de Gestión Documental</p>
                 </div>

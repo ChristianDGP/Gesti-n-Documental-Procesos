@@ -302,7 +302,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-            <p className="text-slate-500">Vista general {user.role === UserRole.ANALYST ? '(Acceso Global)' : ''}</p>
+            <p className="text-slate-500">Vista general</p>
         </div>
         <div className="flex gap-2">
             {user.role === UserRole.ADMIN && (

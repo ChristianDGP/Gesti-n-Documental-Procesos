@@ -1,17 +1,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DocumentService, HierarchyService, UserService } from '../services/firebaseBackend';
+import { DocumentService, HierarchyService } from '../services/firebaseBackend';
 import { User, DocState, DocType, UserHierarchy, UserRole } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, Send, FilePlus } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus } from 'lucide-react';
 
 interface Props {
   user: User;
 }
-
-// Updated Request Types to include early stages
-type RequestType = 'INITIATED' | 'IN_PROCESS' | 'INTERNAL' | 'REFERENT' | 'CONTROL';
 
 const CreateDocument: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
@@ -25,8 +22,6 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [selectedMicro, setSelectedMicro] = useState<string>('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
-  const [requestType, setRequestType] = useState<RequestType | ''>('');
-  const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
 
   // File Upload State
   const [file, setFile] = useState<File | undefined>(undefined);
@@ -70,17 +65,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           const hierarchy = await HierarchyService.getUserHierarchy(user.id);
           setUserHierarchy(hierarchy);
       }
-
-      // 2. Cargar Coordinador para notificaciones
-      const users = await UserService.getAll();
-      const coord = users.find(u => u.role === UserRole.COORDINATOR);
-      if (coord) setCoordinatorEmail(coord.email);
-
       setInitializing(false);
   };
 
   // Helper functions for safe extraction of hierarchy arrays
-  // These explicitly return string[] to prevent implicit any errors in .map()
   const getProjects = (): string[] => {
       return Object.keys(userHierarchy);
   };
@@ -134,18 +122,12 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       resetFile();
   }
 
-  const handleRequestTypeChange = (val: string) => {
-      setRequestType(val as RequestType);
-      resetFile();
-  }
-
   const resetFile = () => {
       setFile(undefined);
       setFileError([]);
       setIsFileValid(false);
       setTitle('');
       setDescription('');
-      // Critical: Clear the input value so selecting the same file again triggers onChange
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
@@ -165,86 +147,42 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       }
   };
 
-  const getVersionHint = () => {
-      if (requestType === 'INITIATED') return '[0.0]';
-      if (requestType === 'IN_PROCESS') return '[0.n] (sin "v")';
-      if (requestType === 'INTERNAL') return '[v0.n] donde n es IMPAR';
-      if (requestType === 'REFERENT') return '[v1.n.i] donde i es IMPAR';
-      if (requestType === 'CONTROL') return '[v1.n.iAR] donde i es IMPAR';
-      return '[Versión]';
-  };
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const selectedFile = e.target.files[0];
           setFile(selectedFile);
           
-          // Validate with context AND request type!
+          // Validate logic - Simplified from the "Tree" version
           const result = parseDocumentFilename(
               selectedFile.name,
               selectedProject,
               selectedMicro,
-              selectedDocType || undefined,
-              requestType as RequestType || undefined
+              selectedDocType || undefined
+              // Removed RequestType param
           );
           
           if (result.valido) {
               setIsFileValid(true);
               setFileError([]);
               
-              // Only auto-fill title/description, rely on Selectors for hierarchy
               const cleanMicro = result.microproceso || selectedMicro;
               const cleanType = result.tipo || selectedDocType;
               setTitle(`${cleanMicro} - ${cleanType}`);
-              
-              // Auto-description based on Type
-              let desc = "Documento cargado";
-              if (requestType === 'INITIATED') desc = "Carga Inicial (Inicio de Gestión)";
-              else if (requestType === 'IN_PROCESS') desc = "Avance de trabajo (En Proceso)";
-              else if (requestType === 'INTERNAL') desc = "Solicitud de Revisión Interna";
-              else if (requestType === 'REFERENT') desc = "Solicitud de Revisión Referente";
-              else if (requestType === 'CONTROL') desc = "Control de Gestión";
-              
-              setDescription(desc);
+              setDescription(`Carga de documento: ${cleanType} (${result.nomenclatura})`);
               
               if (result.estado) setDetectedState(mapParserStateToEnum(result.estado));
               if (result.nomenclatura) setDetectedVersion(result.nomenclatura);
               if (result.porcentaje) setDetectedProgress(result.porcentaje);
 
           } else {
+              // Soft validation - allow upload but show warnings (Restored behavior)
               setIsFileValid(false);
               setFileError(result.errores);
+              // Clean fields but keep file selected so they can see why it failed
               setTitle('');
               setDescription('');
           }
       }
-  };
-
-  // --- LOGIC FOR NOTIFICATION ---
-  const sendCoordinatorNotification = () => {
-      if (!coordinatorEmail || !file) return;
-      
-      const subject = encodeURIComponent(`Solicitud de Aprobación SGD: ${selectedProject} - ${selectedMicro}`);
-      
-      let stageLabel = "";
-      if (requestType === 'INTERNAL') stageLabel = "Revisión Interna";
-      if (requestType === 'REFERENT') stageLabel = "Revisión con Referente";
-      if (requestType === 'CONTROL') stageLabel = "Control de Gestión";
-
-      const body = encodeURIComponent(
-`Estimado Coordinador,
-
-Se ha generado una nueva solicitud de revisión en el sistema.
-
-Documento: ${title}
-Tipo de Solicitud: ${stageLabel}
-Versión: ${detectedVersion}
-Archivo: ${file.name}
-
-Atentamente,
-${user.name}
-`);
-      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -253,7 +191,6 @@ ${user.name}
 
     setLoading(true);
     
-    // Eliminado el Promise.race / timeout porque ya no subimos archivos, es solo registro
     try {
       const newDoc = await DocumentService.create(
           title, 
@@ -272,18 +209,11 @@ ${user.name}
           }
       );
 
-      // NOTIFICATION LOGIC: Only for Approval Flows
-      if (['INTERNAL', 'REFERENT', 'CONTROL'].includes(requestType as string)) {
-          sendCoordinatorNotification();
-      }
-
-      // CAMBIO: Ir al detalle del documento creado
       navigate(`/doc/${newDoc.id}`);
     } catch (error: any) {
       console.error(error);
       alert('Error al crear documento: ' + error.message);
     } finally {
-      // Always reset loading state so the user can try again
       setLoading(false);
     }
   };
@@ -296,8 +226,6 @@ ${user.name}
   const micros = getMicros() as string[];
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
 
-  const isApprovalFlow = ['INTERNAL', 'REFERENT', 'CONTROL'].includes(requestType as string);
-
   return (
     <div className="max-w-4xl mx-auto pb-12">
         <button onClick={() => navigate(-1)} className="flex items-center text-slate-500 hover:text-slate-800 mb-6 text-sm">
@@ -309,7 +237,7 @@ ${user.name}
             <div className="mb-8 border-b border-slate-100 pb-4">
                 <h1 className="text-2xl font-bold text-slate-900 mb-2">Nueva Solicitud</h1>
                 <p className="text-slate-500">
-                   Completa la ficha técnica para iniciar una revisión formal.
+                   Carga de documento para gestión y aprobación.
                 </p>
             </div>
 
@@ -378,24 +306,6 @@ ${user.name}
                             </select>
                         </div>
 
-                        {/* Request Type Selector (New) */}
-                        <div className="md:col-span-2">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Tipo de Solicitud / Revisión</label>
-                            <select 
-                                value={requestType}
-                                onChange={(e) => handleRequestTypeChange(e.target.value)}
-                                disabled={!selectedMicro}
-                                className="w-full p-2.5 border border-indigo-200 bg-indigo-50/50 text-indigo-900 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
-                            >
-                                <option value="">-- Seleccionar Tipo de Solicitud --</option>
-                                <option value="INITIATED">Iniciado (Carga Inicial 0.0)</option>
-                                <option value="IN_PROCESS">En Proceso (Avance 0.n sin revisión)</option>
-                                <option value="INTERNAL">Revisión Interna (Inicio de Flujo v0.n)</option>
-                                <option value="REFERENT">Revisión con Referente (v1.n)</option>
-                                <option value="CONTROL">Control de Gestión (v1.nAR)</option>
-                            </select>
-                        </div>
-
                         {/* Report Type */}
                         <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-4">
                             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Tipo de Informe</label>
@@ -414,7 +324,7 @@ ${user.name}
                                             checked={selectedDocType === type}
                                             onChange={(e) => handleTypeChange(e.target.value)}
                                             className="hidden"
-                                            disabled={!requestType}
+                                            disabled={!selectedMicro}
                                         />
                                         <span className="text-sm font-medium">{type}</span>
                                     </label>
@@ -432,7 +342,7 @@ ${user.name}
                 </div>
 
                 {/* Step 2: File Upload */}
-                {selectedMicro && selectedDocType && requestType && (
+                {selectedMicro && selectedDocType && (
                     <div className="animate-fadeIn">
                          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
                             <Upload size={18} className="text-indigo-600" />
@@ -444,7 +354,7 @@ ${user.name}
                             <div>
                                 <p className="font-semibold">Nomenclatura Requerida:</p>
                                 <p className="font-mono mt-1 text-xs md:text-sm font-bold">
-                                    {selectedProject} - {selectedMicro} - {selectedDocType.replace(' ', '')} - {getVersionHint()}
+                                    {selectedProject} - {selectedMicro} - {selectedDocType.replace(' ', '')} - [Versión]
                                 </p>
                             </div>
                         </div>
@@ -466,7 +376,7 @@ ${user.name}
                                     <div className="text-green-700">
                                         <FileCheck size={48} className="mx-auto mb-3" />
                                         <p className="font-semibold text-lg">{file.name}</p>
-                                        <p className="text-sm mt-1">Validación exitosa</p>
+                                        <p className="text-sm mt-1">Archivo listo para cargar</p>
                                     </div>
                                 ) : (
                                     <div className="text-red-600">
@@ -486,7 +396,7 @@ ${user.name}
                                     <Upload size={40} className="mx-auto mb-3" />
                                     <p className="font-medium">Click para seleccionar archivo</p>
                                     <p className="text-xs mt-2 text-slate-400">
-                                        El nombre debe coincidir con la nomenclatura para {requestType} (Solo validación, no se sube)
+                                        El sistema detectará la versión y estado automáticamente.
                                     </p>
                                 </div>
                             )}
@@ -500,7 +410,7 @@ ${user.name}
                          <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
                             <FileType size={20} className="text-slate-500 flex-shrink-0" />
                             <div className="text-sm text-slate-700 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                                <div><span className="text-slate-400 text-xs uppercase block">Estado</span>{mapParserStateToEnum(parseDocumentFilename(file!.name).estado || '').replace(/_/g, ' ')}</div>
+                                <div><span className="text-slate-400 text-xs uppercase block">Estado Detectado</span>{mapParserStateToEnum(parseDocumentFilename(file!.name).estado || '').replace(/_/g, ' ')}</div>
                                 <div><span className="text-slate-400 text-xs uppercase block">Versión</span>{detectedVersion}</div>
                                 <div><span className="text-slate-400 text-xs uppercase block">Progreso</span>{detectedProgress}%</div>
                                 <div><span className="text-slate-400 text-xs uppercase block">Tipo</span>{selectedDocType}</div>
@@ -533,18 +443,12 @@ ${user.name}
                             <button 
                                 type="submit" 
                                 disabled={loading}
-                                className={`flex items-center px-6 py-3 text-white rounded-lg disabled:opacity-50 transition-colors shadow-md font-medium
-                                    ${isApprovalFlow ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'}`}
+                                className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50 transition-colors shadow-md font-medium"
                             >
-                                {loading ? (isApprovalFlow ? 'Enviando Solicitud...' : 'Guardando...') : isApprovalFlow ? (
-                                    <>
-                                        <Send size={18} className="mr-2" />
-                                        Crear Solicitud de Aprobación
-                                    </>
-                                ) : (
+                                {loading ? 'Cargando...' : (
                                     <>
                                         <FilePlus size={18} className="mr-2" />
-                                        Cargar Documento / Guardar Avance
+                                        Cargar Documento
                                     </>
                                 )}
                             </button>

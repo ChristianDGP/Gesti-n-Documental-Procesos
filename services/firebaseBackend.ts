@@ -20,7 +20,8 @@ import {
 
 // --- Helpers ---
 const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
-    const v = version.trim();
+    const v = (version || '').trim();
+    if (!v) return { state: DocState.INITIATED, progress: 10 };
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
     if (v.endsWith('AR')) return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     if (v.startsWith('v1.') && !v.includes('AR') && !v.includes('ACG')) return { state: DocState.SENT_TO_REFERENT, progress: 80 };
@@ -54,6 +55,30 @@ export const generateMatrixId = (project: string, micro: string): string => {
     const p = normalizeHeader(project).replace(/[^A-Z0-9]/g, '');
     const m = normalizeHeader(micro).replace(/[^A-Z0-9]+/g, '_'); 
     return `MTX_${p}_${m}`;
+};
+
+// Helper to parse DD/MM/YYYY to ISO string
+const parseDateString = (dateStr: string): string => {
+    if (!dateStr || !dateStr.trim()) return new Date().toISOString();
+    try {
+        const cleanDate = dateStr.trim();
+        // Handle DD/MM/YYYY
+        if (cleanDate.includes('/')) {
+            const parts = cleanDate.split('/');
+            if (parts.length === 3) {
+                 const day = parts[0].padStart(2,'0');
+                 const month = parts[1].padStart(2,'0');
+                 const year = parts[2];
+                 const iso = `${year}-${month}-${day}`;
+                 const d = new Date(iso);
+                 if (!isNaN(d.getTime())) return d.toISOString();
+            }
+        }
+        // Handle normal parsable strings
+        const d = new Date(cleanDate);
+        if (!isNaN(d.getTime())) return d.toISOString();
+    } catch(e) {}
+    return new Date().toISOString();
 };
 
 // Helper to find user ID by fuzzy name/email match
@@ -633,72 +658,197 @@ export const DatabaseService = {
           }
       }
   },
-  fullSystemResetAndImport: async (legacyCsv: string, reqsCsv: string, onProgress: (percent: number, status: string) => void) => {
+  fullSystemResetAndImport: async (rulesCsv: string, historyCsv: string | null, onProgress: (percent: number, status: string) => void) => {
       onProgress(5, "Limpiando base de datos...");
       await deleteCollectionInBatches('documents');
       await deleteCollectionInBatches('history');
       await deleteCollectionInBatches('process_matrix');
       await deleteCollectionInBatches('notifications');
+      
       const users = await UserService.getAll();
-      onProgress(10, "Procesando Estructura (Legacy)...");
-      const legacyLines = legacyCsv.split('\n');
-      const matrixBatch = writeBatch(db);
-      let matrixOps = 0;
-      const matrixIds = new Set<string>();
-      for (let i = 1; i < legacyLines.length; i++) { 
-          const line = legacyLines[i].trim();
-          if (!line) continue;
-          const separator = line.includes(';') ? ';' : ',';
-          const cols = line.split(separator);
-          if (cols.length < 4) continue;
-          const project = cols[0].trim();
-          const macro = cols[1].trim();
-          const process = cols[2].trim();
-          const micro = cols[3].trim();
-          const responsableRaw = cols[4] ? cols[4].trim() : '';
-          const id = generateMatrixId(project, micro);
-          const assignees = findUserIdsFromCSV(users, responsableRaw);
-          if (!matrixIds.has(id)) {
-              const ref = doc(db, "process_matrix", id);
-              matrixBatch.set(ref, {
-                  project, macro, process, name: micro, assignees, requiredTypes: ['AS IS', 'FCE', 'PM', 'TO BE'], active: true 
+      
+      // PHASE 1: Parse History to Memory Map (12 Columns Strict Format)
+      // Structure: Key (Proj|Micro) -> { 'AS IS': {ver, date}, 'FCE': ... }
+      type HistoryInfo = { version: string, date: string, state: DocState, progress: number };
+      const historyMap = new Map<string, Record<string, HistoryInfo>>();
+      
+      if (historyCsv) {
+          onProgress(15, "Analizando Histórico de Documentos...");
+          const hLines = historyCsv.split('\n');
+          for (let i = 1; i < hLines.length; i++) {
+              const line = hLines[i].trim();
+              if (!line) continue;
+              const separator = line.includes(';') ? ';' : ',';
+              const cols = line.split(separator);
+              
+              // New 12 Column Format:
+              // 0: PROYECTO
+              // 1: MACRO
+              // 2: PROCESO
+              // 3: MICRO
+              // 4: AS IS (Ver) | 5: Date
+              // 6: FCE (Ver)   | 7: Date
+              // 8: PM (Ver)    | 9: Date
+              // 10: TO BE (Ver)| 11: Date
+
+              if (cols.length < 11) continue; 
+              
+              const project = normalizeHeader(cols[0]);
+              const micro = normalizeHeader(cols[3]);
+              const key = `${project}|${micro}`;
+              
+              const docTypesMap: { type: DocType, vIdx: number, dIdx: number }[] = [
+                  { type: 'AS IS', vIdx: 4, dIdx: 5 },
+                  { type: 'FCE', vIdx: 6, dIdx: 7 },
+                  { type: 'PM', vIdx: 8, dIdx: 9 },
+                  { type: 'TO BE', vIdx: 10, dIdx: 11 },
+              ];
+
+              const entry: Record<string, HistoryInfo> = {};
+              let hasData = false;
+
+              docTypesMap.forEach(dt => {
+                   const ver = cols[dt.vIdx]?.trim();
+                   const dateStr = cols[dt.dIdx]?.trim();
+                   if (ver && ver !== '-' && ver !== '') {
+                       const { state, progress } = determineStateFromVersion(ver);
+                       entry[dt.type] = {
+                           version: ver,
+                           date: parseDateString(dateStr),
+                           state, 
+                           progress
+                       };
+                       hasData = true;
+                   }
               });
-              matrixIds.add(id);
-              matrixOps++;
+
+              if (hasData) {
+                  historyMap.set(key, entry);
+              }
           }
       }
-      await matrixBatch.commit();
-      onProgress(50, "Estructura Base Cargada.");
-      onProgress(60, "Aplicando Reglas de Negocio...");
-      const reqLines = reqsCsv.split('\n');
-      const reqBatch = writeBatch(db);
-      let reqOps = 0;
-      let updatedCount = 0;
-      for (let i = 1; i < reqLines.length; i++) {
-           const line = reqLines[i].trim();
+
+      onProgress(30, "Construyendo Matriz y Generando Documentos Específicos...");
+      
+      const lines = rulesCsv.split('\n');
+      let batch = writeBatch(db); 
+      let ops = 0;
+      let createdCount = 0;
+      let historyMatchedCount = 0;
+      const BATCH_LIMIT = 400; 
+      
+      for (let i = 1; i < lines.length; i++) {
+           const line = lines[i].trim();
            if (!line) continue;
            const separator = line.includes(';') ? ';' : ',';
            const cols = line.split(separator);
+           
            if (cols.length < 6) continue;
-           const project = cols[0].trim();
-           const micro = cols[1].trim();
-           const asis = cols[2].trim() === '1';
-           const fce = cols[3].trim() === '1';
-           const pm = cols[4].trim() === '1';
-           const tobe = cols[5].trim() === '1';
-           const requiredTypes: DocType[] = [];
+           
+           // Rules Structure:
+           // 0: ID, 1: Macro, 2: Process, 3: Micro, 4: Analyst, 5: Project
+           // 6: AS IS, 7: FCE, 8: PM, 9: TO BE (Flags)
+
+           let project = cols[5]?.trim();
+           let macro = cols[1]?.trim() || 'Macroproceso General';
+           let process = cols[2]?.trim() || 'Proceso General';
+           let micro = cols[3]?.trim();
+           const responsableRaw = cols[4]?.trim();
+           let assignees = findUserIdsFromCSV(users, responsableRaw);
+           
+           let requiredTypes: DocType[] = [];
+           const asis = cols[6]?.trim() === '1';
+           const fce = cols[7]?.trim() === '1';
+           const pm = cols[8]?.trim() === '1';
+           const tobe = cols[9]?.trim() === '1';
+           
            if (asis) requiredTypes.push('AS IS');
            if (fce) requiredTypes.push('FCE');
            if (pm) requiredTypes.push('PM');
            if (tobe) requiredTypes.push('TO BE');
-           const id = generateMatrixId(project, micro);
-           const ref = doc(db, "process_matrix", id);
-           reqBatch.set(ref, { requiredTypes, active: true }, { merge: true });
-           reqOps++;
-           updatedCount++;
+
+           // Fallback logic for legacy format
+           const col5IsFlag = cols[5]?.trim() === '0' || cols[5]?.trim() === '1';
+           if (col5IsFlag) {
+                project = cols[0].trim();
+                macro = cols[1].trim();
+                process = cols[2].trim();
+                micro = cols[3].trim();
+                requiredTypes = [];
+                if (cols[5]?.trim() === '1') requiredTypes.push('AS IS');
+                if (cols[6]?.trim() === '1') requiredTypes.push('FCE');
+                if (cols[7]?.trim() === '1') requiredTypes.push('PM');
+                if (cols[8]?.trim() === '1') requiredTypes.push('TO BE');
+           }
+           
+           if (!project || !micro) continue;
+
+           // 1. Create Matrix Entry
+           const matrixId = generateMatrixId(project, micro);
+           const matrixRef = doc(db, "process_matrix", matrixId);
+           
+           batch.set(matrixRef, { 
+               project, macro, process, name: micro, 
+               assignees, requiredTypes, active: true 
+           });
+           ops++;
+
+           // 2. Create Specific Documents based on History OR Requirement
+           const lookupKey = `${normalizeHeader(project)}|${normalizeHeader(micro)}`;
+           const historyRecord = historyMap.get(lookupKey);
+           
+           // Determine which types to create:
+           // Union of Required Types AND Types present in history
+           const typesToCreate = new Set<DocType>(requiredTypes);
+           if (historyRecord) {
+               Object.keys(historyRecord).forEach(k => typesToCreate.add(k as DocType));
+               historyMatchedCount++; // Just counting hit on the row
+           }
+
+           for (const type of typesToCreate) {
+                const histData = historyRecord ? historyRecord[type] : null;
+                
+                // If not required and no history, skip (unless we want to be safe, but usually skip)
+                // Actually, if it is in typesToCreate it is either required or has history.
+                
+                const version = histData ? histData.version : '0.0';
+                const date = histData ? histData.date : new Date().toISOString();
+                const state = histData ? histData.state : DocState.INITIATED;
+                const progress = histData ? histData.progress : 10;
+                
+                const newDocRef = doc(collection(db, "documents"));
+                const docData: Omit<Document, 'id'> = {
+                    title: `${micro} - ${type}`, // Specific Name
+                    description: histData ? `Migrado desde Histórico (${version})` : 'Documento Inicializado por Regla',
+                    authorId: assignees[0] || 'admin',
+                    authorName: 'Sistema',
+                    assignedTo: assignees[0] || 'admin',
+                    assignees: assignees.length > 0 ? assignees : ['admin'],
+                    state: state,
+                    version: version,
+                    progress: progress,
+                    hasPendingRequest: false,
+                    files: [], 
+                    createdAt: date, 
+                    updatedAt: date,
+                    project, macroprocess: macro, process, microprocess: micro, 
+                    docType: type // EXPLICIT TYPE
+                };
+                
+                batch.set(newDocRef, JSON.parse(JSON.stringify(docData)));
+                ops++;
+                createdCount++;
+           }
+
+           if (ops >= BATCH_LIMIT) {
+               await batch.commit();
+               batch = writeBatch(db);
+               ops = 0;
+           }
       }
-      await reqBatch.commit();
-      onProgress(90, "Reglas Aplicadas.");
-      return { legacy: { imported: matrixOps }, requirements: { updated: updatedCount, created: 0 }, errors: [] };
+      if (ops > 0) await batch.commit();
+      
+      onProgress(100, "Carga Completa.");
+      return { created: createdCount, historyMatched: historyMatchedCount, errors: [] };
   }
 };

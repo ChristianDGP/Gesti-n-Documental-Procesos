@@ -3,7 +3,6 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   COORDINATOR = 'COORDINATOR',
   ANALYST = 'ANALYST',
-  USER = 'USER', // <-- AGREGAMOS ESTE ROL BASE FALTANTE
 }
 
 export interface User {

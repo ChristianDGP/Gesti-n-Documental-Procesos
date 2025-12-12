@@ -5,7 +5,6 @@ import { User, FullHierarchy, ProcessNode, DocType } from '../types';
 import { 
   FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2
 } from 'lucide-react';
-import { Link as RouterLink } from 'react-router-dom';
 
 interface Props {
   user: User; // Admin User
@@ -258,13 +257,6 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                     {seeding ? 'Restaurando...' : 'Cargar Datos por Defecto'}
                 </button>
              )}
-             <RouterLink 
-                to="/admin/hierarchy"
-                className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors shadow-sm font-medium whitespace-nowrap"
-            >
-                <FolderTree size={18} className="mr-2" />
-                Gestionar Estructura (Árbol)
-            </RouterLink>
         </div>
       </div>
 
