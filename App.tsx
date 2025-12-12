@@ -8,8 +8,10 @@ import CreateDocument from './views/CreateDocument';
 import DocumentDetail from './views/DocumentDetail';
 import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
+import AdminHierarchy from './views/AdminHierarchy'; // New Import
 import AdminDatabase from './views/AdminDatabase';
 import Buffer from './views/Buffer';
+import WorkList from './views/WorkList';
 import Profile from './views/Profile';
 import { UserRole } from './types'; 
 import { logoutUser } from './services/firebaseAuthService'; 
@@ -44,6 +46,7 @@ const App: React.FC = () => {
                                     <Route path="/" element={<Dashboard user={user} />} />
                                     
                                     <Route path="/inbox" element={<Buffer user={user} />} />
+                                    <Route path="/worklist" element={<WorkList user={user} />} />
                                     <Route path="/new" element={<CreateDocument user={user} />} />
                                     <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
                                     
@@ -57,6 +60,10 @@ const App: React.FC = () => {
                                     <Route 
                                         path="/admin/assignments" 
                                         element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminAssignments user={user} /> : <Navigate to="/" />} 
+                                    />
+                                    <Route 
+                                        path="/admin/hierarchy" 
+                                        element={user.role === UserRole.ADMIN ? <AdminHierarchy /> : <Navigate to="/" />} 
                                     />
                                     <Route 
                                         path="/admin/database" 

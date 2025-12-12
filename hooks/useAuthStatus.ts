@@ -58,12 +58,14 @@ export const useAuthStatus = () => {
                             const migratedUser: User = {
                                 ...existingProfile,
                                 id: firebaseUser.uid, // Actualizamos ID
-                                avatar: firebaseUser.photoURL || existingProfile.avatar, // Preferir foto de Google si existe
+                                avatar: firebaseUser.photoURL || existingProfile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(existingProfile.name || 'User')}`, // Fallback robusto
                                 role: shouldBeAdmin ? UserRole.ADMIN : existingProfile.role // Enforce admin check
                             };
                             
                             // A. Crear nuevo usuario con ID de Google
-                            await setDoc(userRef, migratedUser);
+                            // IMPORTANTE: Sanitizar undefined (Firestore no lo soporta)
+                            const safeUser = JSON.parse(JSON.stringify(migratedUser));
+                            await setDoc(userRef, safeUser);
                             
                             // B. Ejecutar migración profunda de referencias (Documentos, Matrices, Configs)
                             await UserService.migrateLegacyReferences(existingProfile.id, firebaseUser.uid);
@@ -84,7 +86,9 @@ export const useAuthStatus = () => {
                                 organization: shouldBeAdmin ? 'Administración Sistema' : 'Sin Asignar' 
                             };
 
-                            await setDoc(userRef, newUser);
+                            // IMPORTANTE: Sanitizar undefined
+                            const safeNewUser = JSON.parse(JSON.stringify(newUser));
+                            await setDoc(userRef, safeNewUser);
                             setUser(newUser);
                         }
                     }

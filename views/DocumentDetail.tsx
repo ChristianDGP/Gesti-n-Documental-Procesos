@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService } from '../services/fireba
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2, MousePointerClick } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2, MousePointerClick, Lock } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -29,6 +29,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'APPROVE' | 'REJECT' | null>(null);
   const [approvalType, setApprovalType] = useState<ApprovalContext | ''>(''); 
+  
+  // Delete Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Validation State for Modal
   const [validationFile, setValidationFile] = useState<File | null>(null);
@@ -66,14 +69,21 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     setLoading(false);
   };
 
-  const handleDelete = async () => {
+  const handleDeleteClick = () => {
+      setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
       if (!doc) return;
-      if (!window.confirm('¿Estás seguro de que quieres eliminar este documento permanentemente? Esta acción no se puede deshacer.')) return;
       try {
+          setShowDeleteModal(false);
+          setLoading(true); // Bloquear UI
           await DocumentService.delete(doc.id);
-          navigate('/');
+          navigate('/', { replace: true });
       } catch (e: any) {
-          alert(e.message);
+          console.error("Error eliminando documento:", e);
+          alert('Error al eliminar: ' + e.message);
+          setLoading(false);
       }
   };
 
@@ -251,58 +261,58 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAuthor = doc.authorId === user.id;
   
   // Helpers for Action Buttons Logic
-  const hasWriteAccess = (user.role === UserRole.ANALYST && (isAssignee || isAuthor)) || user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
-  const canUpload = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
+  // *** CRITICAL PERMISSION CHECK ***
+  const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
+  const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+  
+  // Can Edit? (Visible Action Buttons)
+  const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
+
+  const canUpload = isAnalystAssigned && (doc.state === DocState.INITIATED || doc.state === DocState.IN_PROCESS || doc.state === DocState.REJECTED);
   
   // --- STRICT VERSION CHECK FOR APPROVAL REQUEST ---
   const isValidApprovalVersion = (v: string): boolean => {
-      // Regla 1: "v0.n" donde n es impar
+      if (!v) return false;
+      
       const matchInternal = v.match(/^v0\.(\d+)$/);
       if (matchInternal) {
-          const n = parseInt(matchInternal[1]);
-          return n % 2 !== 0; // n es impar
+          const n = parseInt(matchInternal[1], 10);
+          return n % 2 !== 0; 
       }
-
-      // Regla 2 y 3: "v1.n.i" o "v1.n.iAR" donde n es impar Y i es impar
-      // Se asume que i es el ultimo numero tras el punto
       const matchAdvanced = v.match(/^v1\.(\d+)\.(\d+)(AR)?$/);
       if (matchAdvanced) {
-          const n = parseInt(matchAdvanced[1]);
-          const i = parseInt(matchAdvanced[2]);
-          return (n % 2 !== 0) && (i % 2 !== 0); // n e i son impares
+          const n = parseInt(matchAdvanced[1], 10);
+          const i = parseInt(matchAdvanced[2], 10);
+          return (n % 2 !== 0) && (i % 2 !== 0);
       }
-
       return false;
   };
 
   const isVersionValidForRequest = isValidApprovalVersion(doc.version);
 
-  const canRequestApproval = user.role === UserRole.ANALYST && 
-                             (isAssignee || isAuthor) && 
-                             !doc.hasPendingRequest && // <--- REQUISITO CRÍTICO: No debe haber solicitud vigente
+  const canRequestApproval = isAnalystAssigned && 
+                             !doc.hasPendingRequest && 
                              isVersionValidForRequest;
 
-  const canRestart = user.role === UserRole.ANALYST && (isAssignee || isAuthor) && doc.state === DocState.REJECTED;
-  
-  const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+  const canRestart = isAnalystAssigned && doc.state === DocState.REJECTED;
   const isDocActive = doc.state !== DocState.APPROVED;
 
-  // MODIFICACIÓN: La aprobación y rechazo es EXCLUSIVA de Coordinadores y Admins
   const canApprove = isCoordinatorOrAdmin && isDocActive;
   const canReject = isCoordinatorOrAdmin && isDocActive;
 
-  const canNotifyCoordinator = user.role === UserRole.ANALYST && coordinatorEmail && doc.state !== DocState.APPROVED;
+  const canNotifyCoordinator = isAnalystAssigned && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <div className="flex justify-between items-center">
-        <button onClick={() => navigate('/')} className="flex items-center text-slate-500 hover:text-slate-800 text-sm">
-            <ArrowLeft size={16} className="mr-1" /> Volver al Dashboard
+        <button onClick={() => navigate(-1)} className="flex items-center text-slate-500 hover:text-slate-800 text-sm">
+            <ArrowLeft size={16} className="mr-1" /> Volver
         </button>
         {user.role === UserRole.ADMIN && (
             <button 
-                onClick={handleDelete}
+                type="button"
+                onClick={handleDeleteClick}
                 className="flex items-center text-red-500 hover:text-red-700 text-sm font-medium px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
             >
                 <Trash2 size={16} className="mr-1" /> Eliminar Documento
@@ -338,6 +348,23 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
+            
+            {/* Permission Warning */}
+            {!canEdit && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <Lock size={20} className="text-yellow-400" />
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-sm text-yellow-700">
+                                Estás viendo este documento en modo <strong>solo lectura</strong> porque no estás asignado a él.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Archivos Adjuntos */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 className="font-semibold text-slate-800 mb-4 flex items-center"><Paperclip size={18} className="mr-2 text-indigo-500" /> Archivos Adjuntos</h3>
@@ -362,25 +389,30 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             </div>
 
             {/* Acciones */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                 <h3 className="font-semibold text-slate-800 mb-4">Acciones de Flujo</h3>
-                 <textarea 
-                    className="w-full p-3 border border-slate-300 rounded-lg text-sm mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
-                    rows={3}
-                    placeholder="Escriba aquí sus observaciones o comentarios..."
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                 />
-                 <div className="flex flex-wrap gap-3">
-                    {hasWriteAccess && <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium shadow-sm transition-colors"><MessageSquare size={16} className="mr-2" /> Guardar Observación</button>}
-                    {canNotifyCoordinator && <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Coord.</button>}
-                    {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
-                    {canRequestApproval && <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><Send size={16} className="mr-2" /> Solicitar Aprobación</button>}
-                    {canRestart && <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">Reiniciar Flujo</button>}
-                    {canApprove && <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><CheckCircle size={16} className="mr-2" /> Aprobar</button>}
-                    {canReject && <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium border border-red-200"><XCircle size={16} className="mr-2" /> Rechazar</button>}
-                 </div>
-            </div>
+            {canEdit && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                     <h3 className="font-semibold text-slate-800 mb-4">Acciones de Flujo</h3>
+                     <textarea 
+                        className="w-full p-3 border border-slate-300 rounded-lg text-sm mb-4 outline-none focus:ring-2 focus:ring-indigo-500"
+                        rows={3}
+                        placeholder="Escriba aquí sus observaciones o comentarios..."
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                     />
+                     <div className="flex flex-wrap gap-3">
+                        <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium shadow-sm transition-colors"><MessageSquare size={16} className="mr-2" /> Guardar Observación</button>
+                        
+                        {canNotifyCoordinator && <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Coord.</button>}
+                        {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
+                        
+                        {canRequestApproval && <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><Send size={16} className="mr-2" /> Solicitar Aprobación</button>}
+                        {canRestart && <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">Reiniciar Flujo</button>}
+                        
+                        {canApprove && <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><CheckCircle size={16} className="mr-2" /> Aprobar</button>}
+                        {canReject && <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium border border-red-200"><XCircle size={16} className="mr-2" /> Rechazar</button>}
+                     </div>
+                </div>
+            )}
         </div>
 
         {/* Historial (Right Column) */}
@@ -399,7 +431,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         </div>
       </div>
 
-      {/* MODAL DE RESPUESTA (APROBAR/RECHAZAR) */}
+      {/* MODAL DE RESPUESTA */}
       {showResponseModal && pendingAction && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
@@ -501,6 +533,47 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               </div>
           </div>
       )}
+
+      {/* MODAL ELIMINAR */}
+      {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-slideUp">
+                  <div className="p-5 border-b border-red-100 bg-red-50 flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
+                          <Trash2 size={24} /> Confirmar Eliminación
+                      </h3>
+                      <button onClick={() => setShowDeleteModal(false)} className="text-red-400 hover:text-red-600"><XCircle size={20} /></button>
+                  </div>
+                  <div className="p-6">
+                      <p className="text-slate-700 mb-2">
+                          ¿Estás seguro de que quieres eliminar permanentemente el documento:
+                      </p>
+                      <p className="font-bold text-slate-900 bg-slate-100 p-2 rounded border border-slate-200 mb-4 break-words">
+                          {doc.title}
+                      </p>
+                      <div className="flex items-start gap-2 bg-red-50 p-3 rounded-lg border border-red-100 mb-6">
+                          <AlertTriangle size={20} className="text-red-600 flex-shrink-0" />
+                          <p className="text-xs text-red-700 font-medium">Esta acción no se puede deshacer y se perderá todo el historial asociado.</p>
+                      </div>
+                      <div className="flex justify-end gap-3">
+                          <button 
+                              onClick={() => setShowDeleteModal(false)}
+                              className="px-4 py-2 text-slate-600 hover:text-slate-800 text-sm font-medium"
+                          >
+                              Cancelar
+                          </button>
+                          <button 
+                              onClick={confirmDelete}
+                              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-bold shadow-sm flex items-center gap-2"
+                          >
+                              <Trash2 size={16} /> Sí, Eliminar
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

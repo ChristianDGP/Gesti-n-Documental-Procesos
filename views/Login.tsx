@@ -24,8 +24,6 @@ const Login: React.FC = () => {
                 if (!name) throw new Error("El nombre es obligatorio para registrarse.");
                 await registerUser(email, password, name);
                 // El hook useAuthStatus detectará el nuevo usuario y creará el perfil en DB
-                // No navegamos manualmente aquí para permitir que el hook termine su proceso si es necesario, 
-                // pero Firebase Auth actualiza el estado rápidamente.
                 navigate('/');
             } else {
                 await loginUser(email, password); 
@@ -34,12 +32,22 @@ const Login: React.FC = () => {
         } catch (err: any) {
             console.error(err);
             let mensajeError = 'Error de autenticación.';
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+            const errorCode = err.code;
+            const errorMessage = err.message || '';
+
+            // Manejo actualizado para el error de credenciales unificado de Firebase
+            if (errorCode === 'auth/invalid-credential' || errorMessage.includes('invalid-credential')) {
+                mensajeError = isRegistering 
+                    ? 'Error al crear cuenta. Intente con otro correo.'
+                    : 'Correo no registrado o contraseña incorrecta. Si es nuevo, seleccione "Crear Cuenta".';
+            } else if (errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
                 mensajeError = 'Usuario o contraseña incorrectos.';
-            } else if (err.code === 'auth/email-already-in-use') {
-                mensajeError = 'Este correo electrónico ya está registrado.';
-            } else if (err.code === 'auth/weak-password') {
+            } else if (errorCode === 'auth/email-already-in-use') {
+                mensajeError = 'Este correo electrónico ya está registrado. Intente iniciar sesión.';
+            } else if (errorCode === 'auth/weak-password') {
                 mensajeError = 'La contraseña debe tener al menos 6 caracteres.';
+            } else if (errorCode === 'auth/too-many-requests') {
+                mensajeError = 'Demasiados intentos fallidos. Intente más tarde.';
             } else if (err.message) {
                 mensajeError = err.message;
             }
@@ -57,7 +65,11 @@ const Login: React.FC = () => {
             navigate('/');
         } catch (err: any) {
             console.error(err);
-            setError("Error al iniciar sesión con Google.");
+            if (err.code === 'auth/popup-closed-by-user') {
+                setError("Inicio de sesión cancelado.");
+            } else {
+                setError("Error al iniciar sesión con Google.");
+            }
             setLoading(false);
         }
     };
@@ -143,7 +155,7 @@ const Login: React.FC = () => {
                     </div>
                     
                     {error && (
-                        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
+                        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 animate-fadeIn">
                             <AlertCircle size={16} className="flex-shrink-0" />
                             <span>{error}</span>
                         </div>

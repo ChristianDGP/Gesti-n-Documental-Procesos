@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { HierarchyService, UserService } from '../services/firebaseBackend';
-import { User, UserRole, FullHierarchy, ProcessNode, DocType } from '../types';
+import { HierarchyService, UserService, NotificationService } from '../services/firebaseBackend';
+import { User, FullHierarchy, ProcessNode, DocType } from '../types';
 import { 
-  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Trash2, FileText, CheckSquare, Square, Save, Layers, Filter
+  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2
 } from 'lucide-react';
+import { Link as RouterLink } from 'react-router-dom';
 
 interface Props {
   user: User; // Admin User
@@ -14,12 +15,17 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [hierarchy, setHierarchy] = useState<FullHierarchy>({});
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
   
+  // State for deletion
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
   // Filters State
   const [filterProject, setFilterProject] = useState('');
   const [filterMacro, setFilterMacro] = useState('');
   const [filterProcess, setFilterProcess] = useState('');
-  const [filterMicro, setFilterMicro] = useState(''); // Text Search
+  const [filterMicro, setFilterMicro] = useState(''); 
   const [filterAnalyst, setFilterAnalyst] = useState('');
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({ 'HPC': true, 'HSR': true });
@@ -31,43 +37,84 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [modalProcess, setModalProcess] = useState('');
   const [modalMicro, setModalMicro] = useState('');
   const [currentAssignees, setCurrentAssignees] = useState<string[]>([]);
+  const [originalAssignees, setOriginalAssignees] = useState<string[]>([]);
   const [matrixKeyToUpdate, setMatrixKeyToUpdate] = useState<string | null>(null);
-
-  // Create Microprocess Modal State
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newProject, setNewProject] = useState('');
-  const [newMacro, setNewMacro] = useState('');
-  const [newProcess, setNewProcess] = useState('');
-  const [newMicroName, setNewMicroName] = useState('');
-  const [newAssignees, setNewAssignees] = useState<string[]>([]);
-  const [newRequiredTypes, setNewRequiredTypes] = useState<DocType[]>(['AS IS', 'FCE', 'PM', 'TO BE']); // Default all checked
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
-    const [h, u] = await Promise.all([
-      HierarchyService.getFullHierarchy(),
-      UserService.getAll()
-    ]);
-    setHierarchy(h);
-    setAllUsers(u.filter(usr => usr.role === UserRole.ANALYST));
-    setLoading(false);
+  const loadData = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+    try {
+        const [h, u] = await Promise.all([
+          HierarchyService.getFullHierarchy(),
+          UserService.getAll()
+        ]);
+        setHierarchy(h);
+        setAllUsers(u);
+    } catch (e) {
+        console.error("Error loading assignments data:", e);
+    } finally {
+        if (showLoader) setLoading(false);
+    }
+  };
+
+  const handleSeedDefaults = async () => {
+      if (!window.confirm("¿Restaurar configuración de procesos por defecto?\nEsto agregará los microprocesos base si la base de datos está vacía.")) return;
+      setSeeding(true);
+      try {
+          await HierarchyService.seedDefaults();
+          await loadData();
+          alert("Datos restaurados correctamente.");
+      } catch (e: any) {
+          alert("Error: " + e.message);
+      } finally {
+          setSeeding(false);
+      }
   };
 
   const toggleProject = (proj: string) => {
     setExpandedProjects(prev => ({ ...prev, [proj]: !prev[proj] }));
   };
 
-  const handleDelete = async (project: string, micro: string) => {
-      if(!window.confirm(`¿Estás seguro de que deseas eliminar el microproceso "${micro}" de la matriz?\nEsta acción es irreversible en esta vista.`)) return;
+  // --- DELETE HANDLER (Matching Production Message) ---
+  const handleDelete = async (project: string, macro: string, process: string, id: string, microName: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const cleanId = id?.trim();
+      if (!cleanId) return;
+
+      // MENSAJE EXACTO DE LA CAPTURA DE PANTALLA
+      const confirmMsg = `¿Estás seguro de que deseas eliminar el microproceso "${microName}" de la matriz?\nEsta acción es irreversible en esta vista.`;
+
+      if(!window.confirm(confirmMsg)) return;
+      
+      // 1. Ocultar inmediatamente (Visual)
+      setHiddenIds(prev => new Set(prev).add(cleanId));
+      setDeletingIds(prev => new Set(prev).add(cleanId)); 
+      
+      // 2. ELIMINAR DEL ESTADO LOCAL
+      setHierarchy(prev => {
+          const next = { ...prev };
+          if (next[project] && next[project][macro] && next[project][macro][process]) {
+              next[project][macro][process] = next[project][macro][process].filter(node => node.docId !== cleanId);
+          }
+          return next;
+      });
+
       try {
-          await HierarchyService.deleteMicroprocess(project, micro);
-          await loadData();
+          await HierarchyService.deleteMicroprocess(cleanId);
       } catch (e: any) {
-          alert(e.message);
+          console.error("Error API:", e);
+          alert("Error en el servidor, pero se ha ocultado localmente: " + e.message);
+      } finally {
+          setDeletingIds(prev => {
+              const next = new Set(prev);
+              next.delete(cleanId);
+              return next;
+          });
       }
   };
 
@@ -80,7 +127,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       setModalProcess(proc);
       setModalMicro(microObj.name);
       setMatrixKeyToUpdate(microObj.docId);
-      setCurrentAssignees([...microObj.assignees]); // Copy
+      const existing = [...(microObj.assignees || [])];
+      setCurrentAssignees(existing);
+      setOriginalAssignees(existing);
       setShowEditModal(true);
   };
 
@@ -101,8 +150,23 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
       try {
           await HierarchyService.updateMatrixAssignment(matrixKeyToUpdate, currentAssignees, user.id);
+          
+          const addedAssignees = currentAssignees.filter(id => !originalAssignees.includes(id));
+          if (addedAssignees.length > 0) {
+              await Promise.all(addedAssignees.map(async (targetId) => {
+                  await NotificationService.create(
+                      targetId,
+                      matrixKeyToUpdate!,
+                      'ASSIGNMENT',
+                      'Nueva Asignación de Proceso',
+                      `Se le ha asignado el proceso: ${modalMicro} (${modalProject})`,
+                      user.name
+                  );
+              }));
+          }
+
           setShowEditModal(false);
-          await loadData();
+          await loadData(false); 
       } catch (err: any) {
           alert(err.message);
       }
@@ -110,90 +174,8 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
   const handleToggleRequiredType = async (matrixKey: string, type: DocType) => {
       await HierarchyService.toggleRequiredType(matrixKey, type);
-      await loadData();
+      await loadData(false);
   };
-
-  // --- Handlers for CREATE Modal ---
-  const resetCreateForm = () => {
-      setNewProject('');
-      setNewMacro('');
-      setNewProcess('');
-      setNewMicroName('');
-      setNewAssignees([]);
-      setNewRequiredTypes(['AS IS', 'FCE', 'PM', 'TO BE']);
-  };
-
-  const handleOpenCreateModal = () => {
-      resetCreateForm();
-      setShowCreateModal(true);
-  };
-
-  const handleAddNewAssignee = (userId: string) => {
-      if (!userId || newAssignees.includes(userId)) return;
-      setNewAssignees([...newAssignees, userId]);
-  };
-
-  const handleRemoveNewAssignee = (userId: string) => {
-      setNewAssignees(newAssignees.filter(id => id !== userId));
-  };
-
-  const handleToggleNewType = (type: DocType) => {
-      if (newRequiredTypes.includes(type)) {
-          setNewRequiredTypes(newRequiredTypes.filter(t => t !== type));
-      } else {
-          setNewRequiredTypes([...newRequiredTypes, type]);
-      }
-  };
-
-  const notifyAssignees = (assigneesIds: string[], project: string, micro: string) => {
-      if (assigneesIds.length === 0) return;
-      
-      const emails = assigneesIds
-          .map(id => allUsers.find(u => u.id === id)?.email)
-          .filter(email => !!email)
-          .join(',');
-
-      if (!emails) return;
-
-      const subject = encodeURIComponent(`Nueva Asignación SGD: ${project} - ${micro}`);
-      const body = encodeURIComponent(
-          `Estimado(a),\n\nSe le ha asignado el microproceso "${micro}" del proyecto ${project} en la plataforma de Gestión Documental.\n\nPor favor, ingrese al sistema para iniciar la carga de documentos (Estado Iniciado 0.0).\n\nAtentamente,\nAdministración SGD`
-      );
-
-      if (window.confirm("¿Desea notificar a los analistas asignados por correo electrónico ahora?")) {
-          window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${emails}&su=${subject}&body=${body}`, '_blank');
-      }
-  };
-
-  const handleSubmitCreate = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!newProject || !newMacro || !newProcess || !newMicroName) {
-          alert('Todos los campos de jerarquía y nombre son obligatorios.');
-          return;
-      }
-      try {
-          await HierarchyService.addMicroprocess(
-              newProject, newMacro, newProcess, newMicroName, newAssignees, newRequiredTypes
-          );
-          
-          // Trigger notification flow
-          if (newAssignees.length > 0) {
-              notifyAssignees(newAssignees, newProject, newMicroName);
-          }
-
-          setShowCreateModal(false);
-          resetCreateForm();
-          await loadData();
-          // Ensure the project is expanded to show the new node
-          setExpandedProjects(prev => ({ ...prev, [newProject]: true }));
-      } catch (err: any) {
-          alert(err.message);
-      }
-  };
-
-  // Helper getters for Create Modal Cascading
-  const getCreateMacros = () => newProject && hierarchy[newProject] ? Object.keys(hierarchy[newProject]) : [];
-  const getCreateProcesses = () => newProject && newMacro && hierarchy[newProject]?.[newMacro] ? Object.keys(hierarchy[newProject][newMacro]) : [];
 
   // --- Filters Helpers ---
   const getAvailableMacros = () => {
@@ -238,12 +220,14 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
               const nodes = macros[macro][proc];
               nodes.forEach(node => {
-                  // Text Search for Microprocess
-                  if (filterMicro && !node.name.toLowerCase().includes(filterMicro.toLowerCase())) return;
+                  if (hiddenIds.has(node.docId)) return; // Skip deleted locally
                   
-                  // Analyst Filter
-                  if (filterAnalyst && !node.assignees.includes(filterAnalyst)) return;
+                  // IMPORTANT: Filter out inactive nodes (Soft Deleted in Hierarchy)
+                  // This ensures consistency between views.
+                  if (node.active === false) return; 
 
+                  if (filterMicro && !node.name.toLowerCase().includes(filterMicro.toLowerCase())) return;
+                  if (filterAnalyst && (!node.assignees || !node.assignees.includes(filterAnalyst))) return;
                   rows.push({ macro, proc, node });
               });
           });
@@ -254,22 +238,33 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando matriz de procesos...</div>;
 
   const hasActiveFilters = filterProject || filterMacro || filterProcess || filterMicro || filterAnalyst;
+  const isHierarchyEmpty = Object.keys(hierarchy).length === 0;
 
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Matriz de Asignaciones</h1>
-          <p className="text-slate-500">Gestione los responsables y defina los documentos requeridos.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Gestor de Asignaciones</h1>
+          <p className="text-slate-500">Asigne analistas responsables y defina documentos requeridos.</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-             <button 
-                onClick={handleOpenCreateModal}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium whitespace-nowrap"
+             {isHierarchyEmpty && (
+                 <button 
+                    onClick={handleSeedDefaults}
+                    disabled={seeding}
+                    className="flex items-center px-4 py-2 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg hover:bg-yellow-100 transition-colors shadow-sm font-medium whitespace-nowrap"
+                >
+                    <RefreshCw size={18} className={`mr-2 ${seeding ? 'animate-spin' : ''}`} />
+                    {seeding ? 'Restaurando...' : 'Cargar Datos por Defecto'}
+                </button>
+             )}
+             <RouterLink 
+                to="/admin/hierarchy"
+                className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors shadow-sm font-medium whitespace-nowrap"
             >
-                <Plus size={18} className="mr-2" />
-                Nuevo Microproceso
-            </button>
+                <FolderTree size={18} className="mr-2" />
+                Gestionar Estructura (Árbol)
+            </RouterLink>
         </div>
       </div>
 
@@ -334,6 +329,21 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
               </select>
           </div>
       </div>
+      
+      {isHierarchyEmpty && (
+          <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center">
+              <Layers size={48} className="mx-auto text-slate-300 mb-3" />
+              <h3 className="text-lg font-bold text-slate-700">La Matriz de Procesos está vacía</h3>
+              <p className="text-slate-500 mb-4">No se han definido procesos ni asignaciones aún.</p>
+              <button 
+                onClick={handleSeedDefaults}
+                disabled={seeding}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+              >
+                  Cargar Datos por Defecto
+              </button>
+          </div>
+      )}
 
       <div className="space-y-4">
         {Object.keys(hierarchy).map(projectKey => {
@@ -390,7 +400,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                                             <td className="px-4 py-3 align-top">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     {['AS IS', 'FCE', 'PM', 'TO BE'].map((type) => {
-                                                        const isChecked = row.node.requiredTypes.includes(type as DocType);
+                                                        const isChecked = row.node.requiredTypes && row.node.requiredTypes.includes(type as DocType);
                                                         return (
                                                             <button 
                                                                 key={type}
@@ -412,24 +422,33 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
                                             {/* Analistas */}
                                             <td className="px-4 py-3 align-top">
-                                                <div className="flex -space-x-2 overflow-hidden py-1">
-                                                    {row.node.assignees.length > 0 ? row.node.assignees.map((aid: string) => {
-                                                        const u = allUsers.find(user => user.id === aid);
-                                                        return u ? (
-                                                            <img 
-                                                                key={u.id} 
-                                                                src={u.avatar} 
-                                                                className="inline-block h-6 w-6 rounded-full ring-2 ring-white" 
-                                                                title={u.name}
-                                                            />
-                                                        ) : null;
-                                                    }) : (
-                                                        <span className="text-xs text-red-400 italic py-1">Sin asignar</span>
-                                                    )}
-                                                </div>
-                                                <div className="text-xs text-slate-500 mt-1 truncate">
-                                                     {row.node.assignees.map((aid: string) => allUsers.find(u => u.id === aid)?.name).join(', ')}
-                                                </div>
+                                                {(row.node.assignees && row.node.assignees.length > 0) ? (
+                                                    <>
+                                                        <div className="flex -space-x-2 overflow-hidden py-1">
+                                                            {row.node.assignees.map((aid: string) => {
+                                                                const u = allUsers.find(user => user.id === aid);
+                                                                if (!u) {
+                                                                    return (
+                                                                         <div key={aid} className="inline-flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white bg-slate-200 text-[10px] text-slate-500 font-bold cursor-help" title={`Usuario ID: ${aid} no encontrado`}>?</div>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <div key={u.id} className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-indigo-100 overflow-hidden" title={u.name}>
+                                                                        {u.avatar ? <img src={u.avatar} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-indigo-700">{u.name.charAt(0)}</span>}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mt-1 truncate">
+                                                             {row.node.assignees.map((aid: string) => {
+                                                                 const u = allUsers.find(user => user.id === aid);
+                                                                 return u ? u.name : 'Desconocido';
+                                                             }).join(', ')}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-xs text-red-400 italic py-1 block">Sin asignar</span>
+                                                )}
                                             </td>
 
                                             {/* Acciones */}
@@ -440,14 +459,20 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                                                         className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors"
                                                         title="Editar Asignación"
                                                     >
-                                                        <Edit size={16} />
+                                                        <Users size={16} />
                                                     </button>
+                                                    {/* Botón de Eliminar Restaurado */}
                                                     <button 
-                                                        onClick={() => handleDelete(projectKey, row.node.name)}
+                                                        onClick={(e) => handleDelete(projectKey, row.macro, row.proc, row.node.docId, row.node.name, e)}
                                                         className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors"
                                                         title="Eliminar Microproceso"
+                                                        disabled={deletingIds.has(row.node.docId?.trim())}
                                                     >
-                                                        <Trash2 size={16} />
+                                                        {deletingIds.has(row.node.docId?.trim()) ? (
+                                                            <Loader2 size={16} className="animate-spin text-red-600" />
+                                                        ) : (
+                                                            <Trash2 size={16} />
+                                                        )}
                                                     </button>
                                                 </div>
                                             </td>
@@ -492,17 +517,17 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                                 ) : (
                                     currentAssignees.map(aid => {
                                         const u = allUsers.find(user => user.id === aid);
-                                        return u ? (
+                                        return (
                                             <div key={aid} className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100">
                                                 <div className="flex items-center gap-2">
-                                                    <img src={u.avatar} className="w-6 h-6 rounded-full" />
-                                                    <span className="text-sm font-medium text-slate-700">{u.name}</span>
+                                                    {u && (u.avatar ? <img src={u.avatar} className="w-6 h-6 rounded-full" /> : <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs text-indigo-700 font-bold">{u.name.charAt(0)}</div>)}
+                                                    <span className="text-sm font-medium text-slate-700">{u ? u.name : `Usuario Eliminado (${aid})`}</span>
                                                 </div>
                                                 <button type="button" onClick={() => handleRemoveAssignee(aid)} className="text-red-400 hover:text-red-600">
                                                     <X size={16} />
                                                 </button>
                                             </div>
-                                        ) : null;
+                                        );
                                     })
                                 )}
                             </div>
@@ -538,146 +563,6 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm"
                         >
                             Guardar Cambios
-                        </button>
-                    </div>
-                </form>
-            </div>
-          </div>
-      )}
-
-      {/* MODAL 2: CREATE MICROPROCESS */}
-      {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center flex-shrink-0">
-                    <div>
-                        <h3 className="text-lg font-bold text-slate-800">Crear Nuevo Microproceso</h3>
-                        <p className="text-xs text-slate-500">Agregue un nuevo nodo a la jerarquía existente.</p>
-                    </div>
-                    <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
-                </div>
-                
-                <form onSubmit={handleSubmitCreate} className="p-6 overflow-y-auto">
-                    <div className="space-y-6">
-                        {/* 1. Hierarchy Selection */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Proyecto</label>
-                                <select 
-                                    value={newProject} 
-                                    onChange={(e) => { setNewProject(e.target.value); setNewMacro(''); setNewProcess(''); }}
-                                    className="w-full p-2 border border-slate-300 rounded-lg text-sm"
-                                    required
-                                >
-                                    <option value="">Seleccionar...</option>
-                                    {Object.keys(hierarchy).map(p => <option key={p} value={p}>{p}</option>)}
-                                </select>
-                            </div>
-                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Macroproceso</label>
-                                <select 
-                                    value={newMacro} 
-                                    onChange={(e) => { setNewMacro(e.target.value); setNewProcess(''); }}
-                                    className="w-full p-2 border border-slate-300 rounded-lg text-sm disabled:bg-slate-100"
-                                    disabled={!newProject}
-                                    required
-                                >
-                                    <option value="">Seleccionar...</option>
-                                    {getCreateMacros().map((m: string) => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                            </div>
-                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Proceso</label>
-                                <select 
-                                    value={newProcess} 
-                                    onChange={(e) => setNewProcess(e.target.value)}
-                                    className="w-full p-2 border border-slate-300 rounded-lg text-sm disabled:bg-slate-100"
-                                    disabled={!newMacro}
-                                    required
-                                >
-                                    <option value="">Seleccionar...</option>
-                                    {getCreateProcesses().map((p: string) => <option key={p} value={p}>{p}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* 2. Definition */}
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Microproceso</label>
-                            <input 
-                                type="text"
-                                value={newMicroName}
-                                onChange={(e) => setNewMicroName(e.target.value)}
-                                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                placeholder="Ej: Gestión de Nuevos Ingresos"
-                                required
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* 3. Assignees */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Asignar Analistas</label>
-                                <select 
-                                    className="w-full p-2 border border-slate-300 rounded-lg text-sm mb-2"
-                                    onChange={(e) => handleAddNewAssignee(e.target.value)}
-                                    value=""
-                                >
-                                    <option value="">+ Agregar analista</option>
-                                    {allUsers
-                                        .filter(u => !newAssignees.includes(u.id))
-                                        .map(u => (
-                                            <option key={u.id} value={u.id}>{u.name}</option>
-                                    ))}
-                                </select>
-                                <div className="space-y-1 max-h-32 overflow-y-auto">
-                                    {newAssignees.map(aid => {
-                                        const u = allUsers.find(user => user.id === aid);
-                                        return u ? (
-                                            <div key={aid} className="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-100 text-xs">
-                                                <span>{u.name}</span>
-                                                <button type="button" onClick={() => handleRemoveNewAssignee(aid)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
-                                            </div>
-                                        ) : null;
-                                    })}
-                                    {newAssignees.length === 0 && <p className="text-xs text-slate-400 italic">Sin asignar</p>}
-                                </div>
-                            </div>
-
-                            {/* 4. Required Types */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Documentos Requeridos</label>
-                                <div className="space-y-2">
-                                    {['AS IS', 'FCE', 'PM', 'TO BE'].map((type) => (
-                                        <label key={type} className="flex items-center gap-2 p-2 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={newRequiredTypes.includes(type as DocType)}
-                                                onChange={() => handleToggleNewType(type as DocType)}
-                                                className="rounded text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                            <span className="text-sm text-slate-700 font-medium">{type}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end pt-6 gap-3 border-t border-slate-100 mt-6">
-                        <button 
-                            type="button" 
-                            onClick={() => setShowCreateModal(false)}
-                            className="px-4 py-2 text-slate-600 hover:text-slate-800 text-sm font-medium"
-                        >
-                            Cancelar
-                        </button>
-                        <button 
-                            type="submit"
-                            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm flex items-center"
-                        >
-                            <Save size={16} className="mr-2" />
-                            Crear Microproceso
                         </button>
                     </div>
                 </form>

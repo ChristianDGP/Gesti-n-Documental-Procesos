@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network } from 'lucide-react';
 import { User, UserRole, DocState, Document } from '../types';
-import { DocumentService } from '../services/firebaseBackend';
+import { NotificationService } from '../services/firebaseBackend';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -18,31 +18,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
-  // Fetch Inbox Count Logic
+  // Fetch Inbox Count Logic (Unread Notifications)
   useEffect(() => {
     const fetchCount = async () => {
         try {
-            const docs = await DocumentService.getAll();
-            let count = 0;
-            
-            const scope = user.role === UserRole.ANALYST 
-                ? docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id)))
-                : docs;
-
-            if (user.role === UserRole.COORDINATOR) {
-                count = scope.filter(d => 
-                    d.hasPendingRequest === true && 
-                    (d.state === DocState.INTERNAL_REVIEW || d.state === DocState.SENT_TO_REFERENT)
-                ).length;
-            } else if (user.role === UserRole.ANALYST) {
-                count = scope.filter(d => 
-                    d.state === DocState.REJECTED || 
-                    d.state === DocState.INITIATED ||
-                    d.state === DocState.IN_PROCESS
-                ).length;
-            } else if (user.role === UserRole.ADMIN) {
-                count = scope.filter(d => d.hasPendingRequest === true).length;
-            }
+            const count = await NotificationService.getUnreadCount(user.id);
             setInboxCount(count);
         } catch (e) {
             console.error("Error fetching inbox count", e);
@@ -92,26 +72,36 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           </div>
 
           <nav className="flex-1 px-4 py-6 space-y-2">
+            
+            {/* Group 1: Gestión */}
+            <div className="pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Gestión</div>
             <NavItem to="/" icon={BarChart2} label="Dashboard" />
             <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
+            <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
             <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
-            
-            {/* Assignments for Coordinator and Admin */}
-            {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
-                 <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
-            )}
 
-            <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Cuenta</div>
-            <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
-            
-            {/* Admin Only */}
-            {user.role === UserRole.ADMIN && (
+            {/* Group 2: Administración */}
+            {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
               <>
                 <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Administración</div>
-                <NavItem to="/admin/users" icon={Users} label="Usuarios" />
-                <NavItem to="/admin/database" icon={Database} label="Base de Datos" />
+                
+                {/* Asignaciones (Assignments) - Admin & Coordinator */}
+                <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
+
+                {/* Admin Only Items - Alphabetical Order */}
+                {user.role === UserRole.ADMIN && (
+                    <>
+                        <NavItem to="/admin/database" icon={Database} label="Base de Datos" />
+                        <NavItem to="/admin/hierarchy" icon={Network} label="Estructura Árbol" />
+                        <NavItem to="/admin/users" icon={Users} label="Usuarios" />
+                    </>
+                )}
               </>
             )}
+
+            {/* Group 3: Cuenta */}
+            <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Cuenta</div>
+            <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
           </nav>
 
           <div className="p-4 border-t border-slate-800">

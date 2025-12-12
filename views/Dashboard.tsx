@@ -49,7 +49,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             HierarchyService.getRequiredTypesMap(),
             UserService.getAll()
         ]);
-        setDocs(data);
+
+        // DEDUPLICATION LOGIC (Show only latest version)
+        // Group by Project + Microprocess + DocType
+        const latestDocsMap = new Map<string, Document>();
+        data.forEach(doc => {
+            const uniqueKey = `${doc.project || 'Gen'}|${doc.microprocess || doc.title}|${doc.docType || 'Gen'}`;
+            const existing = latestDocsMap.get(uniqueKey);
+            // Keep the one with the latest updatedAt
+            if (!existing || new Date(doc.updatedAt) > new Date(existing.updatedAt)) {
+                latestDocsMap.set(uniqueKey, doc);
+            }
+        });
+        const finalDocs = Array.from(latestDocsMap.values());
+
+        setDocs(finalDocs);
         setRequiredMap(reqs);
         setAllUsers(users);
     } catch (error) {
@@ -94,15 +108,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const getFilteredDocs = () => {
     let filtered = docs;
     
-    // 1. Role based base filtering
-    if (user.role === UserRole.ANALYST) {
-      filtered = docs.filter(d => 
-        d.authorId === user.id || 
-        (d.assignees && d.assignees.includes(user.id)) ||
-        d.assignedTo === user.id
-      );
-    }
-
+    // VISIBILITY UPDATE: Analyst can now see everything (Removed Role Filtering)
+    
     // 2. Explicit Filters
     if (filterProject) {
         filtered = filtered.filter(d => d.project === filterProject);
@@ -197,10 +204,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const filteredDocs = getFilteredDocs();
   const sortedDocs = getSortedDocs(filteredDocs);
 
-  // Extract unique values for dropdowns
-  const baseDocs = user.role === UserRole.ANALYST ? 
-    docs.filter(d => d.authorId === user.id || (d.assignees && d.assignees.includes(user.id))) : 
-    docs;
+  // Extract unique values for dropdowns from the FULL deduplicated list
+  const baseDocs = docs;
 
   const uniqueProjects = Array.from(new Set(baseDocs.map(d => d.project).filter(Boolean))) as string[];
   
@@ -235,9 +240,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   // Calculate Stats based on BASE filtered documents (ignoring quick filter for the counts themselves to stay static relative to dropdowns)
   const contextDocs = (() => {
       let d = docs;
-      if (user.role === UserRole.ANALYST) {
-          d = docs.filter(doc => doc.authorId === user.id || (doc.assignees && doc.assignees.includes(user.id)));
-      }
       if (filterProject) d = d.filter(doc => doc.project === filterProject);
       if (filterMacro) d = d.filter(doc => doc.macroprocess === filterMacro);
       if (filterProcess) d = d.filter(doc => doc.process === filterProcess);
@@ -290,7 +292,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         : <ArrowDown size={14} className="text-indigo-600" />;
   };
 
-  const showAnalystFilter = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
+  // Show analyst filter for everyone now, as everyone can see everything
+  const showAnalystFilter = true; 
 
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando dashboard...</div>;
 
@@ -299,7 +302,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-            <p className="text-slate-500">Vista general para {user.name} ({user.role})</p>
+            <p className="text-slate-500">Vista general {user.role === UserRole.ANALYST ? '(Acceso Global)' : ''}</p>
         </div>
         <div className="flex gap-2">
             {user.role === UserRole.ADMIN && (

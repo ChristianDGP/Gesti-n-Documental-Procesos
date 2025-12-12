@@ -52,6 +52,19 @@ export interface DocHistory {
   timestamp: string;
 }
 
+// New Interface for Inbox System
+export interface Notification {
+  id: string;
+  userId: string; // Recipient
+  documentId: string;
+  type: 'ASSIGNMENT' | 'APPROVAL' | 'REJECTION' | 'COMMENT';
+  title: string;
+  message: string;
+  isRead: boolean;
+  timestamp: string;
+  actorName: string; // Who triggered it
+}
+
 export interface Document {
   id: string;
   title: string;
@@ -124,6 +137,7 @@ export interface ProcessNode {
   docId: string; // This acts as the matrix ID
   assignees: string[];
   requiredTypes: DocType[]; // List of types defined in initial load
+  active?: boolean; // Soft Delete support
 }
 
 export interface FullHierarchy {
