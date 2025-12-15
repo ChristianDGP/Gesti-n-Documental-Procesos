@@ -173,25 +173,43 @@ const cleanupOldFiles = async (files: DocFile[]) => {
     if (!files || files.length === 0) return;
     
     // Eliminamos TODOS los archivos anteriores para mantener solo el último estado
+    // Robustez: Promise.allSettled pattern manual para no fallar todo si uno falla
     const deletionPromises = files.map(async (file) => {
+        // Solo intentar borrar si parece una URL de Firebase Storage válida
         if (file.url && file.url !== '#' && file.url.includes('firebasestorage')) {
             try {
+                // ref(storage, url) maneja URLs completas
                 const fileRef = ref(storage, file.url);
                 await deleteObject(fileRef);
                 console.log(`Deleted old file: ${file.name}`);
             } catch (e: any) {
-                console.warn(`Could not delete file ${file.name}:`, e.message);
+                // Ignorar error 404 (Object not found) para no bloquear el flujo
+                if (e.code === 'storage/object-not-found') {
+                    console.warn(`File ${file.name} not found in storage, skipping.`);
+                } else {
+                    console.warn(`Could not delete file ${file.name}:`, e.message);
+                }
             }
         }
     });
     
+    // Esperamos a que todos intenten borrarse, sin lanzar error global
     await Promise.all(deletionPromises);
 };
 
 const uploadToStorage = async (file: File, docId: string): Promise<string> => {
-    const storageRef = ref(storage, `docs/${docId}/${Date.now()}_${file.name}`);
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    try {
+        // Sanitizar nombre para evitar problemas con paths
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const path = `docs/${docId}/${Date.now()}_${sanitizedName}`;
+        const storageRef = ref(storage, path);
+        
+        await uploadBytes(storageRef, file);
+        return await getDownloadURL(storageRef);
+    } catch (e: any) {
+        console.error("Upload error:", e);
+        throw new Error(`Error subiendo archivo: ${e.message}`);
+    }
 };
 
 
@@ -365,8 +383,7 @@ export const DocumentService = {
     // 1GB Policy: Only upload if initial state is allowed
     let uploadedFiles: DocFile[] = [];
     if (file && STORAGE_ALLOWED_STATES.includes(state)) {
-        // We simulate upload in 'create' or assume it's just a ref since create usually starts at INITIATED (No file)
-        // If user manually forces a state that allows files, we upload.
+        // Safe upload with error handling
         const url = await uploadToStorage(file, `new_${Date.now()}`);
         uploadedFiles.push({
            id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,

@@ -759,6 +759,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         <span className="font-bold text-slate-500">{stats.notStarted}</span>
                     </li>
                     <li className="flex justify-between border-b border-indigo-200 pb-1">
+                        <span>En Proceso:</span>
+                        <span className="font-bold text-blue-600">{stats.inProcess}</span>
+                    </li>
+                    <li className="flex justify-between border-b border-indigo-200 pb-1">
+                        <span>Referente:</span>
+                        <span className="font-bold text-purple-600">{stats.referent}</span>
+                    </li>
+                    <li className="flex justify-between border-b border-indigo-200 pb-1">
+                        <span>Control Gestión:</span>
+                        <span className="font-bold text-orange-600">{stats.control}</span>
+                    </li>
+                    <li className="flex justify-between border-b border-indigo-200 pb-1">
                         <span>Terminados:</span>
                         <span className="font-bold text-green-600">{stats.finished}</span>
                     </li>
