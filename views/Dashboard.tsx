@@ -535,7 +535,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                         >
                             <option value="">Analista (Todos)</option>
-                            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            {allUsers
+                                .filter(u => u.role === UserRole.ANALYST)
+                                .map(u => <option key={u.id} value={u.id}>{u.name}</option>)
+                            }
                         </select>
                     )}
 
