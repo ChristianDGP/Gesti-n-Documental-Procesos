@@ -7,7 +7,7 @@ import {
   signInWithPopup, signOut, onAuthStateChanged 
 } from "firebase/auth";
 import { 
-  ref, uploadBytes, getDownloadURL 
+  ref, uploadBytes, getDownloadURL, deleteObject 
 } from "firebase/storage";
 import { db, auth, googleProvider, storage } from "./firebaseConfig";
 import { 
@@ -157,6 +157,43 @@ const deleteCollectionInBatches = async (collectionName: string, batchSize: numb
 };
 
 // --- Services ---
+
+// 1GB POLICY HELPERS
+// Estados donde SÍ se permite almacenar archivos (Solicitudes y Rechazos activos)
+const STORAGE_ALLOWED_STATES = [
+    DocState.INTERNAL_REVIEW,
+    DocState.SENT_TO_REFERENT,
+    DocState.REFERENT_REVIEW,
+    DocState.SENT_TO_CONTROL,
+    DocState.CONTROL_REVIEW,
+    DocState.REJECTED
+];
+
+const cleanupOldFiles = async (files: DocFile[]) => {
+    if (!files || files.length === 0) return;
+    
+    // Eliminamos TODOS los archivos anteriores para mantener solo el último estado
+    const deletionPromises = files.map(async (file) => {
+        if (file.url && file.url !== '#' && file.url.includes('firebasestorage')) {
+            try {
+                const fileRef = ref(storage, file.url);
+                await deleteObject(fileRef);
+                console.log(`Deleted old file: ${file.name}`);
+            } catch (e: any) {
+                console.warn(`Could not delete file ${file.name}:`, e.message);
+            }
+        }
+    });
+    
+    await Promise.all(deletionPromises);
+};
+
+const uploadToStorage = async (file: File, docId: string): Promise<string> => {
+    const storageRef = ref(storage, `docs/${docId}/${Date.now()}_${file.name}`);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+};
+
 
 export const NotificationService = {
     create: async (userId: string, docId: string, type: Notification['type'], title: string, message: string, actorName: string) => {
@@ -324,69 +361,59 @@ export const DocumentService = {
   create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any): Promise<Document> => {
     const state = initialState || DocState.INITIATED;
     const isSubmission = state === DocState.INTERNAL_REVIEW || state === DocState.SENT_TO_REFERENT || state === DocState.SENT_TO_CONTROL;
+    
+    // 1GB Policy: Only upload if initial state is allowed
+    let uploadedFiles: DocFile[] = [];
+    if (file && STORAGE_ALLOWED_STATES.includes(state)) {
+        // We simulate upload in 'create' or assume it's just a ref since create usually starts at INITIATED (No file)
+        // If user manually forces a state that allows files, we upload.
+        const url = await uploadToStorage(file, `new_${Date.now()}`);
+        uploadedFiles.push({
+           id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
+           url: url, uploadedAt: new Date().toISOString()
+        });
+    }
+
     const newDocData: Omit<Document, 'id'> = {
       title, description, authorId: author.id, authorName: author.name,
       assignedTo: author.id, assignees: [author.id],
       state, version: initialVersion || '0.0', progress: initialProgress || 10,
       hasPendingRequest: isSubmission,
-      files: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      files: uploadedFiles, 
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
     };
     const safeDocData = JSON.parse(JSON.stringify(newDocData));
     const docRef = await addDoc(collection(db, "documents"), safeDocData);
     const docId = docRef.id;
-    if (file) {
-       const newFile: DocFile = {
-           id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
-           url: '#', uploadedAt: new Date().toISOString()
-       };
-       await updateDoc(docRef, { files: [newFile] });
-       newDocData.files = [newFile];
-    }
+    
     await HistoryService.log(docId, author, 'Creación', state, state, 'Documento creado (Registro de versión).');
     await HistoryService.log(docId, author, 'Asignación', state, state, `Asignado a: ${author.name}`);
     return { id: docId, ...newDocData } as Document;
   },
-  uploadFile: async (docId: string, file: File, user: User): Promise<DocFile> => {
-      const docRef = doc(db, "documents", docId);
-      const docSnap = await getDoc(docRef);
-      if(!docSnap.exists()) throw new Error("Doc not found");
-      const currentDoc = docSnap.data() as Document;
-      const newFile: DocFile = {
-          id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
-          url: '#', uploadedAt: new Date().toISOString()
-      };
-      const updatedFiles = [...(currentDoc.files || []), newFile];
-      const updates: any = { files: updatedFiles, updatedAt: new Date().toISOString() };
-      const parts = file.name.replace(/\.[^/.]+$/, "").split(' - ');
-      if (parts.length >= 4) {
-          const newVersion = parts[parts.length - 1];
-          const { state, progress } = determineStateFromVersion(newVersion);
-          updates.version = newVersion;
-          updates.state = state;
-          updates.progress = progress;
-      }
-      await updateDoc(docRef, updates);
-      return newFile;
-  },
+  
   delete: async (id: string) => {
+      // Clean up storage before deleting doc
+      const docRef = doc(db, "documents", id);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+          const data = snap.data() as Document;
+          await cleanupOldFiles(data.files);
+      }
       await deleteDoc(doc(db, "documents", id));
   },
+
   transitionState: async (docId: string, user: User, action: 'ADVANCE' | 'REJECT' | 'APPROVE' | 'REQUEST_APPROVAL' | 'COMMENT', comment: string, file?: File, customVersion?: string): Promise<void> => {
       const docRef = doc(db, "documents", docId);
       const docSnap = await getDoc(docRef);
       if(!docSnap.exists()) throw new Error("Doc not found");
       const currentDoc = docSnap.data() as Document;
+      
       let newState = currentDoc.state;
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
-      let updatedFiles = [...currentDoc.files];
-      if (file) {
-          updatedFiles.push({
-              id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
-              url: '#', uploadedAt: new Date().toISOString()
-          });
-      }
+      
+      // Determine New State & Version Logic
       if (customVersion) {
         newVersion = customVersion;
         if (action === 'APPROVE') {
@@ -406,10 +433,36 @@ export const DocumentService = {
         case 'ADVANCE': hasPending = false; if (currentDoc.state === DocState.REJECTED) newState = DocState.IN_PROCESS; break;
         case 'COMMENT': comment = `OBSERVACIÓN: ${comment}`; break;
       }
+
+      // --- 1GB POLICY IMPLEMENTATION ---
+      let finalFiles = [...(currentDoc.files || [])];
+
+      // 1. If we are providing a new file, we MUST delete the old ones (Single File Policy)
+      if (file) {
+          await cleanupOldFiles(currentDoc.files);
+          finalFiles = []; // Clear array
+          
+          // 2. Only Upload if Target State allows storage
+          if (STORAGE_ALLOWED_STATES.includes(newState)) {
+              const url = await uploadToStorage(file, docId);
+              finalFiles.push({
+                  id: `file-${Date.now()}`, name: file.name, size: file.size, type: file.type,
+                  url: url, uploadedAt: new Date().toISOString()
+              });
+          }
+      } else if (action === 'APPROVE' || action === 'ADVANCE') {
+          // 3. If transitioning to a state that DOES NOT allow storage (e.g. APPROVED), clean up everything
+          if (!STORAGE_ALLOWED_STATES.includes(newState)) {
+              await cleanupOldFiles(currentDoc.files);
+              finalFiles = [];
+          }
+      }
+      // ---------------------------------
+
       const progress = STATE_CONFIG[newState]?.progress || currentDoc.progress;
       await updateDoc(docRef, {
           state: newState, version: newVersion, hasPendingRequest: hasPending,
-          files: updatedFiles, progress, updatedAt: new Date().toISOString()
+          files: finalFiles, progress, updatedAt: new Date().toISOString()
       });
       const actionLabel = action === 'COMMENT' ? 'Observación' : action;
       await HistoryService.log(docId, user, actionLabel, currentDoc.state, newState, comment);

@@ -1,11 +1,10 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService } from '../services/firebaseBackend';
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2, MousePointerClick, Lock, Plus } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2, MousePointerClick, Lock, Plus, Save } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -174,16 +173,23 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const handleSubmitResponse = async () => {
       if (!doc || !pendingAction || !validationFile || validationError || !extractedVersion) return;
-      if (pendingAction === 'APPROVE' && !approvalType) {
-          alert('Debe seleccionar un Tipo de Aprobación.');
+      
+      if (!approvalType) {
+          alert('Debe seleccionar la Etapa actual del proceso.');
           return;
       }
 
-      if (window.confirm(`Confirma ${pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR'} usando la versión ${extractedVersion} detectada en el archivo?\n\nNOTA: El archivo NO se subirá, solo se registrará el cambio de estado.`)) {
+      const actionText = pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR';
+      const storageWarning = pendingAction === 'APPROVE' && approvalType === 'CONTROL' // Final approval usually
+          ? "\n\nAVISO: Al aprobar finalmente, el archivo se eliminará del servidor para ahorrar espacio (Política 1GB)."
+          : "\n\nNOTA: Se eliminará cualquier archivo anterior para mantener solo la versión actual.";
+
+      const msg = `¿Confirma ${actionText} usando la versión ${extractedVersion}?${storageWarning}`;
+
+      if (window.confirm(msg)) {
           setShowResponseModal(false);
-          
-          // CRITICAL: We pass NULL as the file to avoid uploading, but we pass extractedVersion
-          await executeTransition(pendingAction, null, extractedVersion);
+          // Now we PASS the file to be uploaded
+          await executeTransition(pendingAction, validationFile, extractedVersion);
       }
   };
 
@@ -237,7 +243,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAuthor = doc.authorId === user.id;
   
   // Helpers for Action Buttons Logic
-  // *** CRITICAL PERMISSION CHECK ***
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
   
@@ -250,17 +255,27 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isValidApprovalVersion = (v: string): boolean => {
       if (!v) return false;
       
+      // 1. Revisión Interna: v0.n (n IMPAR)
       const matchInternal = v.match(/^v0\.(\d+)$/);
       if (matchInternal) {
           const n = parseInt(matchInternal[1], 10);
           return n % 2 !== 0; 
       }
-      const matchAdvanced = v.match(/^v1\.(\d+)\.(\d+)(AR)?$/);
-      if (matchAdvanced) {
-          const n = parseInt(matchAdvanced[1], 10);
-          const i = parseInt(matchAdvanced[2], 10);
-          return (n % 2 !== 0) && (i % 2 !== 0);
+
+      // 2. Revisión Referente: v1.n.i (i IMPAR) - Se infiere por solicitud de referente
+      const matchReferent = v.match(/^v1\.(\d+)\.(\d+)$/);
+      if (matchReferent) {
+          const i = parseInt(matchReferent[2], 10);
+          return i % 2 !== 0;
       }
+
+      // 3. Revisión Control: v1.n.iAR (i IMPAR)
+      const matchControl = v.match(/^v1\.(\d+)\.(\d+)AR$/);
+      if (matchControl) {
+          const i = parseInt(matchControl[2], 10);
+          return i % 2 !== 0;
+      }
+      
       return false;
   };
 
@@ -357,17 +372,26 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
             {/* Archivos Adjuntos */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="font-semibold text-slate-800 mb-4 flex items-center"><Paperclip size={18} className="mr-2 text-indigo-500" /> Archivos Adjuntos</h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-slate-800 flex items-center"><Paperclip size={18} className="mr-2 text-indigo-500" /> Archivos Adjuntos</h3>
+                    {doc.files.length > 0 && (
+                        <span className="text-[10px] text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center gap-1">
+                            <CheckCircle size={10}/> Archivo Único Activo
+                        </span>
+                    )}
+                </div>
                 <ul className="space-y-2 mb-4">
                     {doc.files.map(file => (
-                        <li key={file.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm border border-slate-100">
+                        <li key={file.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm border border-slate-100 group hover:border-indigo-200 transition-colors">
                             <div className="flex items-center overflow-hidden">
-                                <FileText size={16} className="text-slate-400 mr-3 flex-shrink-0" />
-                                <span className="truncate font-medium text-slate-700">{file.name}</span>
+                                <FileText size={16} className="text-slate-400 mr-3 flex-shrink-0 group-hover:text-indigo-500" />
+                                <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate font-medium text-slate-700 hover:text-indigo-700 hover:underline">
+                                    {file.name}
+                                </a>
                             </div>
                         </li>
                     ))}
-                    {doc.files.length === 0 && <p className="text-sm text-slate-400 italic">No hay archivos.</p>}
+                    {doc.files.length === 0 && <p className="text-sm text-slate-400 italic">No hay archivos activos en esta etapa.</p>}
                 </ul>
                 
                 {canUpload && (
@@ -402,6 +426,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
                         
                         {canRequestApproval && <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><Send size={16} className="mr-2" /> Solicitar Aprobación</button>}
+                        
+                        {!isVersionValidForRequest && isAnalystAssigned && !doc.hasPendingRequest && (
+                             <div className="w-full text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 flex items-center gap-2">
+                                <AlertTriangle size={14} />
+                                <span>No puede solicitar aprobación: La versión actual ({doc.version}) no cumple el formato para solicitud (Debe ser Impar).</span>
+                             </div>
+                        )}
+
                         {canRestart && <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">Reiniciar Flujo</button>}
                         
                         {canApprove && <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><CheckCircle size={16} className="mr-2" /> Aprobar</button>}
@@ -427,7 +459,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         </div>
       </div>
 
-      {/* MODAL DE RESPUESTA */}
+      {/* MODAL DE RESPUESTA (COORDINADOR) */}
       {showResponseModal && pendingAction && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
@@ -443,7 +475,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         {/* SELECTOR DE CONTEXTO */}
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
-                                <ListFilter size={14} /> Tipo de Aprobación / Contexto
+                                <ListFilter size={14} /> Etapa del Proceso
                             </label>
                             <select 
                                 value={approvalType} 
@@ -456,26 +488,36 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="">-- Seleccionar Etapa --</option>
-                                <option value="INTERNAL">Aprobación Revisión Interna (v1.0)</option>
-                                <option value="REFERENT">Aprobación Referente (v1.n / v1.nAR)</option>
-                                <option value="CONTROL">Aprobación Control Gestión (v1.nACG)</option>
+                                <option value="INTERNAL">Etapa: Revisión Interna (v0.x - v1.0)</option>
+                                <option value="REFERENT">Etapa: Referente (v1.x - v1.y)</option>
+                                <option value="CONTROL">Etapa: Control de Gestión (v1.xAR - v1.yAR)</option>
                             </select>
                         </div>
 
-                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-3">
-                            <Info size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
-                            <div>
-                                <p className="text-xs font-bold text-blue-800 uppercase mb-1">Nomenclatura Requerida</p>
-                                <p className="text-sm font-mono font-bold text-blue-900">
-                                    {approvalType ? getCurrentHint() : 'Seleccione un tipo de aprobación'}
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg flex flex-col gap-2">
+                            <div className="flex items-start gap-3">
+                                <Info size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                <div>
+                                    <p className="text-xs font-bold text-blue-800 uppercase mb-1">Regla de Nomenclatura</p>
+                                    <p className="text-sm font-mono font-bold text-blue-900">
+                                        {approvalType ? getCurrentHint() : 'Seleccione una etapa para ver la regla.'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="mt-1 pt-2 border-t border-blue-200">
+                                <p className="text-[10px] text-blue-700 flex items-center gap-1 font-semibold">
+                                    <AlertTriangle size={10} /> Política de Almacenamiento (1GB):
+                                </p>
+                                <p className="text-[10px] text-blue-600 ml-3">
+                                    Al subir un nuevo archivo, se eliminarán automáticamente los archivos de versiones anteriores para liberar espacio.
                                 </p>
                             </div>
                         </div>
 
-                        {/* SELECTOR DE ARCHIVO (SOLO VALIDACIÓN) */}
+                        {/* SELECTOR DE ARCHIVO (CARGA Y VALIDACIÓN) */}
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
-                                <MousePointerClick size={14} /> Validar Archivo (No se subirá)
+                                <Upload size={14} /> Cargar Archivo de {pendingAction === 'APPROVE' ? 'Aprobación' : 'Rechazo'}
                             </label>
                             
                             <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer relative
@@ -492,9 +534,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 
                                 {!validationFile ? (
                                     <div className="text-slate-400 text-sm">
-                                        <Upload size={24} className="mx-auto mb-2 opacity-50" />
+                                        <MousePointerClick size={24} className="mx-auto mb-2 opacity-50" />
                                         <p>Click para seleccionar el archivo final.</p>
-                                        <p className="text-xs mt-1">(Esto validará el nombre, pero no lo subirá al servidor)</p>
+                                        <p className="text-xs mt-1">(Se validará el nombre antes de subir)</p>
                                     </div>
                                 ) : (
                                     <div className={validationError ? "text-red-700" : "text-green-700"}>
@@ -518,11 +560,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             <button 
                                 onClick={handleSubmitResponse}
                                 disabled={!validationFile || !!validationError || !extractedVersion || !approvalType}
-                                className={`px-4 py-2 rounded-lg text-white text-sm font-bold shadow-sm transition-all
+                                className={`px-4 py-2 rounded-lg text-white text-sm font-bold shadow-sm transition-all flex items-center gap-2
                                     ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
                                     disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
-                                Confirmar {pendingAction === 'APPROVE' ? 'Aprobación' : 'Rechazo'}
+                                <Save size={16} />
+                                {pendingAction === 'APPROVE' ? 'Subir y Aprobar' : 'Subir y Rechazar'}
                             </button>
                         </div>
                   </div>
