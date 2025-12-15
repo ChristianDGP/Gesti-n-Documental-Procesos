@@ -1,21 +1,30 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { DocumentService } from '../services/firebaseBackend';
 import { Document, User, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Filter, ArrowRight, Calendar, ListTodo, Activity, CheckCircle, Clock, Layers, FileText } from 'lucide-react';
+import { Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, Search, ArrowUp, ArrowDown, ArrowUpDown, X } from 'lucide-react';
 
 interface Props {
   user: User;
 }
 
+type SortOption = 'microprocess' | 'state' | 'updatedAt';
+
 const WorkList: React.FC<Props> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // Filters & Search State
   const [filterState, setFilterState] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<{ key: SortOption; direction: 'asc' | 'desc' }>({
+    key: 'updatedAt',
+    direction: 'desc'
+  });
 
   useEffect(() => {
     loadData();
@@ -34,41 +43,18 @@ const WorkList: React.FC<Props> = ({ user }) => {
         );
 
         // 2. AGRUPACIÓN Y DEDUPLICACIÓN DE VERSIONES
-        // Clave de agrupación: Proyecto + Microproceso + Tipo de Documento.
-        // Objetivo: Si tengo FCE v0.0 y FCE v0.1, solo mostrar FCE v0.1.
-        //           Pero si tengo FCE v0.1 y TO BE v0.0, mostrar ambos.
         const latestDocsMap = new Map<string, Document>();
 
         myActiveDocs.forEach(doc => {
-            // Usamos un identificador único compuesto
             const uniqueKey = `${doc.project || 'Gen'}|${doc.microprocess || doc.title}|${doc.docType || 'Gen'}`;
-            
             const existing = latestDocsMap.get(uniqueKey);
 
-            // Si no existe, o si el actual es más reciente que el que tenemos guardado, lo actualizamos
             if (!existing || new Date(doc.updatedAt) > new Date(existing.updatedAt)) {
                 latestDocsMap.set(uniqueKey, doc);
             }
         });
 
-        // Convertimos el Map a Array
         const finalDocs = Array.from(latestDocsMap.values());
-
-        // 3. Ordenar para visualización (Proyecto -> Microproceso -> Tipo)
-        finalDocs.sort((a, b) => {
-            const projA = a.project || '';
-            const projB = b.project || '';
-            if (projA !== projB) return projA.localeCompare(projB);
-
-            const microA = a.microprocess || a.title;
-            const microB = b.microprocess || b.title;
-            if (microA !== microB) return microA.localeCompare(microB);
-
-            const typeA = a.docType || '';
-            const typeB = b.docType || '';
-            return typeA.localeCompare(typeB);
-        });
-
         setDocs(finalDocs);
 
     } catch (error) {
@@ -78,12 +64,69 @@ const WorkList: React.FC<Props> = ({ user }) => {
     }
   };
 
-  const getFilteredDocs = () => {
-      if (!filterState) return docs;
-      return docs.filter(d => d.state === filterState);
+  // --- SORT HANDLER ---
+  const handleSort = (key: SortOption) => {
+      let direction: 'asc' | 'desc' = 'asc';
+      if (sortConfig.key === key && sortConfig.direction === 'asc') {
+          direction = 'desc';
+      }
+      setSortConfig({ key, direction });
   };
 
-  const filteredDocs = getFilteredDocs();
+  // --- FILTER & SORT LOGIC ---
+  const processedDocs = useMemo(() => {
+      let filtered = [...docs];
+
+      // 1. Filter by State Dropdown
+      if (filterState) {
+          filtered = filtered.filter(d => d.state === filterState);
+      }
+
+      // 2. Filter by Search Term
+      if (searchTerm) {
+          const lowerTerm = searchTerm.toLowerCase();
+          filtered = filtered.filter(d => 
+              (d.project || '').toLowerCase().includes(lowerTerm) ||
+              (d.microprocess || '').toLowerCase().includes(lowerTerm) ||
+              (d.title || '').toLowerCase().includes(lowerTerm) ||
+              (d.docType || '').toLowerCase().includes(lowerTerm)
+          );
+      }
+
+      // 3. Sort
+      return filtered.sort((a, b) => {
+          const modifier = sortConfig.direction === 'asc' ? 1 : -1;
+
+          switch (sortConfig.key) {
+              case 'microprocess':
+                  const microA = a.microprocess || a.title || '';
+                  const microB = b.microprocess || b.title || '';
+                  return microA.localeCompare(microB) * modifier;
+              
+              case 'state':
+                  // Sort by logical progress % defined in constants
+                  const progA = STATE_CONFIG[a.state]?.progress || 0;
+                  const progB = STATE_CONFIG[b.state]?.progress || 0;
+                  return (progA - progB) * modifier;
+
+              case 'updatedAt':
+                  const dateA = new Date(a.updatedAt).getTime();
+                  const dateB = new Date(b.updatedAt).getTime();
+                  return (dateA - dateB) * modifier;
+              
+              default:
+                  return 0;
+          }
+      });
+  }, [docs, filterState, searchTerm, sortConfig]);
+
+  // Helper for Sort Icons
+  const SortIcon = ({ column }: { column: SortOption }) => {
+      if (sortConfig.key !== column) return <ArrowUpDown size={14} className="text-slate-300 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />;
+      return sortConfig.direction === 'asc' 
+        ? <ArrowUp size={14} className="text-indigo-600 ml-1" /> 
+        : <ArrowDown size={14} className="text-indigo-600 ml-1" />;
+  };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando lista de trabajo...</div>;
 
@@ -101,23 +144,47 @@ const WorkList: React.FC<Props> = ({ user }) => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             {/* Filter Bar */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between flex-wrap gap-3">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h2 className="font-semibold text-slate-800 flex items-center gap-2">
                     <Activity size={18} className="text-indigo-600" />
                     Mis Pendientes
                 </h2>
                 
-                <div className="flex items-center gap-3">
-                    <select 
-                        value={filterState} 
-                        onChange={(e) => setFilterState(e.target.value)}
-                        className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                    >
-                        <option value="">Estado (Todos)</option>
-                        {Object.keys(STATE_CONFIG).filter(k => k !== DocState.APPROVED).map(key => (
-                            <option key={key} value={key}>{STATE_CONFIG[key as DocState].label.split('(')[0]}</option>
-                        ))}
-                    </select>
+                <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                    {/* SEARCH INPUT */}
+                    <div className="relative w-full md:w-64">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar microproceso, tipo..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-8 p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* STATE FILTER */}
+                    <div className="relative w-full md:w-auto">
+                        <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <select 
+                            value={filterState} 
+                            onChange={(e) => setFilterState(e.target.value)}
+                            className="w-full md:w-auto pl-9 p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white cursor-pointer"
+                        >
+                            <option value="">Estado (Todos)</option>
+                            {Object.keys(STATE_CONFIG).filter(k => k !== DocState.APPROVED).map(key => (
+                                <option key={key} value={key}>{STATE_CONFIG[key as DocState].label.split('(')[0]}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -126,21 +193,53 @@ const WorkList: React.FC<Props> = ({ user }) => {
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                         <tr>
                             <th className="px-4 py-3">Proyecto / Macro</th>
-                            <th className="px-4 py-3">Microproceso</th>
+                            
+                            {/* SORTABLE: MICROPROCESS */}
+                            <th 
+                                className="px-4 py-3 cursor-pointer hover:bg-slate-100 group select-none transition-colors"
+                                onClick={() => handleSort('microprocess')}
+                            >
+                                <div className="flex items-center">
+                                    Microproceso <SortIcon column="microprocess" />
+                                </div>
+                            </th>
+                            
                             <th className="px-4 py-3">Documento / Tipo</th>
-                            <th className="px-4 py-3">Estado Actual</th>
+                            
+                            {/* SORTABLE: STATE */}
+                            <th 
+                                className="px-4 py-3 cursor-pointer hover:bg-slate-100 group select-none transition-colors"
+                                onClick={() => handleSort('state')}
+                            >
+                                <div className="flex items-center">
+                                    Estado Actual <SortIcon column="state" />
+                                </div>
+                            </th>
+                            
                             <th className="px-4 py-3">Versión</th>
-                            <th className="px-4 py-3">Última Actualización</th>
-                            <th className="px-4 py-3">Acción</th>
+                            
+                            {/* SORTABLE: UPDATED AT */}
+                            <th 
+                                className="px-4 py-3 cursor-pointer hover:bg-slate-100 group select-none transition-colors"
+                                onClick={() => handleSort('updatedAt')}
+                            >
+                                <div className="flex items-center">
+                                    Última Actualización <SortIcon column="updatedAt" />
+                                </div>
+                            </th>
+                            
+                            <th className="px-4 py-3 text-right">Acción</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredDocs.length === 0 ? (
+                        {processedDocs.length === 0 ? (
                             <tr><td colSpan={7} className="p-8 text-center text-slate-400">
-                                {filterState ? 'No hay documentos en este estado.' : '¡Todo al día! No tienes documentos pendientes de gestión.'}
+                                {filterState || searchTerm 
+                                    ? 'No se encontraron documentos con los filtros aplicados.' 
+                                    : '¡Todo al día! No tienes documentos pendientes de gestión.'}
                             </td></tr>
                         ) : (
-                            filteredDocs.map(doc => (
+                            processedDocs.map(doc => (
                                 <tr key={doc.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                                     <td className="px-4 py-3">
                                         <div className="font-bold text-slate-700">{doc.project}</div>
@@ -175,8 +274,8 @@ const WorkList: React.FC<Props> = ({ user }) => {
                                             <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3">
-                                        <Link to={`/doc/${doc.id}`} className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 hover:underline">
+                                    <td className="px-4 py-3 text-right">
+                                        <Link to={`/doc/${doc.id}`} className="text-indigo-600 hover:text-indigo-800 text-xs font-bold inline-flex items-center gap-1 hover:underline">
                                             Gestionar <ArrowRight size={12} />
                                         </Link>
                                     </td>
