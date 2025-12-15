@@ -2,9 +2,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/firebaseBackend';
-import { Document, User, DocState, UserRole } from '../types';
+import { Document, User, DocState, UserRole, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, Search, ArrowUp, ArrowDown, ArrowUpDown, X, AlertTriangle } from 'lucide-react';
+import { Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, Search, ArrowUp, ArrowDown, ArrowUpDown, X, AlertTriangle, PlayCircle } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -30,63 +30,127 @@ const WorkList: React.FC<Props> = ({ user }) => {
     loadData();
   }, []);
 
+  const normalize = (str: string | undefined) => {
+      if (!str) return '';
+      return str.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
-        const [allDocs, hierarchy] = await Promise.all([
+        const [realDocsData, hierarchy] = await Promise.all([
             DocumentService.getAll(),
             HierarchyService.getFullHierarchy()
         ]);
         
-        // 2. Build a Set of VALID and ACTIVE structure keys (Project|Microprocess)
-        const validStructureKeys = new Set<string>();
+        // 1. Map Real Docs for lookup
+        const realDocMap = new Map<string, Document>();
+        realDocsData.forEach(doc => {
+            if (doc.project && (doc.microprocess || doc.title)) {
+                const microName = doc.microprocess || doc.title.split(' - ')[0] || doc.title;
+                const docType = doc.docType || 'AS IS';
+                const key = `${normalize(doc.project)}|${normalize(microName)}|${normalize(docType)}`;
+                
+                // Use latest
+                const existing = realDocMap.get(key);
+                if (!existing || new Date(doc.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+                    realDocMap.set(key, { ...doc, microprocess: microName, docType: docType as DocType });
+                }
+            }
+        });
 
-        Object.keys(hierarchy).forEach(proj => {
+        // 2. Build Work List from Hierarchy (Assignments)
+        const myWorkList: Document[] = [];
+        const hierarchyKeys = Object.keys(hierarchy);
+
+        const isCoordOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+        const reviewStates = [
+            DocState.INTERNAL_REVIEW, 
+            DocState.SENT_TO_REFERENT, 
+            DocState.REFERENT_REVIEW, 
+            DocState.SENT_TO_CONTROL, 
+            DocState.CONTROL_REVIEW
+        ];
+
+        hierarchyKeys.forEach(proj => {
             Object.keys(hierarchy[proj]).forEach(macro => {
                 Object.keys(hierarchy[proj][macro]).forEach(proc => {
-                    hierarchy[proj][macro][proc].forEach(node => {
-                        if (node.active !== false) {
-                            validStructureKeys.add(`${proj}|${node.name}`);
-                        }
+                    const nodes = hierarchy[proj][macro][proc];
+                    nodes.forEach(node => {
+                        if (node.active === false) return; 
+
+                        const requiredTypes = (node.requiredTypes && node.requiredTypes.length > 0) 
+                            ? node.requiredTypes 
+                            : ['AS IS', 'FCE', 'PM', 'TO BE'];
+
+                        requiredTypes.forEach(type => {
+                            const key = `${normalize(proj)}|${normalize(node.name)}|${normalize(type)}`;
+                            
+                            if (realDocMap.has(key)) {
+                                // Exists in DB
+                                const realDoc = realDocMap.get(key)!;
+                                
+                                // LOGIC: Show if assigned OR if it's pending review and I'm a coordinator
+                                const isAssigned = node.assignees && node.assignees.includes(user.id);
+                                const isPendingReview = isCoordOrAdmin && reviewStates.includes(realDoc.state);
+
+                                if ((isAssigned || isPendingReview) && realDoc.state !== DocState.APPROVED) {
+                                    myWorkList.push({
+                                        ...realDoc,
+                                        macroprocess: macro,
+                                        process: proc,
+                                        project: proj,
+                                        assignees: node.assignees
+                                    });
+                                }
+                            } else {
+                                // Virtual (Not Started)
+                                // Only show not started if explicitly assigned
+                                const isAssigned = node.assignees && node.assignees.includes(user.id);
+                                if (isAssigned) {
+                                    myWorkList.push({
+                                        id: `virtual-${key}-${Date.now()}`,
+                                        title: `${node.name} - ${type}`,
+                                        description: 'Pendiente de inicio',
+                                        project: proj,
+                                        macroprocess: macro,
+                                        process: proc,
+                                        microprocess: node.name,
+                                        docType: type as DocType,
+                                        authorId: '',
+                                        authorName: '',
+                                        assignedTo: user.id,
+                                        assignees: node.assignees,
+                                        state: DocState.NOT_STARTED,
+                                        version: '-',
+                                        progress: 0,
+                                        files: [],
+                                        createdAt: new Date().toISOString(),
+                                        updatedAt: new Date(0).toISOString(), 
+                                        hasPendingRequest: false
+                                    });
+                                }
+                            }
+                        });
                     });
                 });
             });
         });
 
-        // 3. FILTERING LOGIC
-        const myActiveDocs = allDocs.filter(d => {
-            // Check structure validity
-            if (!validStructureKeys.has(`${d.project}|${d.microprocess}`)) return false;
+        // 3. Add any "Real" documents that might be assigned but outside hierarchy (Orphans)
+        realDocMap.forEach((doc) => {
+            const isAssigned = doc.assignees && doc.assignees.includes(user.id);
+            const isPendingReview = isCoordOrAdmin && reviewStates.includes(doc.state);
             
-            // Exclude Approved
-            if (d.state === DocState.APPROVED) return false;
-
-            const isAssigned = d.assignees && d.assignees.includes(user.id);
-            const isCoordinator = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
-            
-            // COORDINATOR VIEW: 
-            // 1. Pending Requests (Crucial for their inbox)
-            // 2. Or explicitly assigned to them
-            if (isCoordinator) {
-                return d.hasPendingRequest || isAssigned;
-            }
-
-            // ANALYST VIEW:
-            // Only what is assigned
-            return isAssigned;
-        });
-
-        // 4. DEDUPLICATION
-        const latestDocsMap = new Map<string, Document>();
-        myActiveDocs.forEach(doc => {
-            const uniqueKey = `${doc.project || 'Gen'}|${doc.microprocess || doc.title}|${doc.docType || 'Gen'}`;
-            const existing = latestDocsMap.get(uniqueKey);
-            if (!existing || new Date(doc.updatedAt) > new Date(existing.updatedAt)) {
-                latestDocsMap.set(uniqueKey, doc);
+            if ((isAssigned || isPendingReview) && doc.state !== DocState.APPROVED) {
+                const exists = myWorkList.some(d => d.id === doc.id);
+                if (!exists) {
+                    myWorkList.push(doc);
+                }
             }
         });
 
-        setDocs(Array.from(latestDocsMap.values()));
+        setDocs(myWorkList);
 
     } catch (error) {
         console.error("Error loading work list:", error);
@@ -148,7 +212,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
                 Lista de Trabajo
             </h1>
             <p className="text-slate-500">
-                {user.role === UserRole.ANALYST ? 'Mis asignaciones pendientes.' : 'Solicitudes pendientes de aprobación y mis asignaciones.'}
+                {user.role === UserRole.ANALYST ? 'Mis asignaciones pendientes.' : 'Revisiones y asignaciones pendientes.'}
             </p>
         </div>
       </div>
@@ -157,7 +221,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
             <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h2 className="font-semibold text-slate-800 flex items-center gap-2">
                     <Activity size={18} className="text-indigo-600" />
-                    Pendientes
+                    Mis Pendientes
                 </h2>
                 
                 <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
@@ -207,8 +271,8 @@ const WorkList: React.FC<Props> = ({ user }) => {
                         {processedDocs.length === 0 ? (
                             <tr><td colSpan={6} className="p-8 text-center text-slate-400">Todo al día. No hay pendientes.</td></tr>
                         ) : (
-                            processedDocs.map(doc => (
-                                <tr key={doc.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${doc.hasPendingRequest ? 'bg-indigo-50/30' : ''}`}>
+                            processedDocs.map((doc, idx) => (
+                                <tr key={`${doc.id}-${idx}`} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${doc.hasPendingRequest ? 'bg-indigo-50/30' : ''}`}>
                                     <td className="px-4 py-3">
                                         <div className="font-bold text-slate-700">{doc.project}</div>
                                         <div className="text-xs text-slate-500">{doc.macroprocess}</div>
@@ -239,12 +303,16 @@ const WorkList: React.FC<Props> = ({ user }) => {
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-1.5 text-slate-500">
                                             <Calendar size={14} />
-                                            <span>{new Date(doc.updatedAt).toLocaleDateString()}</span>
+                                            <span>{doc.state === DocState.NOT_STARTED ? '-' : new Date(doc.updatedAt).toLocaleDateString()}</span>
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-right">
-                                        <Link to={`/doc/${doc.id}`} className="text-indigo-600 hover:text-indigo-800 text-xs font-bold inline-flex items-center gap-1 hover:underline">
-                                            Gestionar <ArrowRight size={12} />
+                                        <Link 
+                                            to={`/doc/${doc.id}`} 
+                                            state={{ docData: doc }}
+                                            className="text-indigo-600 hover:text-indigo-800 text-xs font-bold inline-flex items-center gap-1 hover:underline"
+                                        >
+                                            Ver Detalle <ArrowRight size={12} />
                                         </Link>
                                     </td>
                                 </tr>

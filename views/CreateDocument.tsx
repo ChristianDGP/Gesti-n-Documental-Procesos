@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/firebaseBackend';
-import { User, DocState, DocType, UserHierarchy, UserRole, Document } from '../types';
+import { User, DocState, DocType, UserHierarchy, UserRole, Document, FullHierarchy } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
 import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus, ListFilter, Lock, RefreshCw } from 'lucide-react';
 
@@ -43,6 +43,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   // Hierarchy Selection State with Strict Typing
   const [userHierarchy, setUserHierarchy] = useState<UserHierarchy>({});
+  const [fullHierarchyCache, setFullHierarchyCache] = useState<FullHierarchy>({}); // Cache full hierarchy for assignments
   
   // Matrix Requirement Map (Project|Micro -> AllowedTypes[])
   const [requirementsMap, setRequirementsMap] = useState<Record<string, DocType[]>>({});
@@ -114,18 +115,19 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const loadData = async () => {
       // 1. Cargar Mapa de Requisitos, Jerarquía y Documentos Existentes
       try {
-          const [reqMap, full, userH, docs] = await Promise.all([
+          // Always load full hierarchy to get assignment data
+          const [reqMap, full, docs] = await Promise.all([
               HierarchyService.getRequiredTypesMap(),
-              user.role === UserRole.ADMIN ? HierarchyService.getFullHierarchy() : Promise.resolve(null),
-              user.role !== UserRole.ADMIN ? HierarchyService.getUserHierarchy(user.id) : Promise.resolve(null),
+              HierarchyService.getFullHierarchy(),
               DocumentService.getAll()
           ]);
 
           setRequirementsMap(reqMap);
           setAllDocsCache(docs);
+          setFullHierarchyCache(full);
 
-          // Si es Admin, cargamos la jerarquía completa transformada a formato simple
-          if (user.role === UserRole.ADMIN && full) {
+          // Build View Hierarchy based on Role
+          if (user.role === UserRole.ADMIN) {
                const adminTree: UserHierarchy = {};
                // Convertir FullHierarchy (nodos complejos) a UserHierarchy (solo nombres)
                Object.keys(full).forEach(p => {
@@ -138,8 +140,9 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                    });
                });
                setUserHierarchy(adminTree);
-          } else if (userH) {
-              // Si es Analista, solo lo asignado
+          } else {
+              // Si es Analista/Coordinador, cargamos SU jerarquía filtrada
+              const userH = await HierarchyService.getUserHierarchy(user.id);
               setUserHierarchy(userH);
           }
 
@@ -193,6 +196,14 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       if (!selectedProject || !selectedMicro) return [];
       const key = `${selectedProject}|${selectedMicro}`;
       return requirementsMap[key] || [];
+  };
+
+  // Find assignments from Full Hierarchy Cache
+  const getAssigneesForSelection = (): string[] => {
+      if (!selectedProject || !selectedMacro || !selectedProcess || !selectedMicro) return [];
+      const nodes = fullHierarchyCache[selectedProject]?.[selectedMacro]?.[selectedProcess] || [];
+      const node = nodes.find(n => n.name === selectedMicro);
+      return node?.assignees || [];
   };
 
   // Reset downstream selections when upstream changes
@@ -301,6 +312,9 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
     setLoading(true);
     
     try {
+      // Find assigned users from hierarchy to ensure correct assignment
+      const matrixAssignees = getAssigneesForSelection();
+
       const newDoc = await DocumentService.create(
           title, 
           description, 
@@ -314,7 +328,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               macro: selectedMacro,
               process: selectedProcess,
               micro: selectedMicro,
-              docType: selectedDocType
+              docType: selectedDocType,
+              assignees: matrixAssignees // Pass matrix assignees
           }
       );
 

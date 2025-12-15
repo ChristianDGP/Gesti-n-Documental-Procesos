@@ -7,7 +7,7 @@ import { STATE_CONFIG } from '../constants';
 import { 
     Plus, Clock, CheckCircle, Filter, X, Calendar, ArrowRight, Activity, 
     BookOpen, Users, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, Loader2,
-    User as UserIcon, Database, AlertTriangle, Archive
+    User as UserIcon, Database, AlertTriangle, Archive, PlayCircle
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -306,6 +306,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return u ? u.name : 'Sin Asignar';
   };
 
+  const isAssignedToMe = (doc: DashboardDoc) => {
+      return doc.assignees && doc.assignees.includes(user.id);
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Actualizando dashboard...</div>;
 
   if (isSystemEmpty) {
@@ -463,13 +467,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     }`}>
                                         {doc.docType}
                                     </span>
-                                    {doc.state !== DocState.NOT_STARTED ? (
-                                        <Link to={`/doc/${doc.id}`} className={`block text-[10px] font-bold flex items-center gap-0.5 ${!doc.isRequired ? 'text-gray-500 hover:text-gray-700' : 'text-indigo-500 hover:text-indigo-700'}`}>
-                                            Ver Detalle <ArrowRight size={10}/>
-                                        </Link>
-                                    ) : (
-                                        <span className="block text-slate-300 text-[10px] italic">Pendiente</span>
-                                    )}
+                                    {/* LINK UNIFICADO "VER DETALLE" */}
+                                    <Link 
+                                        to={`/doc/${doc.id}`} 
+                                        state={{ docData: doc }} // Pasamos el doc en state para manejar virtuales
+                                        className={`flex items-center gap-1 text-[10px] font-bold ${!doc.isRequired ? 'text-gray-500 hover:text-gray-700' : 'text-indigo-500 hover:text-indigo-700'}`}
+                                    >
+                                        Ver Detalle <ArrowRight size={10}/>
+                                    </Link>
                                 </td>
                                 
                                 {/* ESTADO ACTUAL */}
