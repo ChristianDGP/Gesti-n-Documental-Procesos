@@ -1,12 +1,16 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { HierarchyService, generateMatrixId } from '../services/firebaseBackend';
-import { FullHierarchy, ProcessNode } from '../types';
+import { FullHierarchy, ProcessNode, User, UserRole } from '../types';
 import { 
-  FolderTree, ChevronRight, ChevronDown, Plus, X, Edit, Trash2, Save, Layers, Network, FolderOpen, FileText, Loader2, Search, Eye, EyeOff, Power
+  FolderTree, ChevronRight, ChevronDown, Plus, X, Edit, Trash2, Save, Layers, Network, FolderOpen, FileText, Loader2, Search, Eye, EyeOff, Power, FolderInput, ArrowRight, AlertTriangle
 } from 'lucide-react';
 
-const AdminHierarchy: React.FC = () => {
+interface Props {
+    user: User;
+}
+
+const AdminHierarchy: React.FC<Props> = ({ user }) => {
   const [hierarchy, setHierarchy] = useState<FullHierarchy>({});
   const [loading, setLoading] = useState(true);
   
@@ -29,6 +33,13 @@ const AdminHierarchy: React.FC = () => {
   // Rename State
   const [renameMode, setRenameMode] = useState<{ level: string, oldName: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
+
+  // Move Modal State
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<{ docId: string, name: string, currentProject: string, currentMacro: string, currentProcess: string } | null>(null);
+  const [targetProject, setTargetProject] = useState('');
+  const [targetMacro, setTargetMacro] = useState('');
+  const [targetProcess, setTargetProcess] = useState('');
 
   useEffect(() => {
     loadData();
@@ -93,13 +104,6 @@ const AdminHierarchy: React.FC = () => {
       if (!window.confirm(confirmMsg)) return;
 
       try {
-          // Optimistic UI update
-          setHierarchy(prev => {
-              // Deep copy to update specific node state without full reload flicker
-              // (Simplification: just reload data for consistency in complex tree)
-              return prev; 
-          });
-
           await HierarchyService.toggleProcessStatus(id, currentStatus);
           await loadData(); // Reload to reflect changes
       } catch (e: any) {
@@ -107,9 +111,49 @@ const AdminHierarchy: React.FC = () => {
       }
   };
 
+  // --- HARD DELETE MICROPROCESS (ADMIN ONLY) ---
+  const handleHardDeleteMicro = async (id: string, name: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      
+      const confirmMsg = `⚠️ PELIGRO: Eliminación Permanente ⚠️\n\n¿Estás seguro de que deseas ELIMINAR definitivamente el microproceso "${name}"?\n\nEsta acción borrará el nodo de la estructura y romperá la relación con los documentos existentes.`;
+
+      if (!window.confirm(confirmMsg)) return;
+
+      // OPTIMISTIC UPDATE: Remove from UI immediately
+      setHierarchy(prev => {
+          const next = { ...prev };
+          // Deep traversal to find and remove the node in local state
+          Object.keys(next).forEach(proj => {
+              Object.keys(next[proj]).forEach(macro => {
+                  Object.keys(next[proj][macro]).forEach(proc => {
+                      next[proj][macro][proc] = next[proj][macro][proc].filter(n => n.docId !== id);
+                  });
+              });
+          });
+          return next;
+      });
+
+      try {
+          // No global loading spinner to keep the UI fluid, the item is already gone
+          await HierarchyService.deleteMicroprocess(id);
+          // Background sync to ensure consistency
+          setTimeout(loadData, 500); 
+      } catch (e: any) {
+          alert("Error al eliminar: " + e.message);
+          loadData(); // Revert on error
+      }
+  };
+
   // NEW: Delete logic for parent nodes
   const handleDeleteNode = async (level: 'PROJECT' | 'MACRO' | 'PROCESS', name: string, e: React.MouseEvent) => {
       e.stopPropagation();
+      
+      // Additional safety check on frontend
+      if (user.role !== UserRole.ADMIN) {
+          alert("Acción no permitida. Solo administradores.");
+          return;
+      }
+
       const warningMsg = `⚠️ ADVERTENCIA CRÍTICA ⚠️\n\nEstá a punto de eliminar el ${level}: "${name}".\n\nEsta acción ELIMINARÁ TODOS los datos contenidos en él (Macroprocesos, Procesos y Microprocesos). \n\n¿Está absolutamente seguro?`;
       
       if (!window.confirm(warningMsg)) return;
@@ -174,6 +218,46 @@ const AdminHierarchy: React.FC = () => {
       }
   };
 
+  // --- MOVE / RELOCATE LOGIC ---
+  const handleMoveStart = (micro: ProcessNode, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setMoveTarget({
+          docId: micro.docId,
+          name: micro.name,
+          currentProject: selectedProject || '',
+          currentMacro: selectedMacro || '',
+          currentProcess: selectedProcess || ''
+      });
+      // Pre-fill current values or defaults
+      setTargetProject(selectedProject || '');
+      setTargetMacro(selectedMacro || '');
+      setTargetProcess(selectedProcess || '');
+      setShowMoveModal(true);
+  };
+
+  const handleMoveSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!moveTarget || !targetProject || !targetMacro || !targetProcess) return;
+
+      // Verification
+      if (targetProject === moveTarget.currentProject && targetMacro === moveTarget.currentMacro && targetProcess === moveTarget.currentProcess) {
+          alert("El destino es el mismo que el origen. No se realizaron cambios.");
+          setShowMoveModal(false);
+          return;
+      }
+
+      try {
+          setLoading(true);
+          await HierarchyService.moveMicroprocess(moveTarget.docId, targetProject, targetMacro, targetProcess);
+          setShowMoveModal(false);
+          await loadData();
+      } catch (err: any) {
+          alert('Error al reubicar: ' + err.message);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   // --- MEMOIZED FLATTENED LIST FOR SEARCH ---
   const flatNodes = useMemo(() => {
       const list: { 
@@ -225,12 +309,17 @@ const AdminHierarchy: React.FC = () => {
   // Filter micros for the Column View
   const columnMicros = micros.filter(m => showInactive || m.active !== false);
 
+  // Helper for Move Modal Options
+  const availableMacros = targetProject && hierarchy[targetProject] ? Object.keys(hierarchy[targetProject]) : [];
+  const availableProcesses = targetProject && targetMacro && hierarchy[targetProject][targetMacro] ? Object.keys(hierarchy[targetProject][targetMacro]) : [];
+
+
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Network className="text-indigo-600" /> Mantenedor de Estructura</h1>
-          <p className="text-slate-500">Gestione el árbol de Proyectos, Macroprocesos y Procesos institucionales.</p>
+          <p className="text-slate-500">Definición jerárquica de Proyectos, Macros y Procesos.</p>
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -306,7 +395,7 @@ const AdminHierarchy: React.FC = () => {
                                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">Inactivo</span>
                                       )}
                                   </td>
-                                  <td className="px-4 py-3 text-right">
+                                  <td className="px-4 py-3 text-right flex justify-end gap-1">
                                       <button 
                                           onClick={(e) => handleToggleStatus(item.micro.docId, item.micro.name, item.micro.active !== false, e)} 
                                           className={`p-1.5 rounded transition-colors ${
@@ -316,6 +405,16 @@ const AdminHierarchy: React.FC = () => {
                                       >
                                           <Power size={16} />
                                       </button>
+                                      
+                                      {user.role === UserRole.ADMIN && (
+                                          <button 
+                                              onClick={(e) => handleHardDeleteMicro(item.micro.docId, item.micro.name, e)}
+                                              className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                              title="Eliminar Definitivamente"
+                                          >
+                                              <Trash2 size={16} />
+                                          </button>
+                                      )}
                                   </td>
                               </tr>
                           ))}
@@ -334,7 +433,7 @@ const AdminHierarchy: React.FC = () => {
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
                   <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                       <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Proyectos</h3>
-                      <button onClick={() => handleAdd('PROJECT')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded"><Plus size={16}/></button>
+                      <button onClick={() => handleAdd('PROJECT')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Proyecto"><Plus size={16}/></button>
                   </div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {projects.map(p => (
@@ -350,7 +449,9 @@ const AdminHierarchy: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button onClick={(e) => { e.stopPropagation(); handleRenameStart('PROJECT', p); }} className="text-slate-400 hover:text-indigo-600 p-1"><Edit size={12}/></button>
-                                  <button onClick={(e) => handleDeleteNode('PROJECT', p, e)} className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={12}/></button>
+                                  {user.role === UserRole.ADMIN && (
+                                      <button onClick={(e) => handleDeleteNode('PROJECT', p, e)} className="text-slate-400 hover:text-red-600 p-1" title="Eliminar Proyecto"><Trash2 size={12}/></button>
+                                  )}
                               </div>
                           </div>
                       ))}
@@ -361,7 +462,7 @@ const AdminHierarchy: React.FC = () => {
               <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${!selectedProject ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                       <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Macroprocesos</h3>
-                      {selectedProject && <button onClick={() => handleAdd('MACRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded"><Plus size={16}/></button>}
+                      {selectedProject && <button onClick={() => handleAdd('MACRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nueva Macro"><Plus size={16}/></button>}
                   </div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {macros.length === 0 && <p className="text-xs text-slate-400 text-center py-4 italic">Sin elementos</p>}
@@ -378,7 +479,9 @@ const AdminHierarchy: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button onClick={(e) => { e.stopPropagation(); handleRenameStart('MACRO', m); }} className="text-slate-400 hover:text-blue-600 p-1"><Edit size={12}/></button>
-                                  <button onClick={(e) => handleDeleteNode('MACRO', m, e)} className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={12}/></button>
+                                  {user.role === UserRole.ADMIN && (
+                                      <button onClick={(e) => handleDeleteNode('MACRO', m, e)} className="text-slate-400 hover:text-red-600 p-1" title="Eliminar Macro"><Trash2 size={12}/></button>
+                                  )}
                               </div>
                           </div>
                       ))}
@@ -389,7 +492,7 @@ const AdminHierarchy: React.FC = () => {
               <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${!selectedMacro ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                       <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Procesos</h3>
-                      {selectedMacro && <button onClick={() => handleAdd('PROCESS')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded"><Plus size={16}/></button>}
+                      {selectedMacro && <button onClick={() => handleAdd('PROCESS')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Proceso"><Plus size={16}/></button>}
                   </div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {processes.length === 0 && <p className="text-xs text-slate-400 text-center py-4 italic">Sin elementos</p>}
@@ -406,7 +509,9 @@ const AdminHierarchy: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button onClick={(e) => { e.stopPropagation(); handleRenameStart('PROCESS', proc); }} className="text-slate-400 hover:text-purple-600 p-1"><Edit size={12}/></button>
-                                  <button onClick={(e) => handleDeleteNode('PROCESS', proc, e)} className="text-slate-400 hover:text-red-600 p-1"><Trash2 size={12}/></button>
+                                  {user.role === UserRole.ADMIN && (
+                                      <button onClick={(e) => handleDeleteNode('PROCESS', proc, e)} className="text-slate-400 hover:text-red-600 p-1" title="Eliminar Proceso"><Trash2 size={12}/></button>
+                                  )}
                               </div>
                           </div>
                       ))}
@@ -417,7 +522,7 @@ const AdminHierarchy: React.FC = () => {
               <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${!selectedProcess ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                       <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Microprocesos</h3>
-                      {selectedProcess && <button onClick={() => handleAdd('MICRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded"><Plus size={16}/></button>}
+                      {selectedProcess && <button onClick={() => handleAdd('MICRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Microproceso"><Plus size={16}/></button>}
                   </div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {columnMicros.length === 0 && <p className="text-xs text-slate-400 text-center py-4 italic">Sin elementos</p>}
@@ -432,15 +537,39 @@ const AdminHierarchy: React.FC = () => {
                                   <FileText size={14} className={micro.active === false ? 'text-slate-300' : 'text-slate-400'} />
                                   <span className="truncate font-medium">{micro.name}</span>
                               </div>
-                              <button 
-                                onClick={(e) => handleToggleStatus(micro.docId, micro.name, micro.active !== false, e)} 
-                                className={`opacity-0 group-hover:opacity-100 transition-opacity ${
-                                    micro.active === false ? 'text-green-400 hover:text-green-600' : 'text-slate-300 hover:text-red-500'
-                                }`}
-                                title={micro.active === false ? "Reactivar" : "Inactivar"}
-                              >
-                                  <Power size={14}/>
-                              </button>
+                              
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {/* MOVE BUTTON */}
+                                  <button 
+                                    onClick={(e) => handleMoveStart(micro, e)}
+                                    className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded"
+                                    title="Reubicar (Mover)"
+                                  >
+                                      <FolderInput size={14} />
+                                  </button>
+                                  
+                                  {/* TOGGLE ACTIVE BUTTON */}
+                                  <button 
+                                    onClick={(e) => handleToggleStatus(micro.docId, micro.name, micro.active !== false, e)} 
+                                    className={`p-1 rounded transition-colors ${
+                                        micro.active === false ? 'text-slate-300 hover:text-green-600 hover:bg-green-50' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'
+                                    }`}
+                                    title={micro.active === false ? "Reactivar" : "Inactivar"}
+                                  >
+                                      <Power size={14}/>
+                                  </button>
+
+                                  {/* HARD DELETE BUTTON (ADMIN ONLY) */}
+                                  {user.role === UserRole.ADMIN && (
+                                      <button 
+                                          onClick={(e) => handleHardDeleteMicro(micro.docId, micro.name, e)}
+                                          className="p-1 rounded text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                          title="Eliminar Definitivamente"
+                                      >
+                                          <Trash2 size={14} />
+                                      </button>
+                                  )}
+                              </div>
                           </div>
                       ))}
                   </div>
@@ -501,6 +630,94 @@ const AdminHierarchy: React.FC = () => {
                     </div>
                 </div>
             </div>
+          </div>
+      )}
+
+      {/* MODAL MOVE (RELOCATE) */}
+      {showMoveModal && moveTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                          <FolderInput size={20} className="text-indigo-600"/>
+                          Reubicar Microproceso
+                      </h3>
+                      <button onClick={() => setShowMoveModal(false)}><X size={20} className="text-slate-400 hover:text-slate-600"/></button>
+                  </div>
+                  
+                  <form onSubmit={handleMoveSubmit} className="p-6">
+                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-6 text-sm">
+                          <span className="text-slate-500">Moviendo:</span> 
+                          <span className="font-bold text-slate-800 ml-2">{moveTarget.name}</span>
+                          <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
+                              <span>Desde:</span>
+                              <span className="bg-white px-2 py-0.5 rounded border">{moveTarget.currentProject}</span>
+                              <ChevronRight size={12}/>
+                              <span className="bg-white px-2 py-0.5 rounded border">{moveTarget.currentMacro}</span>
+                              <ChevronRight size={12}/>
+                              <span className="bg-white px-2 py-0.5 rounded border">{moveTarget.currentProcess}</span>
+                          </div>
+                      </div>
+
+                      <div className="space-y-4">
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Proyecto Destino</label>
+                              <select 
+                                  value={targetProject}
+                                  onChange={(e) => {
+                                      setTargetProject(e.target.value);
+                                      setTargetMacro(''); // Reset downstream
+                                      setTargetProcess('');
+                                  }}
+                                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                              >
+                                  {Object.keys(hierarchy).map(p => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                          </div>
+
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Macroproceso Destino</label>
+                              <select 
+                                  value={targetMacro}
+                                  onChange={(e) => {
+                                      setTargetMacro(e.target.value);
+                                      setTargetProcess('');
+                                  }}
+                                  disabled={!targetProject}
+                                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
+                              >
+                                  <option value="">-- Seleccionar --</option>
+                                  {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
+                              </select>
+                          </div>
+
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Proceso Destino</label>
+                              <select 
+                                  value={targetProcess}
+                                  onChange={(e) => setTargetProcess(e.target.value)}
+                                  disabled={!targetMacro}
+                                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
+                              >
+                                  <option value="">-- Seleccionar --</option>
+                                  {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
+                              </select>
+                          </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 mt-8">
+                          <button type="button" onClick={() => setShowMoveModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded text-sm font-medium">Cancelar</button>
+                          <button 
+                            type="submit" 
+                            disabled={!targetProcess || loading}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                          >
+                             {loading && <Loader2 size={14} className="animate-spin"/>}
+                             Confirmar Reubicación
+                          </button>
+                      </div>
+                  </form>
+              </div>
           </div>
       )}
 

@@ -8,6 +8,7 @@ import CreateDocument from './views/CreateDocument';
 import DocumentDetail from './views/DocumentDetail';
 import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
+import AdminHierarchy from './views/AdminHierarchy'; // Import the Hierarchy View
 import AdminDatabase from './views/AdminDatabase';
 import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
@@ -68,6 +69,12 @@ const App: React.FC = () => {
                                         path="/admin/assignments" 
                                         element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminAssignments user={user} /> : <Navigate to="/" />} 
                                     />
+                                    {/* New Structure Manager Route - Passed USER prop */}
+                                    <Route 
+                                        path="/admin/structure" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminHierarchy user={user} /> : <Navigate to="/" />} 
+                                    />
+                                    
                                     <Route 
                                         path="/admin/database" 
                                         element={user.role === UserRole.ADMIN ? <AdminDatabase /> : <Navigate to="/" />} 

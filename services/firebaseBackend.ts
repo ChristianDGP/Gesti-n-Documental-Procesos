@@ -555,6 +555,16 @@ export const HierarchyService = {
       await updateDoc(docRef, { active: !currentActiveStatus });
   },
 
+  // Move a microprocess to a new parent path
+  moveMicroprocess: async (docId: string, newProject: string, newMacro: string, newProcess: string) => {
+      const docRef = doc(db, "process_matrix", docId);
+      await updateDoc(docRef, {
+          project: newProject,
+          macro: newMacro,
+          process: newProcess
+      });
+  },
+
   // Deprecated - replaced by soft delete, but kept for legacy cleanup if needed
   deleteMicroprocess: async (id: string) => {
       if (!id || !id.trim()) throw new Error("ID no válido");

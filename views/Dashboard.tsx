@@ -1,10 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { DocumentService, HierarchyService, UserService } from '../services/firebaseBackend';
-import { Document, User, UserRole, DocState, DocType } from '../types';
+import { Document, User, UserRole, DocState, DocType, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, PauseCircle } from 'lucide-react';
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Filter, Trash2, Users, Search, X, Calendar, Inbox, ArrowRight, Activity, BookOpen, UserCheck, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, PauseCircle, PlayCircle, Loader2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface DashboardProps {
@@ -15,8 +15,8 @@ type SortKey = 'project' | 'microprocess' | 'state' | 'updatedAt';
 type QuickFilterType = 'ALL' | 'REQUIRED' | 'NOT_STARTED' | 'IN_PROCESS' | 'REFERENT' | 'CONTROL' | 'FINISHED';
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
+  const navigate = useNavigate();
   const [docs, setDocs] = useState<Document[]>([]);
-  const [requiredMap, setRequiredMap] = useState<Record<string, DocType[]>>({});
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,51 +72,117 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-        const [data, reqs, users] = await Promise.all([
+        const [realDocsData, hierarchy, users] = await Promise.all([
             DocumentService.getAll(),
-            HierarchyService.getRequiredTypesMap(),
+            HierarchyService.getFullHierarchy(),
             UserService.getAll()
         ]);
 
-        // DEDUPLICATION LOGIC (Show only latest version)
-        // Group by Project + Microprocess + DocType
+        // 0. BUILD REQUIREMENTS MAP (Active & Configured)
+        // This ensures we only count documents that are explicitly defined in the assignment matrix.
+        const requirementsMap = new Map<string, Set<string>>();
+        
+        Object.keys(hierarchy).forEach(proj => {
+            Object.keys(hierarchy[proj]).forEach(macro => {
+                Object.keys(hierarchy[proj][macro]).forEach(proc => {
+                    hierarchy[proj][macro][proc].forEach(node => {
+                        if (node.active === false) return; // Skip inactive nodes
+                        if (!node.requiredTypes || node.requiredTypes.length === 0) return;
+                        
+                        // Key: Project|Microprocess
+                        const key = `${proj}|${node.name}`;
+                        requirementsMap.set(key, new Set(node.requiredTypes));
+                    });
+                });
+            });
+        });
+
+        // 1. DEDUPLICATION & FILTERING of Real Docs
         const latestDocsMap = new Map<string, Document>();
         
-        data.forEach(doc => {
-            const uniqueKey = `${doc.project || 'Gen'}|${doc.microprocess || doc.title}|${doc.docType || 'Gen'}`;
+        realDocsData.forEach(doc => {
+            // Construct Lookup Key for Requirements
+            const proj = doc.project || '';
+            const micro = doc.microprocess || doc.title; // Fallback if microprocess is missing
+            const type = doc.docType || '';
+
+            // FILTER: Check if this specific doc type is required for this microprocess in the Matrix
+            const reqKey = `${proj}|${micro}`;
+            const allowedTypes = requirementsMap.get(reqKey);
+
+            if (!allowedTypes || !allowedTypes.has(type)) {
+                // Not in the matrix of required documents -> Skip it (Do not count)
+                return;
+            }
+
+            const uniqueKey = `${proj}|${micro}|${type}`;
             const existing = latestDocsMap.get(uniqueKey);
             
-            // Logic: Determine which is the "Current Active" document
             let shouldUseNew = false;
-
             if (!existing) {
                 shouldUseNew = true;
             } else {
                 const timeNew = doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0;
                 const timeExisting = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
 
-                // 1. Primary check: Date
-                if (timeNew > timeExisting) {
-                    shouldUseNew = true;
-                } 
-                // 2. Secondary check: If dates are effectively equal (common in bulk imports), use Version
+                if (timeNew > timeExisting) shouldUseNew = true;
                 else if (timeNew === timeExisting) {
-                    if (isVersionNewer(doc.version, existing.version)) {
-                        shouldUseNew = true;
-                    }
+                    if (isVersionNewer(doc.version, existing.version)) shouldUseNew = true;
                 }
             }
-
-            if (shouldUseNew) {
-                latestDocsMap.set(uniqueKey, doc);
-            }
+            if (shouldUseNew) latestDocsMap.set(uniqueKey, doc);
         });
         
-        const finalDocs = Array.from(latestDocsMap.values());
+        // 2. VIRTUAL DOC GENERATION (The "Matrix Merge")
+        // Iterate through the Hierarchy Matrix and find "Missing" documents that are Required
+        const virtualDocs: Document[] = [];
+        
+        Object.keys(hierarchy).forEach(proj => {
+            Object.keys(hierarchy[proj]).forEach(macro => {
+                Object.keys(hierarchy[proj][macro]).forEach(proc => {
+                    hierarchy[proj][macro][proc].forEach(node => {
+                        // Skip inactive nodes
+                        if (node.active === false) return;
 
-        setDocs(finalDocs);
-        setRequiredMap(reqs);
+                        // Check each required DocType for this node
+                        node.requiredTypes.forEach(type => {
+                            const uniqueKey = `${proj}|${node.name}|${type}`;
+                            
+                            // If this required document DOES NOT exist in the filtered real documents map...
+                            if (!latestDocsMap.has(uniqueKey)) {
+                                // ... Create a "Virtual" Document (Placeholder)
+                                const virtualDoc: Document = {
+                                    id: `virtual_${uniqueKey.replace(/\|/g, '_')}`, // Special ID prefix
+                                    title: `${node.name} - ${type}`,
+                                    description: 'Pendiente de inicio',
+                                    project: proj,
+                                    macroprocess: macro,
+                                    process: proc,
+                                    microprocess: node.name,
+                                    docType: type as DocType,
+                                    state: DocState.NOT_STARTED,
+                                    version: '-',
+                                    progress: 0,
+                                    assignees: node.assignees || [], // Inherit assignees from Matrix!
+                                    authorId: 'system',
+                                    authorName: 'Sistema',
+                                    files: [],
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: '' // Empty indicates never touched
+                                };
+                                virtualDocs.push(virtualDoc);
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
+        // 3. MERGE REAL + VIRTUAL
+        const allDocs = [...Array.from(latestDocsMap.values()), ...virtualDocs];
+        setDocs(allDocs);
         setAllUsers(users);
+
     } catch (error) {
         console.error("Error loading dashboard data:", error);
     } finally {
@@ -125,18 +191,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const handleDeleteDoc = async (id: string, e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent navigation
+    e.preventDefault(); 
+    e.stopPropagation();
+    // Virtual docs cannot be deleted via API (they exist because of the matrix)
+    if (id.startsWith('virtual_')) {
+        alert("Este es un documento requerido por la estructura. Para eliminarlo, debe quitar el microproceso en el gestor de Estructura o desmarcar el tipo de documento en Asignaciones.");
+        return;
+    }
+
     if (!window.confirm('¿Eliminar este documento permanentemente?')) return;
     await DocumentService.delete(id);
     await loadData();
-  };
-
-  // Helper to determine if a doc is strictly required
-  const isDocRequired = (doc: Document): boolean => {
-      const key = `${doc.project}|${doc.microprocess}`;
-      const requiredTypes = requiredMap[key];
-      if (!requiredTypes) return false; 
-      return doc.docType ? requiredTypes.includes(doc.docType) : false;
   };
 
   // Helper to get formatted assignees names (returns array of names for display filtering)
@@ -149,79 +214,71 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const handleQuickFilterClick = (type: QuickFilterType) => {
       if (quickFilter === type) {
-          setQuickFilter('ALL'); // Toggle off
+          setQuickFilter('ALL'); 
       } else {
           setQuickFilter(type);
-          setFilterState(''); // Reset manual state dropdown to avoid conflicts
+          setFilterState(''); 
       }
   };
 
-  const getFilteredDocs = () => {
-    let filtered = docs;
-    
-    // 2. Explicit Filters
-    if (filterProject) {
-        filtered = filtered.filter(d => d.project === filterProject);
-    }
-    if (filterMacro) {
-        filtered = filtered.filter(d => d.macroprocess === filterMacro);
-    }
-    if (filterProcess) {
-        filtered = filtered.filter(d => d.process === filterProcess);
-    }
-    if (filterDocType) {
-        filtered = filtered.filter(d => d.docType === filterDocType);
-    }
-    if (filterState) {
-        filtered = filtered.filter(d => d.state === filterState);
-    }
-    if (filterAnalyst) {
-        filtered = filtered.filter(d => {
-            const names = getAssigneesNames(d);
-            // Check if ANY of the assignees matches the filter
-            return names.includes(filterAnalyst);
-        });
-    }
+  // --- FILTERING LOGIC ---
+  // 1. Get Context Docs (Filtered by dropdowns EXCEPT State)
+  //    This ensures stats reflect the selected Project/Macro/etc.
+  const getContextDocs = () => {
+      let filtered = docs;
+      if (filterProject) filtered = filtered.filter(d => d.project === filterProject);
+      if (filterMacro) filtered = filtered.filter(d => d.macroprocess === filterMacro);
+      if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
+      if (filterDocType) filtered = filtered.filter(d => d.docType === filterDocType);
+      if (filterAnalyst) {
+          filtered = filtered.filter(d => {
+              const assigneeIds = d.assignees || [];
+              return assigneeIds.includes(filterAnalyst);
+          });
+      }
+      return filtered;
+  };
 
-    // 3. Quick Filters (Stat Cards)
-    if (quickFilter !== 'ALL') {
-        // All quick filters (except ALL) imply showing "Required" docs context
-        filtered = filtered.filter(d => isDocRequired(d));
-
-        switch (quickFilter) {
-            case 'NOT_STARTED':
-                filtered = filtered.filter(d => d.state === DocState.NOT_STARTED);
-                break;
-            case 'IN_PROCESS':
-                filtered = filtered.filter(d => 
-                    // Excluye NOT_STARTED, ya tiene su propia tarjeta
-                    d.state === DocState.INITIATED || 
-                    d.state === DocState.IN_PROCESS || 
-                    d.state === DocState.INTERNAL_REVIEW
-                );
-                break;
-            case 'REFERENT':
-                filtered = filtered.filter(d => 
-                    d.state === DocState.SENT_TO_REFERENT || 
-                    d.state === DocState.REFERENT_REVIEW
-                );
-                break;
-            case 'CONTROL':
-                filtered = filtered.filter(d => 
-                    d.state === DocState.SENT_TO_CONTROL || 
-                    d.state === DocState.CONTROL_REVIEW
-                );
-                break;
-            case 'FINISHED':
-                filtered = filtered.filter(d => d.state === DocState.APPROVED);
-                break;
-            case 'REQUIRED':
-                // Already filtered by isDocRequired above
-                break;
-        }
-    }
-
-    return filtered;
+  // 2. Get Final Display Docs (Context + State Filter)
+  const getFinalDisplayDocs = (contextDocs: Document[]) => {
+      let filtered = contextDocs;
+      
+      // Apply State Filter (Dropdown OR QuickFilter)
+      if (filterState) {
+          filtered = filtered.filter(d => d.state === filterState);
+      } else if (quickFilter !== 'ALL') {
+          switch (quickFilter) {
+              case 'NOT_STARTED':
+                  filtered = filtered.filter(d => d.state === DocState.NOT_STARTED);
+                  break;
+              case 'IN_PROCESS':
+                  filtered = filtered.filter(d => 
+                      d.state === DocState.INITIATED || 
+                      d.state === DocState.IN_PROCESS || 
+                      d.state === DocState.INTERNAL_REVIEW
+                  );
+                  break;
+              case 'REFERENT':
+                  filtered = filtered.filter(d => 
+                      d.state === DocState.SENT_TO_REFERENT || 
+                      d.state === DocState.REFERENT_REVIEW
+                  );
+                  break;
+              case 'CONTROL':
+                  filtered = filtered.filter(d => 
+                      d.state === DocState.SENT_TO_CONTROL || 
+                      d.state === DocState.CONTROL_REVIEW
+                  );
+                  break;
+              case 'FINISHED':
+                  filtered = filtered.filter(d => d.state === DocState.APPROVED);
+                  break;
+              case 'REQUIRED':
+                  // All are effectively required in this view
+                  break;
+          }
+      }
+      return filtered;
   };
 
   // Sorting Logic
@@ -239,8 +296,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           
           switch (sortConfig.key) {
               case 'updatedAt':
-                  const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-                  const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                  // Handle empty date for virtual docs (treat as old)
+                  const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : -1;
+                  const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : -1;
                   return (timeA - timeB) * modifier;
               case 'project':
                   return (a.project || '').localeCompare(b.project || '') * modifier;
@@ -256,7 +314,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       });
   };
 
-  const filteredDocs = getFilteredDocs();
+  const contextDocs = getContextDocs();
+  const filteredDocs = getFinalDisplayDocs(contextDocs);
   const sortedDocs = getSortedDocs(filteredDocs);
 
   // Extract unique values for dropdowns from the FULL deduplicated list
@@ -292,17 +351,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       .flatMap(d => getAssigneesNames(d))
   )).sort() as string[];
   
-  // Calculate Stats based on BASE filtered documents (ignoring quick filter for the counts themselves to stay static relative to dropdowns)
-  const contextDocs = (() => {
-      let d = docs;
-      if (filterProject) d = d.filter(doc => doc.project === filterProject);
-      if (filterMacro) d = d.filter(doc => doc.macroprocess === filterMacro);
-      if (filterProcess) d = d.filter(doc => doc.process === filterProcess);
-      if (filterDocType) d = d.filter(doc => doc.docType === filterDocType);
-      if (filterAnalyst) d = d.filter(doc => getAssigneesNames(doc).includes(filterAnalyst));
-      return d.filter(doc => isDocRequired(doc));
-  })();
-
+  // Stats Calculation (Based on CONTEXT docs, not Final Filtered Docs)
+  // This ensures that if you filter by Project "HPC", the stats show numbers for HPC.
+  // But if you click "Finished" card, the stats don't change (showing context distribution).
   const stats = {
     totalRequired: contextDocs.length,
     notStarted: contextDocs.filter(d => d.state === DocState.NOT_STARTED).length,
@@ -349,10 +400,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         : <ArrowDown size={14} className="text-indigo-600" />;
   };
 
-  // Show analyst filter for everyone now, as everyone can see everything
+  const handleVirtualDocClick = (doc: Document) => {
+      navigate('/new');
+  };
+
+  // Show analyst filter for everyone now
   const showAnalystFilter = true; 
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Cargando dashboard...</div>;
+  if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Actualizando dashboard...</div>;
 
   return (
     <div className="space-y-6">
@@ -480,7 +535,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             className="text-sm p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                         >
                             <option value="">Analista (Todos)</option>
-                            {uniqueAnalysts.map(a => <option key={a} value={a}>{a}</option>)}
+                            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
                     )}
 
@@ -574,10 +629,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             <tr><td colSpan={7} className="p-8 text-center text-slate-400">No se encontraron documentos con los filtros aplicados.</td></tr>
                         ) : (
                             sortedDocs.map(doc => {
-                                const isRequired = isDocRequired(doc);
-                                const rowClass = isRequired 
-                                    ? "border-b border-slate-50 hover:bg-slate-50 transition-colors" 
-                                    : "border-b border-slate-50 bg-slate-100/50 text-slate-400 hover:bg-slate-100 transition-colors";
+                                const isVirtual = doc.id.startsWith('virtual_');
+                                const isRequired = true; // All items in this unified view are relevant
+                                
+                                const rowClass = isVirtual
+                                    ? "border-b border-slate-50 bg-slate-50/80 text-slate-500 hover:bg-indigo-50/30 transition-colors"
+                                    : "border-b border-slate-50 hover:bg-slate-50 transition-colors";
                                 
                                 const isNotStarted = doc.state === DocState.NOT_STARTED;
 
@@ -592,7 +649,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                         </td>
                                         <td className="px-4 py-3 font-medium">
                                             {doc.microprocess || doc.title}
-                                            {!isRequired && <div className="text-[10px] text-slate-400 font-normal mt-0.5">(No Requerido)</div>}
                                             
                                             {/* VISUALIZACIÓN VERTICAL DE ANALISTAS */}
                                             {showAnalystFilter && doc.assignees && doc.assignees.length > 0 && (
@@ -607,6 +663,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                     })}
                                                 </div>
                                             )}
+                                            {(!doc.assignees || doc.assignees.length === 0) && (
+                                                <div className="text-[10px] text-red-300 italic mt-1">Sin asignar</div>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col items-start gap-1">
@@ -619,9 +678,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                         {doc.docType}
                                                     </span>
                                                 )}
-                                                <Link to={`/doc/${doc.id}`} className={`text-sm flex items-center hover:underline ${isRequired ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-500 hover:text-slate-700'}`}>
-                                                    {isNotStarted ? 'Iniciar' : 'Ver Detalle'} <ArrowRight size={12} className="ml-1" />
-                                                </Link>
+                                                
+                                                {isVirtual ? (
+                                                    <button onClick={() => handleVirtualDocClick(doc)} className="text-sm flex items-center text-indigo-500 hover:text-indigo-700 hover:underline">
+                                                        <PlayCircle size={14} className="mr-1"/> Iniciar Proceso
+                                                    </button>
+                                                ) : (
+                                                    <Link to={`/doc/${doc.id}`} className="text-sm flex items-center hover:underline text-indigo-600 hover:text-indigo-800">
+                                                        Ver Detalle <ArrowRight size={12} className="ml-1" />
+                                                    </Link>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3">
@@ -652,7 +718,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                                 </>
                                             ) : (
                                                 <div className="text-xs text-slate-400 italic flex items-center gap-1">
-                                                    <Clock size={12} /> Sin actividad
+                                                    <Clock size={12} /> Pendiente
                                                 </div>
                                             )}
                                         </td>
@@ -660,8 +726,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                             <td className="px-4 py-3 text-right">
                                                 <button 
                                                     onClick={(e) => handleDeleteDoc(doc.id, e)}
-                                                    className="text-slate-400 hover:text-red-600 transition-colors p-1"
-                                                    title="Eliminar Documento"
+                                                    className={`text-slate-400 hover:text-red-600 transition-colors p-1 ${isVirtual ? 'opacity-30 cursor-help' : ''}`}
+                                                    title={isVirtual ? "Gestione la estructura para eliminar este requisito" : "Eliminar Documento"}
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
@@ -679,10 +745,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         {/* Chart Column */}
         <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col items-center justify-center min-h-[300px]">
-                <h2 className="font-semibold text-slate-800 w-full mb-4 text-center">Distribución Requerida</h2>
+                <h2 className="font-semibold text-slate-800 w-full mb-4 text-center">Estado General</h2>
                 {chartData.length > 0 ? (
-                    <div className="w-full h-64">
-                        <ResponsiveContainer width="100%" height="100%">
+                    /* FIX: Enforce minHeight on parent AND strict minWidth/minHeight on ResponsiveContainer to prevent 0x0 render crash */
+                    <div className="w-full h-64 min-h-[256px]">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
                             <PieChart>
                                 <Pie
                                     data={chartData}
@@ -711,7 +778,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-100">
                 <h3 className="font-bold text-indigo-900 mb-2">Resumen</h3>
                 <p className="text-sm text-indigo-700 mb-4">
-                    Visualizando {filteredDocs.length} documentos totales.
+                    Visualizando {filteredDocs.length} procesos totales.
                 </p>
                 <ul className="text-sm space-y-2 text-indigo-800">
                     <li className="flex justify-between border-b border-indigo-200 pb-1">
@@ -725,10 +792,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     <li className="flex justify-between border-b border-indigo-200 pb-1">
                         <span>Terminados:</span>
                         <span className="font-bold text-green-600">{stats.finished}</span>
-                    </li>
-                    <li className="flex justify-between text-xs pt-1 opacity-80">
-                        <span>No Requeridos:</span>
-                        <span>{filteredDocs.length - filteredDocs.filter(d => isDocRequired(d)).length}</span>
                     </li>
                 </ul>
             </div>
