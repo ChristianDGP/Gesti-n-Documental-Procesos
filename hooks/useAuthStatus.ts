@@ -11,6 +11,12 @@ export const useAuthStatus = () => {
     const [cargando, setCargando] = useState(true);
 
     useEffect(() => {
+        // Initial load check for speed (Mock Session)
+        const cachedInit = localStorage.getItem('sgd_user_cache');
+        if (cachedInit) {
+            setUser(JSON.parse(cachedInit));
+        }
+
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
                 try {
@@ -97,7 +103,24 @@ export const useAuthStatus = () => {
                     setUser(null);
                 }
             } else {
-                setUser(null);
+                // FALLBACK: Hybrid Auth (Mock Users)
+                // If Firebase has no user, check local storage for a valid mock session
+                const cached = localStorage.getItem('sgd_user_cache');
+                if (cached) {
+                    try {
+                        const parsedUser = JSON.parse(cached);
+                        // Basic validation that it's a user object
+                        if (parsedUser && parsedUser.id && parsedUser.role) {
+                            setUser(parsedUser);
+                        } else {
+                            setUser(null);
+                        }
+                    } catch (e) {
+                        setUser(null);
+                    }
+                } else {
+                    setUser(null);
+                }
             }
             setCargando(false);
         });

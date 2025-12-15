@@ -1,6 +1,9 @@
 
 import React, { useState } from 'react';
 import { loginUser, registerUser } from '../services/firebaseAuthService'; 
+import { UserService } from '../services/firebaseBackend';
+import { MOCK_USERS } from '../constants';
+import { User as UserType } from '../types';
 import { Lock, User, Key, AlertCircle, TrendingUp, Mail, UserPlus, LogIn, Info } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
 import { auth } from '../services/firebaseConfig'; 
@@ -31,6 +34,34 @@ const Login: React.FC = () => {
             }
         } catch (err: any) {
             console.error(err);
+            
+            // --- HYBRID AUTH FALLBACK ---
+            // If Firebase fails, check if it's a Mock User or a DB-only user (created via Admin Panel)
+            if (!isRegistering) {
+                 // 1. Check Mock Constants (e.g., admin@empresa.com)
+                 let targetUser: UserType | undefined = MOCK_USERS.find(u => u.email === email && u.password === password);
+                 
+                 // 2. If not found, Check Firestore Users (Users created manually by Admin)
+                 if (!targetUser) {
+                     try {
+                         const allUsers = await UserService.getAll();
+                         // Note: In a real app, do not store plain text passwords. This is for the demo/internal template capability.
+                         targetUser = allUsers.find(u => u.email === email && u.password === password);
+                     } catch (dbErr) {
+                         console.error("DB Login check failed", dbErr);
+                     }
+                 }
+
+                 // 3. If found in either fallback, Log In via Local Storage
+                 if (targetUser) {
+                     localStorage.setItem('sgd_user_cache', JSON.stringify(targetUser));
+                     // Force reload to ensure Auth Hook picks up the local storage state cleanly
+                     window.location.reload();
+                     return;
+                 }
+            }
+            // -----------------------------
+
             let mensajeError = 'Error de autenticación.';
             const errorCode = err.code;
             const errorMessage = err.message || '';

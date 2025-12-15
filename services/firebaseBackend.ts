@@ -414,6 +414,7 @@ export const DocumentService = {
       const actionLabel = action === 'COMMENT' ? 'Observación' : action;
       await HistoryService.log(docId, user, actionLabel, currentDoc.state, newState, comment);
       
+      // NOTIFICACIONES
       if (action === 'APPROVE' || action === 'REJECT') {
           const targetIds = currentDoc.assignees || [currentDoc.authorId];
           const type = action === 'APPROVE' ? 'APPROVAL' : 'REJECTION';
@@ -424,6 +425,7 @@ export const DocumentService = {
               }
           });
       }
+      
       if (action === 'COMMENT') {
            if (user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) {
                const targetIds = currentDoc.assignees || [currentDoc.authorId];
@@ -436,10 +438,31 @@ export const DocumentService = {
                coords.forEach(c => NotificationService.create(c.id, docId, 'COMMENT', 'Comentario de Analista', `${currentDoc.title}: ${comment}`, user.name));
            }
       }
+
+      // CORRECCIÓN SOLICITADA: Notificación robusta para Solicitud de Aprobación
       if (action === 'REQUEST_APPROVAL') {
            const allUsers = await UserService.getAll();
-           const coords = allUsers.filter(u => u.role === UserRole.COORDINATOR);
-           coords.forEach(c => NotificationService.create(c.id, docId, 'COMMENT', 'Solicitud de Aprobación', `${currentDoc.title} requiere revisión.`, user.name));
+           
+           // 1. Buscar Coordinadores
+           let targets = allUsers.filter(u => u.role === UserRole.COORDINATOR);
+           
+           // 2. Fallback: Si no hay coordinadores, notificar a los Administradores
+           if (targets.length === 0) {
+               console.warn("No coordinators found. Falling back to Admins for approval request.");
+               targets = allUsers.filter(u => u.role === UserRole.ADMIN);
+           }
+
+           // 3. Enviar Notificación de tipo 'ASSIGNMENT' (Icono azul/usuario) para destacar la tarea
+           for (const target of targets) {
+               await NotificationService.create(
+                   target.id, 
+                   docId, 
+                   'ASSIGNMENT', // Usamos ASSIGNMENT para indicar que es una tarea pendiente para el coordinador
+                   'Solicitud de Aprobación', 
+                   `El documento "${currentDoc.title}" (v${newVersion}) requiere su revisión.`, 
+                   user.name
+               );
+           }
       }
   }
 };

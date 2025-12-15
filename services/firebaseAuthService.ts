@@ -30,5 +30,6 @@ export const registerUser = async (email: string, password: string, name: string
 
 // Función de Logout
 export const logoutUser = async (): Promise<void> => {
+    localStorage.removeItem('sgd_user_cache'); // Clear Mock/Cache session
     await signOut(auth);
 };

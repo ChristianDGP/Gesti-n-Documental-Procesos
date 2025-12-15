@@ -41,34 +41,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     loadData();
   }, []);
 
-  // Helper to compare versions robustly
-  const isVersionNewer = (v1: string, v2: string): boolean => {
-      if (!v1) return false;
-      if (!v2) return true;
-      if (v1 === '-') return false; // Not Started is always older
-      
-      // Clean versions (remove 'v', 'AR', 'ACG')
-      const cleanV1 = v1.replace(/[^0-9.]/g, '');
-      const cleanV2 = v2.replace(/[^0-9.]/g, '');
-      
-      const parts1 = cleanV1.split('.').map(Number);
-      const parts2 = cleanV2.split('.').map(Number);
-      
-      for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-          const num1 = parts1[i] || 0;
-          const num2 = parts2[i] || 0;
-          if (num1 > num2) return true;
-          if (num1 < num2) return false;
-      }
-      
-      // If numbers are equal, check specific suffixes for priority
-      // Priority: ACG > AR > (none)
-      const weight1 = v1.includes('ACG') ? 3 : v1.includes('AR') ? 2 : 1;
-      const weight2 = v2.includes('ACG') ? 3 : v2.includes('AR') ? 2 : 1;
-      
-      return weight1 > weight2;
-  };
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -78,18 +50,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             UserService.getAll()
         ]);
 
-        // 0. BUILD REQUIREMENTS MAP (Active & Configured)
-        // This ensures we only count documents that are explicitly defined in the assignment matrix.
+        // 0. BUILD REQUIREMENTS MAP
         const requirementsMap = new Map<string, Set<string>>();
         
         Object.keys(hierarchy).forEach(proj => {
             Object.keys(hierarchy[proj]).forEach(macro => {
                 Object.keys(hierarchy[proj][macro]).forEach(proc => {
                     hierarchy[proj][macro][proc].forEach(node => {
-                        if (node.active === false) return; // Skip inactive nodes
+                        if (node.active === false) return; 
                         if (!node.requiredTypes || node.requiredTypes.length === 0) return;
                         
-                        // Key: Project|Microprocess
                         const key = `${proj}|${node.name}`;
                         requirementsMap.set(key, new Set(node.requiredTypes));
                     });
@@ -97,62 +67,47 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             });
         });
 
-        // 1. DEDUPLICATION & FILTERING of Real Docs
+        // 1. DEDUPLICATION of Real Docs (Golden Rule: Latest updatedAt wins)
         const latestDocsMap = new Map<string, Document>();
         
         realDocsData.forEach(doc => {
-            // Construct Lookup Key for Requirements
             const proj = doc.project || '';
-            const micro = doc.microprocess || doc.title; // Fallback if microprocess is missing
+            const micro = doc.microprocess || doc.title; 
             const type = doc.docType || '';
 
-            // FILTER: Check if this specific doc type is required for this microprocess in the Matrix
+            // Check if required in Matrix
             const reqKey = `${proj}|${micro}`;
             const allowedTypes = requirementsMap.get(reqKey);
-
             if (!allowedTypes || !allowedTypes.has(type)) {
-                // Not in the matrix of required documents -> Skip it (Do not count)
-                return;
+                return; // Skip if not in matrix requirements
             }
 
             const uniqueKey = `${proj}|${micro}|${type}`;
             const existing = latestDocsMap.get(uniqueKey);
             
-            let shouldUseNew = false;
-            if (!existing) {
-                shouldUseNew = true;
-            } else {
-                const timeNew = doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0;
-                const timeExisting = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
-
-                if (timeNew > timeExisting) shouldUseNew = true;
-                else if (timeNew === timeExisting) {
-                    if (isVersionNewer(doc.version, existing.version)) shouldUseNew = true;
-                }
+            // SIMPLIFIED LOGIC: Newest timestamp wins. Period.
+            // This ensures state transitions (like REJECT) which update the timestamp are reflected immediately.
+            if (!existing || new Date(doc.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+                latestDocsMap.set(uniqueKey, doc);
             }
-            if (shouldUseNew) latestDocsMap.set(uniqueKey, doc);
         });
         
-        // 2. VIRTUAL DOC GENERATION (The "Matrix Merge")
-        // Iterate through the Hierarchy Matrix and find "Missing" documents that are Required
+        // 2. VIRTUAL DOC GENERATION
         const virtualDocs: Document[] = [];
         
         Object.keys(hierarchy).forEach(proj => {
             Object.keys(hierarchy[proj]).forEach(macro => {
                 Object.keys(hierarchy[proj][macro]).forEach(proc => {
                     hierarchy[proj][macro][proc].forEach(node => {
-                        // Skip inactive nodes
                         if (node.active === false) return;
 
-                        // Check each required DocType for this node
                         node.requiredTypes.forEach(type => {
                             const uniqueKey = `${proj}|${node.name}|${type}`;
                             
-                            // If this required document DOES NOT exist in the filtered real documents map...
+                            // Only create virtual if NO real doc exists for this key
                             if (!latestDocsMap.has(uniqueKey)) {
-                                // ... Create a "Virtual" Document (Placeholder)
                                 const virtualDoc: Document = {
-                                    id: `virtual_${uniqueKey.replace(/\|/g, '_')}`, // Special ID prefix
+                                    id: `virtual_${uniqueKey.replace(/\|/g, '_')}`, 
                                     title: `${node.name} - ${type}`,
                                     description: 'Pendiente de inicio',
                                     project: proj,
@@ -163,12 +118,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     state: DocState.NOT_STARTED,
                                     version: '-',
                                     progress: 0,
-                                    assignees: node.assignees || [], // Inherit assignees from Matrix!
+                                    assignees: node.assignees || [], 
                                     authorId: 'system',
                                     authorName: 'Sistema',
                                     files: [],
                                     createdAt: new Date().toISOString(),
-                                    updatedAt: '' // Empty indicates never touched
+                                    updatedAt: '' 
                                 };
                                 virtualDocs.push(virtualDoc);
                             }
@@ -178,7 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             });
         });
 
-        // 3. MERGE REAL + VIRTUAL
+        // 3. MERGE
         const allDocs = [...Array.from(latestDocsMap.values()), ...virtualDocs];
         setDocs(allDocs);
         setAllUsers(users);
@@ -401,7 +356,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   const handleVirtualDocClick = (doc: Document) => {
-      navigate('/new');
+      // Pass pre-filled data to CreateDocument via location state
+      navigate('/new', {
+          state: {
+              prefill: {
+                  project: doc.project,
+                  macro: doc.macroprocess,
+                  process: doc.process,
+                  micro: doc.microprocess,
+                  docType: doc.docType
+              }
+          }
+      });
   };
 
   // Show analyst filter for everyone now

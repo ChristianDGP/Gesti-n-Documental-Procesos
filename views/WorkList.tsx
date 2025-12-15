@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService } from '../services/firebaseBackend';
+import { DocumentService, HierarchyService } from '../services/firebaseBackend';
 import { Document, User, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, Search, ArrowUp, ArrowDown, ArrowUpDown, X } from 'lucide-react';
@@ -33,16 +33,38 @@ const WorkList: React.FC<Props> = ({ user }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-        const allDocs = await DocumentService.getAll();
+        // 1. Fetch Documents AND Hierarchy to validate structure existence
+        const [allDocs, hierarchy] = await Promise.all([
+            DocumentService.getAll(),
+            HierarchyService.getFullHierarchy()
+        ]);
         
-        // 1. Filtrar mis asignaciones y excluir terminados
+        // 2. Build a Set of VALID and ACTIVE structure keys (Project|Microprocess)
+        const validStructureKeys = new Set<string>();
+
+        Object.keys(hierarchy).forEach(proj => {
+            Object.keys(hierarchy[proj]).forEach(macro => {
+                Object.keys(hierarchy[proj][macro]).forEach(proc => {
+                    hierarchy[proj][macro][proc].forEach(node => {
+                        // Only include if the node exists and is ACTIVE
+                        if (node.active !== false) {
+                            validStructureKeys.add(`${proj}|${node.name}`);
+                        }
+                    });
+                });
+            });
+        });
+
+        // 3. Filtrar mis asignaciones, excluir terminados y VALIDAR ESTRUCTURA
         const myActiveDocs = allDocs.filter(d => 
             d.assignees && 
             d.assignees.includes(user.id) &&
-            d.state !== DocState.APPROVED
+            d.state !== DocState.APPROVED &&
+            // Check if the document belongs to an existing/active microprocess
+            validStructureKeys.has(`${d.project}|${d.microprocess}`)
         );
 
-        // 2. AGRUPACIÓN Y DEDUPLICACIÓN DE VERSIONES
+        // 4. AGRUPACIÓN Y DEDUPLICACIÓN DE VERSIONES
         const latestDocsMap = new Map<string, Document>();
 
         myActiveDocs.forEach(doc => {

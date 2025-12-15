@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService } from '../services/fireba
 import { Document, User, DocHistory, UserRole, DocState } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2, MousePointerClick, Lock } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, AlertTriangle, FileCheck, FileX, Info, ListFilter, Trash2, MousePointerClick, Lock, Plus } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -85,30 +85,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           alert('Error al eliminar: ' + e.message);
           setLoading(false);
       }
-  };
-
-  // Standard File Upload (This one DOES upload attachments, used in the main view)
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0] || !doc) return;
-    const file = e.target.files[0];
-    const analisis = parseDocumentFilename(file.name, doc.project, doc.microprocess, doc.docType);
-
-    if (!analisis.valido) {
-      alert(`Error en nomenclatura:\n${analisis.errores.join('\n')}`);
-      e.target.value = '';
-      return;
-    }
-
-    if (!window.confirm(`Subir archivo: ${analisis.nomenclatura || 'Desconocida'}?`)) {
-        e.target.value = '';
-        return;
-    }
-    
-    try {
-      await DocumentService.uploadFile(doc.id, file, user);
-      await loadData(doc.id);
-    } catch (err: any) { alert(err.message); }
-    finally { e.target.value = ''; }
   };
 
   // Trigger Action Flow
@@ -303,6 +279,20 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canNotifyCoordinator = isAnalystAssigned && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
 
+  const handleNewRequest = () => {
+      navigate('/new', {
+          state: {
+              prefill: {
+                  project: doc.project,
+                  macro: doc.macroprocess,
+                  process: doc.process,
+                  micro: doc.microprocess,
+                  docType: doc.docType
+              }
+          }
+      });
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <div className="flex justify-between items-center">
@@ -379,12 +369,18 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     ))}
                     {doc.files.length === 0 && <p className="text-sm text-slate-400 italic">No hay archivos.</p>}
                 </ul>
+                
                 {canUpload && (
-                    <label className="block p-4 border-2 border-dashed border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer text-center text-indigo-600">
-                        <input type="file" onChange={handleFileUpload} className="hidden" />
-                        <Upload size={24} className="mx-auto mb-2" />
-                        <span className="text-sm font-medium">Subir nueva versión</span>
-                    </label>
+                    <button 
+                        onClick={handleNewRequest}
+                        className="w-full py-4 border-2 border-dashed border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors flex flex-col items-center justify-center text-indigo-600 gap-2 group"
+                    >
+                        <div className="bg-indigo-100 p-2 rounded-full group-hover:bg-indigo-200 transition-colors">
+                            <Plus size={24} /> 
+                        </div>
+                        <span className="text-sm font-medium">Nueva Solicitud</span>
+                        <span className="text-xs text-indigo-400">Haga clic para cargar una nueva versión o documento</span>
+                    </button>
                 )}
             </div>
 

@@ -1,27 +1,38 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/firebaseBackend';
 import { User, DocState, DocType, UserHierarchy, UserRole } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus, ListFilter, Lock } from 'lucide-react';
 
 interface Props {
   user: User;
 }
 
+// Request Types mapped to Parser Logic
+type RequestType = 'INITIATED' | 'IN_PROCESS' | 'INTERNAL' | 'REFERENT' | 'CONTROL';
+
 const CreateDocument: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
+  const location = useLocation(); // Hook to access passed state
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
 
   // Hierarchy Selection State with Strict Typing
   const [userHierarchy, setUserHierarchy] = useState<UserHierarchy>({});
+  
+  // Matrix Requirement Map (Project|Micro -> AllowedTypes[])
+  const [requirementsMap, setRequirementsMap] = useState<Record<string, DocType[]>>({});
+
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedMacro, setSelectedMacro] = useState<string>('');
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [selectedMicro, setSelectedMicro] = useState<string>('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
+  
+  // New: Request Type for Safety
+  const [requestType, setRequestType] = useState<RequestType | ''>('');
 
   // File Upload State
   const [file, setFile] = useState<File | undefined>(undefined);
@@ -43,29 +54,56 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   }, []);
 
   const loadData = async () => {
-      // 1. Cargar Jerarquía
-      // Si es Admin, cargamos la jerarquía completa transformada a formato simple
-      if (user.role === UserRole.ADMIN) {
-           const full = await HierarchyService.getFullHierarchy();
-           const adminTree: UserHierarchy = {};
-           
-           // Convertir FullHierarchy (nodos complejos) a UserHierarchy (solo nombres)
-           Object.keys(full).forEach(p => {
-               adminTree[p] = {};
-               Object.keys(full[p]).forEach(m => {
-                   adminTree[p][m] = {};
-                   Object.keys(full[p][m]).forEach(proc => {
-                       adminTree[p][m][proc] = full[p][m][proc].map(n => n.name);
+      // 1. Cargar Mapa de Requisitos (Matriz) y Jerarquía
+      try {
+          const [reqMap, full, userH] = await Promise.all([
+              HierarchyService.getRequiredTypesMap(),
+              user.role === UserRole.ADMIN ? HierarchyService.getFullHierarchy() : Promise.resolve(null),
+              user.role !== UserRole.ADMIN ? HierarchyService.getUserHierarchy(user.id) : Promise.resolve(null)
+          ]);
+
+          setRequirementsMap(reqMap);
+
+          // Si es Admin, cargamos la jerarquía completa transformada a formato simple
+          if (user.role === UserRole.ADMIN && full) {
+               const adminTree: UserHierarchy = {};
+               // Convertir FullHierarchy (nodos complejos) a UserHierarchy (solo nombres)
+               Object.keys(full).forEach(p => {
+                   adminTree[p] = {};
+                   Object.keys(full[p]).forEach(m => {
+                       adminTree[p][m] = {};
+                       Object.keys(full[p][m]).forEach(proc => {
+                           adminTree[p][m][proc] = full[p][m][proc].map(n => n.name);
+                       });
                    });
                });
-           });
-           setUserHierarchy(adminTree);
-      } else {
-          // Si es Analista, solo lo asignado
-          const hierarchy = await HierarchyService.getUserHierarchy(user.id);
-          setUserHierarchy(hierarchy);
+               setUserHierarchy(adminTree);
+          } else if (userH) {
+              // Si es Analista, solo lo asignado
+              setUserHierarchy(userH);
+          }
+
+          // 2. PRE-FILL LOGIC (Si viene desde Dashboard o Detalle)
+          if (location.state?.prefill) {
+              const { project, macro, process, micro, docType } = location.state.prefill;
+              if (project) setSelectedProject(project);
+              if (macro) setSelectedMacro(macro);
+              if (process) setSelectedProcess(process);
+              if (micro) setSelectedMicro(micro);
+              
+              // Validate if the pre-filled docType is actually allowed
+              if (docType && project && micro) {
+                  const allowed = reqMap[`${project}|${micro}`] || [];
+                  if (allowed.includes(docType)) {
+                      setSelectedDocType(docType);
+                  }
+              }
+          }
+      } catch (e) {
+          console.error("Error loading create document data", e);
+      } finally {
+          setInitializing(false);
       }
-      setInitializing(false);
   };
 
   // Helper functions for safe extraction of hierarchy arrays
@@ -88,6 +126,13 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       const processes = userHierarchy[selectedProject]?.[selectedMacro];
       if (!processes) return [];
       return processes[selectedProcess] || [];
+  };
+
+  // Helper to check allowed types based on Matrix
+  const getAllowedDocTypes = (): DocType[] => {
+      if (!selectedProject || !selectedMicro) return [];
+      const key = `${selectedProject}|${selectedMicro}`;
+      return requirementsMap[key] || [];
   };
 
   // Reset downstream selections when upstream changes
@@ -114,11 +159,17 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   const handleMicroChange = (val: string) => {
       setSelectedMicro(val);
+      setSelectedDocType(''); // Reset type because allowed types change per micro
       resetFile();
   }
 
   const handleTypeChange = (val: string) => {
       setSelectedDocType(val as DocType);
+      resetFile();
+  }
+  
+  const handleRequestTypeChange = (val: string) => {
+      setRequestType(val as RequestType);
       resetFile();
   }
 
@@ -152,13 +203,13 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           const selectedFile = e.target.files[0];
           setFile(selectedFile);
           
-          // Validate logic - Simplified from the "Tree" version
+          // Validate logic with Strict Request Type
           const result = parseDocumentFilename(
               selectedFile.name,
               selectedProject,
               selectedMicro,
-              selectedDocType || undefined
-              // Removed RequestType param
+              selectedDocType || undefined,
+              requestType || undefined // Pass the strict expected type
           );
           
           if (result.valido) {
@@ -175,10 +226,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               if (result.porcentaje) setDetectedProgress(result.porcentaje);
 
           } else {
-              // Soft validation - allow upload but show warnings (Restored behavior)
               setIsFileValid(false);
               setFileError(result.errores);
-              // Clean fields but keep file selected so they can see why it failed
               setTitle('');
               setDescription('');
           }
@@ -187,7 +236,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !description || !file || !isFileValid || !selectedMicro || !selectedDocType) return;
+    if (!title || !description || !file || !isFileValid || !selectedMicro || !selectedDocType || !requestType) return;
 
     setLoading(true);
     
@@ -225,6 +274,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const processes = getProcesses() as string[];
   const micros = getMicros() as string[];
   const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'];
+  
+  const allowedDocTypes = getAllowedDocTypes();
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
@@ -306,30 +357,77 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                             </select>
                         </div>
 
-                        {/* Report Type */}
+                        {/* Report Type (Filtered by Requirements) */}
                         <div className="md:col-span-2 mt-2 border-t border-slate-200 pt-4">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Tipo de Informe</label>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {docTypes.map(type => (
-                                    <label key={type} className={`
-                                        cursor-pointer border rounded-lg p-3 text-center transition-all
-                                        ${selectedDocType === type 
-                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105' 
-                                            : 'bg-white border-slate-300 text-slate-600 hover:border-indigo-400'}
-                                    `}>
-                                        <input 
-                                            type="radio" 
-                                            name="docType" 
-                                            value={type} 
-                                            checked={selectedDocType === type}
-                                            onChange={(e) => handleTypeChange(e.target.value)}
-                                            className="hidden"
-                                            disabled={!selectedMicro}
-                                        />
-                                        <span className="text-sm font-medium">{type}</span>
-                                    </label>
-                                ))}
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-xs font-semibold text-slate-500 uppercase">Tipo de Informe</label>
+                                {selectedMicro && (
+                                    <span className="text-[10px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                        Filtrado por Matriz
+                                    </span>
+                                )}
                             </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {docTypes.map(type => {
+                                    const isAllowed = allowedDocTypes.includes(type as DocType);
+                                    
+                                    return (
+                                        <label key={type} className={`
+                                            relative border rounded-lg p-3 text-center transition-all
+                                            ${!selectedMicro 
+                                                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' 
+                                                : isAllowed 
+                                                    ? (selectedDocType === type 
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md transform scale-105 cursor-pointer' 
+                                                        : 'bg-white border-slate-300 text-slate-600 hover:border-indigo-400 cursor-pointer')
+                                                    : 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed opacity-60'}
+                                        `}>
+                                            <input 
+                                                type="radio" 
+                                                name="docType" 
+                                                value={type} 
+                                                checked={selectedDocType === type}
+                                                onChange={(e) => handleTypeChange(e.target.value)}
+                                                className="hidden"
+                                                disabled={!selectedMicro || !isAllowed}
+                                            />
+                                            <span className="text-sm font-medium flex items-center justify-center gap-1">
+                                                {!isAllowed && selectedMicro && <Lock size={12} />}
+                                                {type}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            {selectedMicro && allowedDocTypes.length === 0 && (
+                                <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
+                                    <AlertTriangle size={12} /> Este microproceso no tiene documentos configurados en la matriz.
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Request Type Selector (Workflow Stage) */}
+                        <div className="md:col-span-2 mt-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                             <label className="block text-xs font-bold text-indigo-900 uppercase mb-2 flex items-center gap-2">
+                                <ListFilter size={16} /> Tipo de Solicitud / Etapa
+                             </label>
+                             <select 
+                                value={requestType} 
+                                onChange={(e) => handleRequestTypeChange(e.target.value)}
+                                disabled={!selectedDocType}
+                                className="w-full p-3 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-700 disabled:bg-slate-100"
+                            >
+                                <option value="">-- Seleccione qué está subiendo --</option>
+                                <option value="INITIATED">Iniciado (Versión 0.0)</option>
+                                <option value="IN_PROCESS">En Proceso / Avance (Versión 0.n)</option>
+                                <option value="INTERNAL">Revisión Interna (Versión v0.n)</option>
+                                <option value="REFERENT">Revisión Referente (Versión v1.n)</option>
+                                <option value="CONTROL">Control de Gestión (Versión v1.nAR)</option>
+                            </select>
+                            <p className="text-[10px] text-indigo-600 mt-2">
+                                * El archivo que subas debe coincidir estrictamente con la etapa seleccionada.
+                            </p>
                         </div>
                     </div>
 
@@ -342,7 +440,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                 </div>
 
                 {/* Step 2: File Upload */}
-                {selectedMicro && selectedDocType && (
+                {selectedMicro && selectedDocType && requestType && (
                     <div className="animate-fadeIn">
                          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 flex items-center gap-2">
                             <Upload size={18} className="text-indigo-600" />
@@ -376,7 +474,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                     <div className="text-green-700">
                                         <FileCheck size={48} className="mx-auto mb-3" />
                                         <p className="font-semibold text-lg">{file.name}</p>
-                                        <p className="text-sm mt-1">Archivo listo para cargar</p>
+                                        <p className="text-sm mt-1">Archivo válido y listo para cargar</p>
                                     </div>
                                 ) : (
                                     <div className="text-red-600">
@@ -396,7 +494,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                     <Upload size={40} className="mx-auto mb-3" />
                                     <p className="font-medium">Click para seleccionar archivo</p>
                                     <p className="text-xs mt-2 text-slate-400">
-                                        El sistema detectará la versión y estado automáticamente.
+                                        Se validará la versión contra la etapa seleccionada.
                                     </p>
                                 </div>
                             )}
@@ -405,7 +503,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                 )}
 
                 {/* Step 3: Confirmation Form */}
-                {isFileValid && selectedMicro && selectedDocType && (
+                {isFileValid && selectedMicro && selectedDocType && requestType && (
                     <div className="animate-fadeIn border-t border-slate-100 pt-6">
                          <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
                             <FileType size={20} className="text-slate-500 flex-shrink-0" />
