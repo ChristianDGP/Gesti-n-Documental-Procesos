@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HierarchyService } from '../services/firebaseBackend';
-import { User, DocState, DocType, UserHierarchy, UserRole } from '../types';
+import { User, DocState, DocType, UserHierarchy, UserRole, Document } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
-import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus, ListFilter, Lock } from 'lucide-react';
+import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus, ListFilter, Lock, RefreshCw } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -12,6 +12,28 @@ interface Props {
 
 // Request Types mapped to Parser Logic
 type RequestType = 'INITIATED' | 'IN_PROCESS' | 'INTERNAL' | 'REFERENT' | 'CONTROL';
+
+// Map States to Levels for filtering
+const STATE_LEVELS: Record<DocState, number> = {
+    [DocState.NOT_STARTED]: 0,
+    [DocState.INITIATED]: 1,
+    [DocState.IN_PROCESS]: 2,
+    [DocState.INTERNAL_REVIEW]: 3,
+    [DocState.SENT_TO_REFERENT]: 4,
+    [DocState.REFERENT_REVIEW]: 4,
+    [DocState.SENT_TO_CONTROL]: 5,
+    [DocState.CONTROL_REVIEW]: 5,
+    [DocState.APPROVED]: 6,
+    [DocState.REJECTED]: 0 // Special case
+};
+
+const REQUEST_TYPE_LEVELS: Record<RequestType, number> = {
+    'INITIATED': 1,
+    'IN_PROCESS': 2,
+    'INTERNAL': 3,
+    'REFERENT': 4,
+    'CONTROL': 5
+};
 
 const CreateDocument: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
@@ -34,6 +56,10 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   // New: Request Type for Safety
   const [requestType, setRequestType] = useState<RequestType | ''>('');
 
+  // Existing Document State (for filtering)
+  const [existingDoc, setExistingDoc] = useState<Document | null>(null);
+  const [existingDocLevel, setExistingDocLevel] = useState<number>(0);
+
   // File Upload State
   const [file, setFile] = useState<File | undefined>(undefined);
   const [fileError, setFileError] = useState<string[]>([]);
@@ -49,20 +75,54 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [detectedVersion, setDetectedVersion] = useState('0.0');
   const [detectedProgress, setDetectedProgress] = useState(10);
 
+  // Cache of all docs for quick lookup
+  const [allDocsCache, setAllDocsCache] = useState<Document[]>([]);
+
   useEffect(() => {
       loadData();
   }, []);
 
+  // Effect to find existing document when selection changes
+  useEffect(() => {
+      if (selectedProject && selectedMicro && selectedDocType) {
+          const found = allDocsCache.find(d => 
+              d.project === selectedProject && 
+              (d.microprocess === selectedMicro || d.title.includes(selectedMicro)) &&
+              d.docType === selectedDocType
+          );
+          
+          if (found) {
+              setExistingDoc(found);
+              // Calculate effective level (Use MAX logic if multiple found, but find returns first. Assuming cache is sorted by update)
+              const level = STATE_LEVELS[found.state] || 0;
+              setExistingDocLevel(level);
+          } else {
+              setExistingDoc(null);
+              setExistingDocLevel(0);
+          }
+      } else {
+          setExistingDoc(null);
+          setExistingDocLevel(0);
+      }
+      
+      // Reset request type when hierarchy changes to prevent invalid states
+      setRequestType('');
+      resetFile();
+
+  }, [selectedProject, selectedMicro, selectedDocType, allDocsCache]);
+
   const loadData = async () => {
-      // 1. Cargar Mapa de Requisitos (Matriz) y Jerarquía
+      // 1. Cargar Mapa de Requisitos, Jerarquía y Documentos Existentes
       try {
-          const [reqMap, full, userH] = await Promise.all([
+          const [reqMap, full, userH, docs] = await Promise.all([
               HierarchyService.getRequiredTypesMap(),
               user.role === UserRole.ADMIN ? HierarchyService.getFullHierarchy() : Promise.resolve(null),
-              user.role !== UserRole.ADMIN ? HierarchyService.getUserHierarchy(user.id) : Promise.resolve(null)
+              user.role !== UserRole.ADMIN ? HierarchyService.getUserHierarchy(user.id) : Promise.resolve(null),
+              DocumentService.getAll()
           ]);
 
           setRequirementsMap(reqMap);
+          setAllDocsCache(docs);
 
           // Si es Admin, cargamos la jerarquía completa transformada a formato simple
           if (user.role === UserRole.ADMIN && full) {
@@ -267,6 +327,17 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
     }
   };
 
+  // Options filtering Logic
+  const shouldShowOption = (type: RequestType): boolean => {
+      if (!existingDoc || existingDoc.state === DocState.REJECTED) return true; // If rejected or new, allow all (typically reset)
+      
+      const optionLevel = REQUEST_TYPE_LEVELS[type];
+      
+      // LOGIC: Show only levels >= current level
+      // Exception: If current is Internal Review (3), we allow Internal Review (3) [update] and Referent (4) [advance].
+      return optionLevel >= existingDocLevel;
+  };
+
   if (initializing) return <div className="p-8 text-center text-slate-500">Cargando permisos...</div>;
 
   const projects = getProjects() as string[];
@@ -408,10 +479,18 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                         </div>
 
                         {/* Request Type Selector (Workflow Stage) */}
-                        <div className="md:col-span-2 mt-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                             <label className="block text-xs font-bold text-indigo-900 uppercase mb-2 flex items-center gap-2">
-                                <ListFilter size={16} /> Tipo de Solicitud / Etapa
-                             </label>
+                        <div className="md:col-span-2 mt-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100 transition-all">
+                             <div className="flex justify-between items-center mb-2">
+                                 <label className="block text-xs font-bold text-indigo-900 uppercase flex items-center gap-2">
+                                    <ListFilter size={16} /> Tipo de Solicitud / Etapa
+                                 </label>
+                                 {existingDoc && (
+                                     <span className="text-[10px] bg-white border border-indigo-200 px-2 py-1 rounded text-indigo-600 font-medium">
+                                         Progreso Actual: {existingDoc.version}
+                                     </span>
+                                 )}
+                             </div>
+                             
                              <select 
                                 value={requestType} 
                                 onChange={(e) => handleRequestTypeChange(e.target.value)}
@@ -419,14 +498,18 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 className="w-full p-3 border border-indigo-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-700 disabled:bg-slate-100"
                             >
                                 <option value="">-- Seleccione qué está subiendo --</option>
-                                <option value="INITIATED">Iniciado (Versión 0.0)</option>
-                                <option value="IN_PROCESS">En Proceso / Avance (Versión 0.n)</option>
-                                <option value="INTERNAL">Revisión Interna (Versión v0.n)</option>
-                                <option value="REFERENT">Revisión Referente (Versión v1.n)</option>
-                                <option value="CONTROL">Control de Gestión (Versión v1.nAR)</option>
+                                {shouldShowOption('INITIATED') && <option value="INITIATED">Iniciado (Versión 0.0)</option>}
+                                {shouldShowOption('IN_PROCESS') && <option value="IN_PROCESS">En Proceso / Avance (Versión 0.n)</option>}
+                                {shouldShowOption('INTERNAL') && <option value="INTERNAL">Revisión Interna (Versión v0.n)</option>}
+                                {shouldShowOption('REFERENT') && <option value="REFERENT">Revisión Referente (Versión v1.n)</option>}
+                                {shouldShowOption('CONTROL') && <option value="CONTROL">Control de Gestión (Versión v1.nAR)</option>}
                             </select>
+                            
                             <p className="text-[10px] text-indigo-600 mt-2">
-                                * El archivo que subas debe coincidir estrictamente con la etapa seleccionada.
+                                {existingDoc 
+                                    ? `* Se han filtrado las etapas anteriores al estado actual del documento (${existingDoc.version}).`
+                                    : "* El archivo que subas debe coincidir estrictamente con la etapa seleccionada."
+                                }
                             </p>
                         </div>
                     </div>

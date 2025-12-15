@@ -18,19 +18,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
-  // Fetch Inbox Count Logic (Unread Notifications)
+  // Fetch Inbox Count Logic (Real-time)
   useEffect(() => {
-    const fetchCount = async () => {
-        try {
-            const count = await NotificationService.getUnreadCount(user.id);
-            setInboxCount(count);
-        } catch (e) {
-            console.error("Error fetching inbox count", e);
-        }
-    };
-    
-    fetchCount();
-  }, [location.pathname]); // Re-fetch on navigation
+    // Suscribirse a cambios en tiempo real en las notificaciones no leídas
+    const unsubscribe = NotificationService.subscribeToUnreadCount(user.id, (count) => {
+        setInboxCount(count);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [user.id]); 
 
   const NavItem = ({ to, icon: Icon, label, badge }: { to: string, icon: any, label: string, badge?: number }) => (
     <Link
