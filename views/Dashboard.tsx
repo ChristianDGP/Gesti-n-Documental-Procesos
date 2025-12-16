@@ -419,7 +419,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
                         <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
                             <option value="">Analista (Todos)</option>
-                            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            {allUsers
+                                .filter(u => u.role === UserRole.ANALYST) // Strict Filter
+                                .map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
 
                         <select value={filterMacro} onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">

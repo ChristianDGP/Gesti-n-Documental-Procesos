@@ -113,20 +113,7 @@ const Login: React.FC = () => {
                     <p className="text-slate-500 mt-2">Sistema de Gestión Documental</p>
                 </div>
                 
-                <div className="flex justify-center mb-6 bg-slate-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => { setIsRegistering(false); setError(''); }}
-                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isRegistering ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        Iniciar Sesión
-                    </button>
-                    <button 
-                        onClick={() => { setIsRegistering(true); setError(''); }}
-                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        Crear Cuenta
-                    </button>
-                </div>
+                {/* Toggle buttons hidden as requested */}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {isRegistering && (

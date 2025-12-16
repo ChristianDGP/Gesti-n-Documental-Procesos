@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
-import { Document, User, DocState, FullHierarchy, DocType } from '../types';
+import { Document, User, DocState, FullHierarchy, DocType, UserRole } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area 
@@ -352,7 +352,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                             className="bg-transparent text-sm font-medium text-slate-700 outline-none p-1 cursor-pointer min-w-[150px]"
                         >
                             <option value="">Todos los Analistas</option>
-                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            {users
+                                .filter(u => u.role === UserRole.ANALYST) // Filter strictly by Role
+                                .map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
                     </div>
                 </div>

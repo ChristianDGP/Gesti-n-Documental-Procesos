@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HierarchyService, UserService, NotificationService } from '../services/firebaseBackend';
-import { User, FullHierarchy, ProcessNode, DocType } from '../types';
+import { User, FullHierarchy, ProcessNode, DocType, UserRole } from '../types';
 import { 
   FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2
 } from 'lucide-react';
@@ -317,7 +317,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                   className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
               >
                   <option value="">Analista (Todos)</option>
-                  {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  {allUsers
+                    .filter(u => u.role === UserRole.ANALYST) // Strict Filter
+                    .map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
           </div>
       </div>
@@ -534,7 +536,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                             >
                                 <option value="">Seleccionar analista para agregar...</option>
                                 {allUsers
-                                    .filter(u => !currentAssignees.includes(u.id))
+                                    .filter(u => u.role === UserRole.ANALYST && !currentAssignees.includes(u.id)) // Strict Filter + Exclusion
                                     .map(u => (
                                         <option key={u.id} value={u.id}>{u.name}</option>
                                 ))}
