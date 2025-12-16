@@ -44,15 +44,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   useEffect(() => {
     // Priority: State (Virtual Doc) -> ID (Fetch)
     if (location.state?.docData) {
-        setDoc(location.state.docData);
+        const passedDoc = location.state.docData;
+        setDoc(passedDoc);
         setLoading(false);
-        if (!location.state.docData.id.startsWith('virtual-')) {
-             loadAuxiliaryData(location.state.docData.id);
+        if (!passedDoc.id.startsWith('virtual-')) {
+             // PASS passedDoc explicitly to avoid stale state closure
+             loadAuxiliaryData(passedDoc.id, passedDoc);
         } else {
-             const d = location.state.docData;
-             if (d.assignees && d.assignees.length > 0) {
+             if (passedDoc.assignees && passedDoc.assignees.length > 0) {
                  UserService.getAll().then(users => {
-                     const names = d.assignees.map((aid: string) => users.find(u => u.id === aid)?.name).filter((n: string) => n) as string[];
+                     const names = passedDoc.assignees.map((aid: string) => users.find(u => u.id === aid)?.name).filter((n: string) => n) as string[];
                      setAssigneeNames(names);
                  });
              }
@@ -105,14 +106,24 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   // Helper function to find coordinator robustly (Case Insensitive)
+  // UPDATED: Now falls back to ADMIN if no COORDINATOR is found.
   const findCoordinator = (users: User[]) => {
-      return users.find(u => {
+      // 1. Priority: Explicit Coordinator
+      const coord = users.find(u => {
           const role = (u.role || '').toString().toUpperCase();
           return role === 'COORDINATOR' || role === 'COORDINADOR';
       });
+      if (coord) return coord;
+
+      // 2. Fallback: Admin (Admins act as super-coordinators)
+      const admin = users.find(u => {
+          const role = (u.role || '').toString().toUpperCase();
+          return role === 'ADMIN' || role === 'ADMINISTRADOR';
+      });
+      return admin;
   };
 
-  const loadAuxiliaryData = async (docId: string) => {
+  const loadAuxiliaryData = async (docId: string, currentDoc: Document | null) => {
       try {
           const [h, allUsers, hierarchy] = await Promise.all([
               HistoryService.getHistory(docId),
@@ -121,14 +132,28 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           ]);
           setHistory(h);
           
-          if (doc) {
+          // Debug logs preserved
+          console.group("SGD Debug: Carga Auxiliar");
+          console.log("Usuarios cargados:", allUsers.length);
+          allUsers.forEach(u => console.log(`Usuario: ${u.name} | Rol: "${u.role}" | Email: ${u.email}`));
+          console.groupEnd();
+
+          // Use the passed document object, fallback to state if not provided (though state might be stale)
+          const targetDoc = currentDoc || doc;
+
+          if (targetDoc) {
               const coordinator = findCoordinator(allUsers);
-              if (coordinator) setCoordinatorEmail(coordinator.email);
+              if (coordinator) {
+                  console.log("Coordinador detectado:", coordinator.name);
+                  setCoordinatorEmail(coordinator.email);
+              } else {
+                  console.warn("ADVERTENCIA: No se encontró ningún usuario con rol COORDINATOR ni ADMIN.");
+              }
               
-              const author = allUsers.find(u => u.id === doc.authorId);
+              const author = allUsers.find(u => u.id === targetDoc.authorId);
               if (author) setAuthorEmail(author.email);
               
-              const resolvedIds = resolveAssignees(doc, hierarchy);
+              const resolvedIds = resolveAssignees(targetDoc, hierarchy);
 
               if (resolvedIds.length > 0) {
                   const names = resolvedIds
@@ -152,12 +177,23 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           HierarchyService.getFullHierarchy()
         ]);
 
+        // Debug logs preserved
+        console.group("SGD Debug: Carga Principal");
+        console.log("Usuarios cargados:", allUsers.length);
+        allUsers.forEach(u => console.log(`Usuario: ${u.name} | Rol: "${u.role}" | Email: ${u.email}`));
+        console.groupEnd();
+
         if (d) {
             setDoc(d);
             setHistory(h);
 
             const coordinator = findCoordinator(allUsers);
-            if (coordinator) setCoordinatorEmail(coordinator.email);
+            if (coordinator) {
+                console.log("Coordinador detectado:", coordinator.name);
+                setCoordinatorEmail(coordinator.email);
+            } else {
+                console.warn("ADVERTENCIA: No se encontró ningún usuario con rol COORDINATOR ni ADMIN.");
+            }
 
             const author = allUsers.find(u => u.id === d.authorId);
             if (author) setAuthorEmail(author.email);
@@ -316,7 +352,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     
     // Safety check for missing coordinator
     if (!coordinatorEmail) {
-        alert("Aviso: No se ha detectado un usuario 'Coordinador' en el sistema.\nPor favor, contacte al administrador para crear este rol.");
+        // Fallback: If no email found, try to find one on the fly (Last Resort)
+        // This handles cases where state might still be weird
+        alert(`Aviso: No se ha detectado un usuario con rol 'Coordinador' ni 'Administrador' en el sistema.
+        
+Esto puede deberse a que la lista de usuarios no se cargó correctamente.
+Por favor, refresque la página (F5) e intente nuevamente.
+
+Si el error persiste, contacte a soporte.`);
         return;
     }
     
