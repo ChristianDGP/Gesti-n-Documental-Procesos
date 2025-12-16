@@ -21,7 +21,14 @@ interface ReportDoc extends Document {
     requiredType?: string;
 }
 
-const COLORS = ['#94a3b8', '#60a5fa', '#a78bfa', '#f97316', '#22c55e', '#ef4444', '#1e293b', '#cbd5e1'];
+// Color Map matching Dashboard
+const STATE_COLOR_MAP: Record<string, string> = {
+    'No Iniciado': '#e2e8f0', // Slate 200
+    'En Proceso': '#3b82f6',  // Blue 500
+    'En Revisión': '#a855f7', // Purple 500 (Mix of Referente/Control)
+    'Rechazado': '#ef4444',   // Red 500
+    'Aprobado': '#22c55e'     // Green 500
+};
 
 const Reports: React.FC<Props> = ({ user }) => {
     const navigate = useNavigate();
@@ -194,27 +201,28 @@ const Reports: React.FC<Props> = ({ user }) => {
         };
     }, [filteredDocs]);
 
-    // 2. CHART: State Distribution (Using Dashboard Criteria)
+    // 2. CHART: State Distribution (Using Dashboard Criteria Colors)
     const stateData = useMemo(() => {
         const counts: Record<string, number> = {};
         
-        // Initialize with all Dashboard states for consistency
-        Object.keys(STATE_CONFIG).forEach(key => {
-            counts[STATE_CONFIG[key as DocState].label.split('(')[0]] = 0;
-        });
+        // Initialize specific keys order
+        counts['No Iniciado'] = 0;
+        counts['En Proceso'] = 0;
+        counts['En Revisión'] = 0;
+        counts['Rechazado'] = 0;
+        counts['Aprobado'] = 0;
 
         filteredDocs.forEach(d => {
-            const label = STATE_CONFIG[d.state].label.split('(')[0];
-            counts[label] = (counts[label] || 0) + 1;
+            let key = 'En Proceso';
+            if (d.state === DocState.NOT_STARTED) key = 'No Iniciado';
+            else if (d.state === DocState.APPROVED) key = 'Aprobado';
+            else if (d.state === DocState.REJECTED) key = 'Rechazado';
+            else if (d.state === DocState.INTERNAL_REVIEW || d.state === DocState.SENT_TO_REFERENT || d.state === DocState.SENT_TO_CONTROL || d.state === DocState.REFERENT_REVIEW || d.state === DocState.CONTROL_REVIEW) key = 'En Revisión';
+            
+            counts[key] = (counts[key] || 0) + 1;
         });
 
-        // Filter out zero values to clean up chart, map colors from constants if possible or palette
-        return Object.keys(counts)
-            .filter(name => counts[name] > 0)
-            .map((name, index) => ({ 
-                name, 
-                value: counts[name] 
-            }));
+        return Object.keys(counts).filter(k => counts[k] > 0).map(name => ({ name, value: counts[name] }));
     }, [filteredDocs]);
 
     // 3. CHART: Analyst Performance (Independent by State, Renamed)
@@ -244,8 +252,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                 return {
                     name: userObj ? (userObj.nickname || userObj.name.split(' ')[0]) : 'Desc.',
                     Asignados: stats[uid].assigned,
-                    Completados: stats[uid].approved,
-                    EnCurso: stats[uid].inProgress,
+                    Terminados: stats[uid].approved,
+                    EnGestion: stats[uid].inProgress,
                 };
             })
             .sort((a, b) => b.Asignados - a.Asignados)
@@ -415,7 +423,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     dataKey="value"
                                 >
                                     {stateData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        <Cell key={`cell-${index}`} fill={STATE_COLOR_MAP[entry.name] || '#94a3b8'} />
                                     ))}
                                 </Pie>
                                 <Tooltip />
@@ -430,7 +438,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2">
                         <Users size={16} /> Gestión por Analista
                     </h3>
-                    <p className="text-xs text-slate-500 mb-6">Comparativa: Asignados (Matriz) vs. Terminados.</p>
+                    <p className="text-xs text-slate-500 mb-6">Comparativa: Asignados vs. Gestión vs. Terminados.</p>
 
                     <div className="h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
@@ -447,8 +455,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 />
                                 <Legend />
                                 <Bar dataKey="Asignados" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
-                                <Bar dataKey="Completados" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={20} />
-                                <Bar dataKey="EnCurso" name="En Gestión" fill="#60a5fa" radius={[4, 4, 0, 0]} barSize={20} />
+                                <Bar dataKey="EnGestion" name="En Gestión" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                                <Bar dataKey="Terminados" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={20} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
