@@ -299,13 +299,35 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
-  const handleGmailNotification = () => {
+  // --- NOTIFICATION HANDLERS ---
+
+  // 1. ANALISTA -> COORDINADOR (NUEVA LÓGICA)
+  const handleAnalystNotificationToCoordinator = () => {
     if (!doc || !coordinatorEmail) return;
-    const subject = encodeURIComponent(`Solicitud de Aprobación SGD: ${doc.project} - ${doc.microprocess}`);
-    const body = encodeURIComponent(`Estimado Coordinador,\n\nSolicitud de revisión para ${doc.title}.\nVersión: ${doc.version}\n\nAtentamente,\n${user.name}`);
+    
+    // Subject Format
+    const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.project} - ${doc.docType || ''} - ${doc.microprocess}`);
+    
+    // Body Format
+    const bodyRaw = `Estimado,
+Para vuestra aprobación, adjunto el Informe:
+
+- ${doc.project}
+- ${doc.macroprocess || ''}
+- ${doc.process || ''}
+- ${doc.microprocess}
+- ${doc.docType || ''}
+- ${doc.version}
+
+Atento a comentarios
+Saludos
+${user.name}`;
+
+    const body = encodeURIComponent(bodyRaw);
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
+  // 2. COORDINADOR -> ANALISTA (FEEDBACK)
   const handleNotifyAnalyst = () => {
       if (!doc || !authorEmail) return;
       const subject = encodeURIComponent(`Respuesta Solicitud SGD: ${doc.project} - ${doc.microprocess}`);
@@ -313,7 +335,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
-  // NOTIFICACIÓN EXTERNA PARA COORDINADOR (REFERENTE / CONTROL)
+  // 3. COORDINADOR -> EXTERNO (REFERENTE / CONTROL)
   const handleNotifyExternal = () => {
       if (!doc) return;
       const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} ${doc.microprocess || ''}`);
@@ -347,6 +369,7 @@ ${user.name}`
   const config = STATE_CONFIG[doc.state];
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
+  
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
   const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
@@ -355,12 +378,19 @@ ${user.name}`
   const isDocActive = doc.state !== DocState.APPROVED;
   const canApprove = isCoordinatorOrAdmin && isDocActive;
   const canReject = isCoordinatorOrAdmin && isDocActive;
-  const canNotifyCoordinator = isAnalystAssigned && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
 
-  // Condiciones para mostrar botón de notificación externa (Coordinador)
+  // Condiciones Botón Coordinador -> Externo
   const canNotifyExternal = (isCoordinatorOrAdmin) && 
                             (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.SENT_TO_CONTROL);
+
+  // Condiciones Botón Analista -> Coordinador
+  const analystNotificationStates = [
+      DocState.INTERNAL_REVIEW,
+      DocState.SENT_TO_REFERENT,
+      DocState.SENT_TO_CONTROL
+  ];
+  const canNotifyCoordinator = isAnalystAssigned && coordinatorEmail && analystNotificationStates.includes(doc.state);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -455,8 +485,22 @@ ${user.name}`
                      <div className="flex flex-wrap gap-3">
                         <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium shadow-sm transition-colors"><MessageSquare size={16} className="mr-2" /> Guardar Observación</button>
                         
-                        {canNotifyCoordinator && <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Coord.</button>}
-                        {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
+                        {/* Botón Analista -> Coordinador */}
+                        {canNotifyCoordinator && (
+                            <button 
+                                onClick={handleAnalystNotificationToCoordinator} 
+                                className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg text-sm font-medium border border-blue-200 shadow-sm"
+                            >
+                                <Mail size={16} className="mr-2" /> Notificar al coordinador
+                            </button>
+                        )}
+
+                        {/* Botón Coordinador -> Analista */}
+                        {canNotifyAuthor && (
+                            <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm">
+                                <Mail size={16} className="mr-2" /> Notificar Analista
+                            </button>
+                        )}
                         
                         {/* Botón Nuevo para Referente/Control */}
                         {canNotifyExternal && (
