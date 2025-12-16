@@ -303,7 +303,13 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   // 1. ANALISTA -> COORDINADOR (NUEVA LÓGICA)
   const handleAnalystNotificationToCoordinator = () => {
-    if (!doc || !coordinatorEmail) return;
+    if (!doc) return;
+    
+    // Safety check for missing coordinator
+    if (!coordinatorEmail) {
+        alert("Aviso: No se ha detectado un usuario 'Coordinador' en el sistema.\nPor favor, contacte al administrador para crear este rol.");
+        return;
+    }
     
     // Subject Format
     const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.project} - ${doc.docType || ''} - ${doc.microprocess}`);
@@ -390,7 +396,8 @@ ${user.name}`
       DocState.SENT_TO_REFERENT,
       DocState.SENT_TO_CONTROL
   ];
-  const canNotifyCoordinator = isAnalystAssigned && coordinatorEmail && analystNotificationStates.includes(doc.state);
+  // Modificación: Permitir visibilidad del botón incluso si no hay coordinador email, para que el usuario sepa que la funcionalidad existe
+  const canNotifyCoordinator = isAnalystAssigned && analystNotificationStates.includes(doc.state);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
