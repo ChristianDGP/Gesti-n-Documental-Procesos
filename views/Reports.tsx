@@ -1,12 +1,14 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
 import { Document, User, DocState, FullHierarchy, DocType } from '../types';
+import { STATE_CONFIG } from '../constants';
 import { 
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
 import { 
-    TrendingUp, Users, AlertTriangle, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2
+    TrendingUp, Users, AlertTriangle, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, User as UserIcon, ArrowRight
 } from 'lucide-react';
 
 interface Props {
@@ -19,14 +21,18 @@ interface ReportDoc extends Document {
     requiredType?: string;
 }
 
-const COLORS = ['#94a3b8', '#60a5fa', '#a78bfa', '#f97316', '#22c55e', '#ef4444'];
+const COLORS = ['#94a3b8', '#60a5fa', '#a78bfa', '#f97316', '#22c55e', '#ef4444', '#1e293b', '#cbd5e1'];
 
 const Reports: React.FC<Props> = ({ user }) => {
+    const navigate = useNavigate();
     const [realDocs, setRealDocs] = useState<Document[]>([]);
     const [hierarchy, setHierarchy] = useState<FullHierarchy>({});
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
+    
+    // Filters
     const [filterProject, setFilterProject] = useState('');
+    const [filterAnalyst, setFilterAnalyst] = useState('');
 
     useEffect(() => {
         loadData();
@@ -105,7 +111,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                             } else {
                                 // No existe -> Documento Virtual "No Iniciado"
                                 unifiedList.push({
-                                    id: `virtual-${key}`,
+                                    id: `virtual-${key}`, // Special ID for virtual docs
                                     title: `${node.name} - ${type}`,
                                     description: 'Pendiente de inicio',
                                     project: proj,
@@ -139,146 +145,156 @@ const Reports: React.FC<Props> = ({ user }) => {
 
 
     const filteredDocs = useMemo(() => {
-        if (!filterProject) return unifiedData;
-        return unifiedData.filter(d => d.project === filterProject);
-    }, [unifiedData, filterProject]);
+        let docs = unifiedData;
+        if (filterProject) docs = docs.filter(d => d.project === filterProject);
+        if (filterAnalyst) docs = docs.filter(d => d.assignees && d.assignees.includes(filterAnalyst));
+        return docs;
+    }, [unifiedData, filterProject, filterAnalyst]);
 
 
-    // 1. KPI CARDS DATA
+    // 1. KPI CARDS DATA (Updated Structure)
     const kpis = useMemo(() => {
-        const total = filteredDocs.length; // Total Required based on Matrix
-        const approved = filteredDocs.filter(d => d.state === DocState.APPROVED).length;
-        const rejected = filteredDocs.filter(d => d.state === DocState.REJECTED).length;
+        const total = filteredDocs.length;
+        const totalIds = filteredDocs.map(d => d.id);
         
-        // Estancados: Documentos iniciados pero sin movimiento reciente
-        const twoWeeksAgo = new Date();
-        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 15);
-        
-        const stalled = filteredDocs.filter(d => 
-            d.state !== DocState.APPROVED && 
-            d.state !== DocState.NOT_STARTED && // Don't count "Not Started" as stalled, just pending
-            new Date(d.updatedAt) < twoWeeksAgo
-        ).length;
+        const approvedDocs = filteredDocs.filter(d => d.state === DocState.APPROVED);
+        const approvedIds = approvedDocs.map(d => d.id);
 
-        // Progress average across ALL required documents (including 0% for Not Started)
-        const avgProgress = total > 0 
-            ? Math.round(filteredDocs.reduce((acc, curr) => acc + curr.progress, 0) / total) 
-            : 0;
+        // Calculate 30 days threshold
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        return { total, approved, rejected, stalled, avgProgress };
+        // Helper to check stall
+        const isStalled = (d: ReportDoc) => {
+            if (d.isVirtual || d.state === DocState.NOT_STARTED) return false;
+            return new Date(d.updatedAt) < thirtyDaysAgo;
+        };
+
+        // Internal Stalled (Initiated, In Process, Internal Review)
+        const internalStates = [DocState.INITIATED, DocState.IN_PROCESS, DocState.INTERNAL_REVIEW];
+        const stalledInternalDocs = filteredDocs.filter(d => internalStates.includes(d.state) && isStalled(d));
+        const stalledInternalIds = stalledInternalDocs.map(d => d.id);
+
+        // Referent Stalled
+        const referentStates = [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW];
+        const stalledReferentDocs = filteredDocs.filter(d => referentStates.includes(d.state) && isStalled(d));
+        const stalledReferentIds = stalledReferentDocs.map(d => d.id);
+
+        // Control Stalled
+        const controlStates = [DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW];
+        const stalledControlDocs = filteredDocs.filter(d => controlStates.includes(d.state) && isStalled(d));
+        const stalledControlIds = stalledControlDocs.map(d => d.id);
+
+        return { 
+            total, totalIds,
+            approved: approvedDocs.length, approvedIds,
+            stalledInternal: stalledInternalDocs.length, stalledInternalIds,
+            stalledReferent: stalledReferentDocs.length, stalledReferentIds,
+            stalledControl: stalledControlDocs.length, stalledControlIds
+        };
     }, [filteredDocs]);
 
-    // 2. CHART: State Distribution
+    // 2. CHART: State Distribution (Using Dashboard Criteria)
     const stateData = useMemo(() => {
         const counts: Record<string, number> = {};
         
-        // Initialize specific keys order
-        counts['No Iniciado'] = 0;
-        counts['En Proceso'] = 0;
-        counts['En Revisión'] = 0;
-        counts['Rechazado'] = 0;
-        counts['Aprobado'] = 0;
-
-        filteredDocs.forEach(d => {
-            let key = 'En Proceso';
-            if (d.state === DocState.NOT_STARTED) key = 'No Iniciado';
-            else if (d.state === DocState.APPROVED) key = 'Aprobado';
-            else if (d.state === DocState.REJECTED) key = 'Rechazado';
-            else if (d.state === DocState.INTERNAL_REVIEW || d.state === DocState.SENT_TO_REFERENT || d.state === DocState.SENT_TO_CONTROL || d.state === DocState.REFERENT_REVIEW || d.state === DocState.CONTROL_REVIEW) key = 'En Revisión';
-            
-            counts[key] = (counts[key] || 0) + 1;
+        // Initialize with all Dashboard states for consistency
+        Object.keys(STATE_CONFIG).forEach(key => {
+            counts[STATE_CONFIG[key as DocState].label.split('(')[0]] = 0;
         });
 
-        return Object.keys(counts).filter(k => counts[k] > 0).map(name => ({ name, value: counts[name] }));
+        filteredDocs.forEach(d => {
+            const label = STATE_CONFIG[d.state].label.split('(')[0];
+            counts[label] = (counts[label] || 0) + 1;
+        });
+
+        // Filter out zero values to clean up chart, map colors from constants if possible or palette
+        return Object.keys(counts)
+            .filter(name => counts[name] > 0)
+            .map((name, index) => ({ 
+                name, 
+                value: counts[name] 
+            }));
     }, [filteredDocs]);
 
-    // 3. CHART: Analyst Performance (Using Assigned Matrix Data)
+    // 3. CHART: Analyst Performance (Independent by State, Renamed)
     const analystData = useMemo(() => {
         const stats: Record<string, { assigned: number, approved: number, inProgress: number }> = {};
         
         filteredDocs.forEach(d => {
-            // Count for all assignees found in the Matrix (or doc legacy)
             if (d.assignees && d.assignees.length > 0) {
                 d.assignees.forEach(uid => {
                     if (!stats[uid]) stats[uid] = { assigned: 0, approved: 0, inProgress: 0 };
                     
+                    // "Asignados" refers to Total in Matrix for that user
                     stats[uid].assigned += 1;
                     
                     if (d.state === DocState.APPROVED) {
                         stats[uid].approved += 1;
                     } else if (d.state !== DocState.NOT_STARTED) {
-                        stats[uid].inProgress += 1;
+                        stats[uid].inProgress += 1; // Anything started but not approved
                     }
                 });
-            } else {
-                // Unassigned bucket?
-                const uid = 'unassigned';
-                if (!stats[uid]) stats[uid] = { assigned: 0, approved: 0, inProgress: 0 };
-                stats[uid].assigned += 1;
             }
         });
 
         return Object.keys(stats)
-            .filter(uid => uid !== 'unassigned')
             .map(uid => {
                 const userObj = users.find(u => u.id === uid);
                 return {
                     name: userObj ? (userObj.nickname || userObj.name.split(' ')[0]) : 'Desc.',
-                    Total: stats[uid].assigned,
+                    Asignados: stats[uid].assigned,
                     Completados: stats[uid].approved,
-                    Avance: stats[uid].inProgress,
-                    Eficiencia: stats[uid].assigned > 0 ? Math.round((stats[uid].approved / stats[uid].assigned) * 100) : 0
+                    EnCurso: stats[uid].inProgress,
                 };
             })
-            .sort((a, b) => b.Total - a.Total)
-            .slice(0, 10); // Top 10
+            .sort((a, b) => b.Asignados - a.Asignados)
+            .slice(0, 10);
     }, [filteredDocs, users]);
 
-    // 4. CHART: Progress by Project
+    // 4. CHART: Compliance by Project (Required vs Finished)
     const projectData = useMemo(() => {
-        const projStats: Record<string, { total: number, progressSum: number }> = {};
+        const projStats: Record<string, { required: number, finished: number }> = {};
         
         const sourceDocs = filterProject ? filteredDocs : unifiedData;
 
         sourceDocs.forEach(d => {
             const p = d.project || 'Sin Proyecto';
-            if (!projStats[p]) projStats[p] = { total: 0, progressSum: 0 };
-            projStats[p].total += 1;
-            projStats[p].progressSum += d.progress;
+            if (!projStats[p]) projStats[p] = { required: 0, finished: 0 };
+            
+            projStats[p].required += 1;
+            if (d.state === DocState.APPROVED) {
+                projStats[p].finished += 1;
+            }
         });
 
         return Object.keys(projStats).map(p => ({
             name: p,
-            avance: Math.round(projStats[p].progressSum / projStats[p].total),
-            docs: projStats[p].total
-        })).sort((a, b) => b.avance - a.avance);
+            Requeridos: projStats[p].required,
+            Terminados: projStats[p].finished,
+            Cumplimiento: Math.round((projStats[p].finished / projStats[p].required) * 100) || 0
+        })).sort((a, b) => b.Cumplimiento - a.Cumplimiento);
     }, [unifiedData, filteredDocs, filterProject]);
 
-    // 5. CHART: Monthly Activity (Correct Chronological Order)
+    // 5. CHART: Monthly Activity
     const velocityData = useMemo(() => {
         const activityMap: Record<string, number> = {};
-        
-        // Only count real updates, ignore virtual not started docs
         const activeDocs = filteredDocs.filter(d => !d.isVirtual && d.state !== DocState.NOT_STARTED);
 
         activeDocs.forEach(d => {
             const date = new Date(d.updatedAt);
-            // Key format YYYY-MM for correct sorting
             const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             activityMap[sortKey] = (activityMap[sortKey] || 0) + 1;
         });
 
-        // Sort keys chronologically
         const sortedKeys = Object.keys(activityMap).sort();
-
-        // Map to display format
         const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         
         return sortedKeys.map(key => {
             const [year, month] = key.split('-');
             const monthIndex = parseInt(month, 10) - 1;
             return {
-                name: `${months[monthIndex]}`, // e.g., "Sep"
+                name: `${months[monthIndex]}`,
                 fullLabel: `${months[monthIndex]} ${year}`,
                 actividad: activityMap[key]
             };
@@ -287,7 +303,13 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     const availableProjects = useMemo(() => Array.from(new Set(unifiedData.map(d => d.project).filter(Boolean))), [unifiedData]);
 
-    if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Calculando métricas del universo completo...</div>;
+    // Navigation Handler to Dashboard with Filter Package
+    const goToDashboard = (ids: string[]) => {
+        // We pass the IDs to the Dashboard to filter specifically
+        navigate('/', { state: { filterIds: ids, fromReport: true } });
+    };
+
+    if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Generando reporte...</div>;
 
     return (
         <div className="space-y-6 pb-12">
@@ -300,26 +322,74 @@ const Reports: React.FC<Props> = ({ user }) => {
                     <p className="text-slate-500">Métricas basadas en la Matriz de Asignaciones (Universo Total).</p>
                 </div>
                 
-                <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
                     <Filter size={16} className="text-slate-400 ml-2" />
+                    
+                    {/* Project Filter */}
                     <select 
                         value={filterProject} 
                         onChange={(e) => setFilterProject(e.target.value)}
-                        className="bg-transparent text-sm font-medium text-slate-700 outline-none p-1 cursor-pointer min-w-[150px]"
+                        className="bg-transparent text-sm font-medium text-slate-700 outline-none p-1 cursor-pointer min-w-[150px] border-r border-slate-100"
                     >
                         <option value="">Todos los Proyectos</option>
                         {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
+
+                    {/* Analyst Filter */}
+                    <div className="flex items-center gap-1 px-2">
+                        <UserIcon size={14} className="text-slate-400" />
+                        <select 
+                            value={filterAnalyst} 
+                            onChange={(e) => setFilterAnalyst(e.target.value)}
+                            className="bg-transparent text-sm font-medium text-slate-700 outline-none p-1 cursor-pointer min-w-[150px]"
+                        >
+                            <option value="">Todos los Analistas</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            {/* ROW 1: KPI CARDS */}
+            {/* ROW 1: KPI CARDS (Updated Structure) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <KPICard title="Total Requeridos" value={kpis.total} icon={FileText} color="indigo" sub="Definidos en Matriz" />
-                <KPICard title="Cumplimiento Real" value={`${kpis.avgProgress}%`} icon={TrendingUp} color="blue" sub="Sobre total requerido" />
-                <KPICard title="Finalizados" value={kpis.approved} icon={CheckCircle} color="green" sub={`${((kpis.approved/kpis.total)*100 || 0).toFixed(1)}% del Universo`} />
-                <KPICard title="Sin Avance" value={kpis.stalled} icon={Clock} color="orange" sub="Iniciados s/mov. >15d" />
-                <KPICard title="Tasa Devolución" value={kpis.rejected} icon={AlertTriangle} color="red" sub={`${((kpis.rejected/kpis.total)*100 || 0).toFixed(1)}% Rechazos`} />
+                <KPICard 
+                    title="Total Requeridos" 
+                    value={kpis.total} 
+                    icon={FileText} color="indigo" sub="Universo Total" 
+                    onClick={() => goToDashboard(kpis.totalIds)}
+                    canClick={kpis.total > 0}
+                />
+                
+                {/* Stall Group */}
+                <KPICard 
+                    title="Interno > 30d" 
+                    value={kpis.stalledInternal} 
+                    icon={Clock} color="orange" sub="Sin avance reciente" 
+                    onClick={() => goToDashboard(kpis.stalledInternalIds)}
+                    canClick={kpis.stalledInternal > 0}
+                />
+                <KPICard 
+                    title="Referente > 30d" 
+                    value={kpis.stalledReferent} 
+                    icon={Clock} color="orange" sub="Sin avance reciente" 
+                    onClick={() => goToDashboard(kpis.stalledReferentIds)}
+                    canClick={kpis.stalledReferent > 0}
+                />
+                <KPICard 
+                    title="Control > 30d" 
+                    value={kpis.stalledControl} 
+                    icon={Clock} color="orange" sub="Sin avance reciente" 
+                    onClick={() => goToDashboard(kpis.stalledControlIds)}
+                    canClick={kpis.stalledControl > 0}
+                />
+
+                <KPICard 
+                    title="Terminados" 
+                    value={kpis.approved} 
+                    icon={CheckCircle} color="green" sub="100% Aprobados" 
+                    onClick={() => goToDashboard(kpis.approvedIds)}
+                    canClick={kpis.approved > 0}
+                />
             </div>
 
             {/* ROW 2: MAIN CHARTS */}
@@ -330,7 +400,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2">
                         <Briefcase size={16} /> Estado del Universo
                     </h3>
-                    <p className="text-xs text-slate-500 mb-6">Incluye documentos "No Iniciados" definidos en asignaciones.</p>
+                    <p className="text-xs text-slate-500 mb-6">Distribución detallada por estado actual.</p>
                     
                     <div className="flex-1 min-h-[250px]">
                         <ResponsiveContainer width="100%" height="100%">
@@ -355,12 +425,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                     </div>
                 </div>
 
-                {/* 2. PERSPECTIVA APRENDIZAJE: DESEMPEÑO DEL EQUIPO */}
+                {/* 2. PERSPECTIVA APRENDIZAJE: DESEMPEÑO DEL EQUIPO (Modificado) */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-2">
                     <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2">
-                        <Users size={16} /> Gestión por Analista (Top 10)
+                        <Users size={16} /> Gestión por Analista
                     </h3>
-                    <p className="text-xs text-slate-500 mb-6">Total Asignado en Matriz vs. Documentos Completados.</p>
+                    <p className="text-xs text-slate-500 mb-6">Comparativa: Asignados (Matriz) vs. Terminados.</p>
 
                     <div className="h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
@@ -376,9 +446,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     cursor={{fill: '#f8fafc'}}
                                 />
                                 <Legend />
-                                <Bar dataKey="Total" name="Asignados (Matriz)" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
-                                <Bar dataKey="Avance" name="En Gestión" stackId="a" fill="#60a5fa" radius={[0, 0, 0, 0]} barSize={20} />
-                                <Bar dataKey="Completados" name="Aprobados" stackId="a" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={20} />
+                                <Bar dataKey="Asignados" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
+                                <Bar dataKey="Completados" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={20} />
+                                <Bar dataKey="EnCurso" name="En Gestión" fill="#60a5fa" radius={[4, 4, 0, 0]} barSize={20} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -388,12 +458,12 @@ const Reports: React.FC<Props> = ({ user }) => {
             {/* ROW 3: TRENDS & RESULTS */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
-                {/* 3. PERSPECTIVA RESULTADOS: AVANCE POR PROYECTO */}
+                {/* 3. PERSPECTIVA RESULTADOS: CUMPLIMIENTO POR PROYECTO (Modificado) */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2">
                         <TrendingUp size={16} /> Cumplimiento por Proyecto
                     </h3>
-                    <p className="text-xs text-slate-500 mb-6">Promedio de avance considerando el 100% de la carga requerida.</p>
+                    <p className="text-xs text-slate-500 mb-6">Total Requeridos vs. Documentos Terminados.</p>
 
                     <div className="h-[250px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
@@ -403,11 +473,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                             >
                                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                                <XAxis type="number" domain={[0, 100]} hide />
+                                <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 11}} />
                                 <Tooltip />
-                                <Bar dataKey="avance" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} name="% Cumplimiento">
-                                </Bar>
+                                <Legend />
+                                <Bar dataKey="Requeridos" fill="#94a3b8" radius={[0, 4, 4, 0]} barSize={15} />
+                                <Bar dataKey="Terminados" fill="#22c55e" radius={[0, 4, 4, 0]} barSize={15} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -448,7 +519,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
 // --- SUBCOMPONENTS ---
 
-const KPICard = ({ title, value, icon: Icon, color, sub }: any) => {
+const KPICard = ({ title, value, icon: Icon, color, sub, onClick, canClick }: any) => {
     const colorClasses: Record<string, string> = {
         indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
         blue: 'bg-blue-50 text-blue-600 border-blue-100',
@@ -458,14 +529,22 @@ const KPICard = ({ title, value, icon: Icon, color, sub }: any) => {
     };
 
     return (
-        <div className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${colorClasses[color] || colorClasses.indigo} transition-transform hover:scale-105`}>
+        <div 
+            onClick={canClick ? onClick : undefined}
+            className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${colorClasses[color] || colorClasses.indigo} 
+                ${canClick ? 'cursor-pointer hover:shadow-md hover:ring-2 hover:ring-opacity-50 hover:ring-indigo-300 transition-all active:scale-95' : ''}
+            `}
+        >
             <div className="flex justify-between items-start mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider opacity-70">{title}</span>
                 <Icon size={18} />
             </div>
             <div>
                 <span className="text-2xl font-bold">{value}</span>
-                <p className="text-[10px] opacity-80 mt-1 font-medium">{sub}</p>
+                <div className="flex justify-between items-center mt-1">
+                    <p className="text-[10px] opacity-80 font-medium">{sub}</p>
+                    {canClick && <ArrowRight size={12} className="opacity-60" />}
+                </div>
             </div>
         </div>
     );

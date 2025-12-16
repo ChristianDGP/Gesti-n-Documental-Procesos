@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService } from '../services/firebaseBackend';
 import { Document, User, UserRole, DocState, DocType, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
@@ -25,6 +25,8 @@ type QuickFilterType = 'ALL' | 'NOT_STARTED' | 'IN_PROCESS' | 'REFERENT' | 'CONT
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const navigate = useNavigate();
+  const location = useLocation(); // Used to receive filters from Reports
+  
   const [mergedDocs, setMergedDocs] = useState<DashboardDoc[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [filterDocType, setFilterDocType] = useState('');
   const [filterState, setFilterState] = useState(''); // Dropdown state filter
   
+  // External Filter (From Reports)
+  const [externalFilterIds, setExternalFilterIds] = useState<string[] | null>(null);
+
   // Quick Stats Filter (Cards)
   const [quickFilter, setQuickFilter] = useState<QuickFilterType>('ALL');
 
@@ -47,8 +52,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   });
 
   useEffect(() => {
+    // Check for incoming report filters
+    if (location.state?.filterIds && Array.isArray(location.state.filterIds)) {
+        setExternalFilterIds(location.state.filterIds);
+        // Clear quick filter to avoid conflict logic
+        setQuickFilter('ALL');
+    } else {
+        setExternalFilterIds(null);
+    }
     loadData();
-  }, []);
+  }, [location.state]);
 
   // Helper to normalize strings for robust comparison
   const normalize = (str: string | undefined) => {
@@ -128,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             } else {
                                 // Create Virtual Placeholder
                                 finalDocsList.push({
-                                    id: `virtual-${key}-${Date.now()}`,
+                                    id: `virtual-${key}`, // Needs to match ID generation in Reports for linking to work (or close enough)
                                     title: `${node.name} - ${type}`,
                                     description: 'Pendiente de inicio',
                                     project: proj,
@@ -177,25 +190,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     }
   };
 
-  // --- 1. CONTEXT FILTERING (Dropdowns Only) ---
+  // --- 1. CONTEXT FILTERING (Dropdowns + External) ---
   const contextDocs = useMemo(() => {
       let filtered = mergedDocs;
 
-      if (filterProject) filtered = filtered.filter(d => d.project === filterProject);
-      
-      if (filterAnalyst) {
-          filtered = filtered.filter(d => {
-              return d.assignees && d.assignees.includes(filterAnalyst);
-          });
+      // PRIORITY: If external filter exists (from Reports), use it exclusively first
+      if (externalFilterIds && externalFilterIds.length > 0) {
+          filtered = filtered.filter(d => externalFilterIds.includes(d.id));
+      } else {
+          // Standard Filters
+          if (filterProject) filtered = filtered.filter(d => d.project === filterProject);
+          
+          if (filterAnalyst) {
+              filtered = filtered.filter(d => {
+                  return d.assignees && d.assignees.includes(filterAnalyst);
+              });
+          }
+
+          if (filterMacro) filtered = filtered.filter(d => d.macroprocess === filterMacro);
+          if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
+          if (filterDocType) filtered = filtered.filter(d => d.docType === filterDocType);
+          if (filterState) filtered = filtered.filter(d => d.state === filterState);
       }
 
-      if (filterMacro) filtered = filtered.filter(d => d.macroprocess === filterMacro);
-      if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
-      if (filterDocType) filtered = filtered.filter(d => d.docType === filterDocType);
-      if (filterState) filtered = filtered.filter(d => d.state === filterState);
-
       return filtered;
-  }, [mergedDocs, filterProject, filterAnalyst, filterMacro, filterProcess, filterDocType, filterState]);
+  }, [mergedDocs, filterProject, filterAnalyst, filterMacro, filterProcess, filterDocType, filterState, externalFilterIds]);
 
   // --- 2. STATS CALCULATION (ONLY COUNT REQUIRED DOCS) ---
   const stats = useMemo(() => {
@@ -276,6 +295,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setFilterDocType('');
       setFilterState('');
       setQuickFilter('ALL');
+      setExternalFilterIds(null); // Clear external filter
+      // Clear location state
+      navigate(location.pathname, { replace: true, state: {} });
   };
 
   const SortIcon = ({ column }: { column: SortKey }) => (
@@ -340,7 +362,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       );
   }
 
-  const hasActiveFilters = filterProject || filterAnalyst || filterMacro || filterProcess || filterDocType || filterState;
+  const hasActiveFilters = filterProject || filterAnalyst || filterMacro || filterProcess || filterDocType || filterState || externalFilterIds;
 
   return (
     <div className="space-y-6 pb-12">
@@ -378,37 +400,49 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         </button>
                     )}
                 </div>
-                <div className="flex flex-wrap gap-3">
-                    <select value={filterProject} onChange={(e) => { setFilterProject(e.target.value); setFilterMacro(''); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-32">
-                        <option value="">Proyecto (Todos)</option>
-                        {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
 
-                    <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
-                        <option value="">Analista (Todos)</option>
-                        {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
+                {externalFilterIds ? (
+                     <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg mb-2 flex justify-between items-center animate-fadeIn">
+                        <span className="text-xs text-blue-700 font-semibold">
+                            Filtro Activo desde Reportes: Visualizando {externalFilterIds.length} documentos específicos.
+                        </span>
+                        <button onClick={clearFilters} className="text-xs bg-white border border-blue-200 px-2 py-1 rounded text-blue-600 hover:bg-blue-50">
+                            Mostrar Todo
+                        </button>
+                     </div>
+                ) : (
+                    <div className="flex flex-wrap gap-3">
+                        <select value={filterProject} onChange={(e) => { setFilterProject(e.target.value); setFilterMacro(''); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-32">
+                            <option value="">Proyecto (Todos)</option>
+                            {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
 
-                    <select value={filterMacro} onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">
-                        <option value="">Macro (Todos)</option>
-                        {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
+                            <option value="">Analista (Todos)</option>
+                            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
 
-                    <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">
-                        <option value="">Proceso (Todos)</option>
-                        {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                        <select value={filterMacro} onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">
+                            <option value="">Macro (Todos)</option>
+                            {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
 
-                    <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-32">
-                        <option value="">Doc (Todos)</option>
-                        {['AS IS', 'FCE', 'PM', 'TO BE'].map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                        <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">
+                            <option value="">Proceso (Todos)</option>
+                            {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
 
-                    <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
-                        <option value="">Estado (Todos)</option>
-                        {Object.keys(STATE_CONFIG).map(k => <option key={k} value={k}>{STATE_CONFIG[k as DocState].label.split('(')[0]}</option>)}
-                    </select>
-                </div>
+                        <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-32">
+                            <option value="">Doc (Todos)</option>
+                            {['AS IS', 'FCE', 'PM', 'TO BE'].map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+
+                        <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
+                            <option value="">Estado (Todos)</option>
+                            {Object.keys(STATE_CONFIG).map(k => <option key={k} value={k}>{STATE_CONFIG[k as DocState].label.split('(')[0]}</option>)}
+                        </select>
+                    </div>
+                )}
             </div>
 
             <div className="overflow-x-auto flex-1">
