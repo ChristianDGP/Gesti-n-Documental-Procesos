@@ -8,8 +8,9 @@ import CreateDocument from './views/CreateDocument';
 import DocumentDetail from './views/DocumentDetail';
 import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
-import AdminHierarchy from './views/AdminHierarchy'; // Import the Hierarchy View
+import AdminHierarchy from './views/AdminHierarchy'; 
 import AdminDatabase from './views/AdminDatabase';
+import Reports from './views/Reports'; // Import Reports View
 import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
 import Profile from './views/Profile';
@@ -69,10 +70,14 @@ const App: React.FC = () => {
                                         path="/admin/assignments" 
                                         element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminAssignments user={user} /> : <Navigate to="/" />} 
                                     />
-                                    {/* New Structure Manager Route - Passed USER prop */}
                                     <Route 
                                         path="/admin/structure" 
                                         element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminHierarchy user={user} /> : <Navigate to="/" />} 
+                                    />
+                                    {/* New Reports Route */}
+                                    <Route 
+                                        path="/admin/reports" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <Reports user={user} /> : <Navigate to="/" />} 
                                     />
                                     
                                     <Route 
