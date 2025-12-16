@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, HierarchyService } from '../services/firebaseBackend';
+import { DocumentService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
 import { User, DocState, DocType, UserHierarchy, UserRole, Document, FullHierarchy } from '../types';
 import { parseDocumentFilename } from '../utils/filenameParser';
 import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus, ListFilter, Lock, RefreshCw } from 'lucide-react';
@@ -156,7 +156,9 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               
               // Validate if the pre-filled docType is actually allowed
               if (docType && project && micro) {
-                  const allowed = reqMap[`${project}|${micro}`] || [];
+                  // FIX: Use normalized key for lookup here too
+                  const key = `${normalizeHeader(project)}|${normalizeHeader(micro)}`;
+                  const allowed = reqMap[key] || [];
                   if (allowed.includes(docType)) {
                       setSelectedDocType(docType);
                   }
@@ -194,7 +196,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   // Helper to check allowed types based on Matrix
   const getAllowedDocTypes = (): DocType[] => {
       if (!selectedProject || !selectedMicro) return [];
-      const key = `${selectedProject}|${selectedMicro}`;
+      // FIX: Use normalizeHeader to match the key format stored in requirementsMap (created in backend service)
+      const key = `${normalizeHeader(selectedProject)}|${normalizeHeader(selectedMicro)}`;
       return requirementsMap[key] || [];
   };
 

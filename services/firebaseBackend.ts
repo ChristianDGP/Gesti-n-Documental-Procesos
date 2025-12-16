@@ -555,7 +555,8 @@ export const HierarchyService = {
     snapshot.docs.forEach(doc => {
       const data = doc.data();
       const proj = data.project;
-      const macro = data.macro;
+      // FIX: Read either 'macro' or 'macroprocess' to support legacy/migrated data without breaking UI
+      const macro = data.macro || data.macroprocess || 'Sin Macroproceso';
       const process = data.process;
       const node: ProcessNode = {
         name: data.name,
@@ -585,7 +586,8 @@ export const HierarchyService = {
            if (data.active === false) return;
 
           const proj = data.project;
-          const macro = data.macro;
+          // FIX: Read either 'macro' or 'macroprocess'
+          const macro = data.macro || data.macroprocess || 'Sin Macroproceso';
           const process = data.process;
           
           if (!hierarchy[proj]) hierarchy[proj] = {};
@@ -632,7 +634,7 @@ export const HierarchyService = {
       const id = generateMatrixId(project, name);
       const ref = doc(db, "process_matrix", id);
       await setDoc(ref, {
-          project, macro, process, name, assignees, requiredTypes, active: true
+          project, macroprocess: macro, process, name, assignees, requiredTypes, active: true
       });
   },
 
@@ -650,9 +652,9 @@ export const HierarchyService = {
       if (level === 'PROJECT') {
           q = query(collection(db, "process_matrix"), where("project", "==", oldName));
       } else if (level === 'MACRO') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macro", "==", oldName));
+           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", oldName));
       } else if (level === 'PROCESS') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macro", "==", context.macro), where("process", "==", oldName));
+           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", oldName));
       }
       
       const snapshot = await getDocs(q);
@@ -661,7 +663,7 @@ export const HierarchyService = {
       snapshot.docs.forEach(d => {
           const update: any = {};
           if (level === 'PROJECT') update.project = newName;
-          if (level === 'MACRO') update.macro = newName;
+          if (level === 'MACRO') update.macroprocess = newName;
           if (level === 'PROCESS') update.process = newName;
           
           if (level === 'PROJECT') {
@@ -682,9 +684,9 @@ export const HierarchyService = {
       if (level === 'PROJECT') {
           q = query(collection(db, "process_matrix"), where("project", "==", name));
       } else if (level === 'MACRO') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macro", "==", name));
+           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", name));
       } else if (level === 'PROCESS') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macro", "==", context.macro), where("process", "==", name));
+           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", name));
       }
       
       const snapshot = await getDocs(q);
@@ -702,10 +704,10 @@ export const HierarchyService = {
       if (data.project !== targetProject) {
           const newId = generateMatrixId(targetProject, data.name);
           const newRef = doc(db, "process_matrix", newId);
-          await setDoc(newRef, { ...data, project: targetProject, macro: targetMacro, process: targetProcess });
+          await setDoc(newRef, { ...data, project: targetProject, macroprocess: targetMacro, process: targetProcess });
           await deleteDoc(ref);
       } else {
-          await updateDoc(ref, { macro: targetMacro, process: targetProcess });
+          await updateDoc(ref, { macroprocess: targetMacro, process: targetProcess });
       }
   },
   
@@ -726,7 +728,7 @@ export const HierarchyService = {
            if (!snap.exists()) {
                batch.set(ref, {
                    project,
-                   macro: 'Macroproceso General',
+                   macroprocess: 'Macroproceso General',
                    process: 'Proceso General',
                    name: micro,
                    assignees: [],
@@ -833,7 +835,7 @@ export const DatabaseService = {
 
             const id = generateMatrixId(project, micro);
             const nodeData = {
-                project, macro, process, name: micro, assignees, requiredTypes, active: true
+                project, macroprocess: macro, process, name: micro, assignees, requiredTypes, active: true
             };
             
             const ref = doc(db, "process_matrix", id);
@@ -914,7 +916,7 @@ export const DatabaseService = {
                              title: `${micro} - ${tc.type}`,
                              description: 'Carga Histórica',
                              project,
-                             macroprocess: (matrixNode as any).macro,
+                             macroprocess: (matrixNode as any).macroprocess,
                              process: (matrixNode as any).process,
                              microprocess: micro,
                              docType: tc.type,
