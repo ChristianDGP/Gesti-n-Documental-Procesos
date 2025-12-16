@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService, HierarchyService, normali
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -313,6 +313,22 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
+  // NOTIFICACIÓN EXTERNA PARA COORDINADOR (REFERENTE / CONTROL)
+  const handleNotifyExternal = () => {
+      if (!doc) return;
+      const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} ${doc.microprocess || ''}`);
+      const body = encodeURIComponent(
+`Estimados,
+Para vuestra aprobación, adjunto el Informe ${doc.docType || ''} - ${doc.microprocess || ''} ${doc.version}, 
+
+Atento a comentarios
+Saludos
+
+${user.name}`
+      );
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank');
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
   
   if (!doc) return (
@@ -341,6 +357,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canReject = isCoordinatorOrAdmin && isDocActive;
   const canNotifyCoordinator = isAnalystAssigned && coordinatorEmail && doc.state !== DocState.APPROVED;
   const canNotifyAuthor = isCoordinatorOrAdmin && authorEmail && doc.authorId !== user.id;
+
+  // Condiciones para mostrar botón de notificación externa (Coordinador)
+  const canNotifyExternal = (isCoordinatorOrAdmin) && 
+                            (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.SENT_TO_CONTROL);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -438,6 +458,17 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         {canNotifyCoordinator && <button onClick={handleGmailNotification} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Coord.</button>}
                         {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
                         
+                        {/* Botón Nuevo para Referente/Control */}
+                        {canNotifyExternal && (
+                            <button 
+                                onClick={handleNotifyExternal} 
+                                className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium shadow-sm border border-purple-700 transition-colors"
+                            >
+                                <ExternalLink size={16} className="mr-2" /> 
+                                Notificar Referente / Control
+                            </button>
+                        )}
+
                         {canRestart && <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">Reiniciar Flujo</button>}
                         
                         {canApprove && <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><CheckCircle size={16} className="mr-2" /> Aprobar</button>}
