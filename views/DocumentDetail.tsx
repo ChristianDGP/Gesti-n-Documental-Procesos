@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, HistoryService, UserService, HierarchyService } from '../services/firebaseBackend';
-import { Document, User, DocHistory, UserRole, DocState } from '../types';
+import { DocumentService, HistoryService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
+import { Document, User, DocHistory, UserRole, DocState, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload } from 'lucide-react';
@@ -64,6 +64,46 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     }
   }, [id, location.state]);
 
+  // Helper to find assignees robustly
+  const resolveAssignees = (d: Document, hierarchy: FullHierarchy): string[] => {
+      let resolvedIds = d.assignees || [];
+      const isLegacy = d.authorName.includes('Sistema') || d.authorName.includes('Carga');
+      
+      // Si no hay asignados explícitos O es un documento migrado (donde assignments pueden estar desactualizados),
+      // buscamos en la Matriz viva.
+      if ((resolvedIds.length === 0 || isLegacy) && d.project && d.microprocess) {
+           const targetMicro = normalizeHeader(d.microprocess);
+           const targetProject = normalizeHeader(d.project);
+           
+           let node: any = null;
+
+           // Búsqueda Profunda Normalizada
+           if (hierarchy) {
+               for (const projKey of Object.keys(hierarchy)) {
+                   if (normalizeHeader(projKey) === targetProject) {
+                       const projData = hierarchy[projKey];
+                       for (const macroKey of Object.keys(projData)) {
+                           const macroData = projData[macroKey];
+                           for (const procKey of Object.keys(macroData)) {
+                               const nodes = macroData[procKey];
+                               const found = nodes.find(n => normalizeHeader(n.name) === targetMicro);
+                               if (found) {
+                                   node = found;
+                                   break;
+                               }
+                           }
+                           if (node) break;
+                       }
+                   }
+                   if (node) break;
+               }
+           }
+
+           if (node?.assignees && node.assignees.length > 0) resolvedIds = node.assignees;
+      }
+      return resolvedIds;
+  };
+
   const loadAuxiliaryData = async (docId: string) => {
       try {
           const [h, allUsers, hierarchy] = await Promise.all([
@@ -79,11 +119,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               const author = allUsers.find(u => u.id === doc.authorId);
               if (author) setAuthorEmail(author.email);
               
-              let resolvedIds = doc.assignees || [];
-              if (resolvedIds.length === 0 && doc.project && doc.microprocess) {
-                   const node = hierarchy[doc.project]?.[doc.macroprocess || '']?.[doc.process || '']?.find(n => n.name === doc.microprocess);
-                   if (node?.assignees && node.assignees.length > 0) resolvedIds = node.assignees;
-              }
+              const resolvedIds = resolveAssignees(doc, hierarchy);
 
               if (resolvedIds.length > 0) {
                   const names = resolvedIds
@@ -117,11 +153,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             const author = allUsers.find(u => u.id === d.authorId);
             if (author) setAuthorEmail(author.email);
 
-            let resolvedIds = d.assignees || [];
-            if (resolvedIds.length === 0 && d.project && d.microprocess) {
-                 const node = hierarchy[d.project]?.[d.macroprocess || '']?.[d.process || '']?.find(n => n.name === d.microprocess);
-                 if (node?.assignees && node.assignees.length > 0) resolvedIds = node.assignees;
-            }
+            const resolvedIds = resolveAssignees(d, hierarchy);
 
             if (resolvedIds.length > 0) {
                 const names = resolvedIds
@@ -351,7 +383,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 {assigneeNames.length > 0 ? (
                     assigneeNames.map((name, i) => <p key={i} className="font-medium text-slate-800">{name}</p>)
                 ) : (
-                    <p className="font-medium text-slate-800">{doc.authorName} <span className="text-[10px] text-slate-400 font-normal">(Creador)</span></p>
+                    <p className="font-medium text-slate-800">{doc.authorName}</p>
                 )}
             </div>
             <div><p className="text-slate-500">Versión Actual</p><p className="font-mono text-slate-800 font-bold">{doc.version}</p></div>

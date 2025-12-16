@@ -1,3 +1,4 @@
+
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -73,31 +74,35 @@ export const generateDocumentId = (project: string, micro: string, type: string)
 
 // Helper to parse Dates robustly (DD/MM/YYYY, YYYY-MM-DD)
 const parseDateString = (dateStr: string): string => {
-    if (!dateStr) return ''; // Empty string if no date provided
+    if (!dateStr) return ''; 
     const clean = dateStr.trim();
     if (!clean || clean === '-' || clean === '0' || clean === '') return '';
 
     try {
-        // DD/MM/YYYY or DD-MM-YYYY
-        const ddmmyyyy = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        // IMPROVED REGEX: Search for date anywhere in string (removed ^ anchor)
+        // Supports DD/MM/YYYY or DD-MM-YYYY
+        const ddmmyyyy = clean.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
         if (ddmmyyyy) {
-            // Note: Month is 0-indexed in JS Date, but ISO string handles correct YYYY-MM-DD
-            // Using string construction to avoid timezone issues affecting the day
-            return new Date(`${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2,'0')}-${ddmmyyyy[1].padStart(2,'0')}T12:00:00`).toISOString();
+            let year = parseInt(ddmmyyyy[3]);
+            // Handle 2-digit years (e.g. 23 -> 2023)
+            if (year < 100) year += 2000;
+            
+            // Construct ISO string YYYY-MM-DD
+            return new Date(`${year}-${ddmmyyyy[2].padStart(2,'0')}-${ddmmyyyy[1].padStart(2,'0')}T12:00:00`).toISOString();
         }
         
         // YYYY-MM-DD
-        const yyyymmdd = clean.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        const yyyymmdd = clean.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
         if (yyyymmdd) {
             return new Date(`${yyyymmdd[1]}-${yyyymmdd[2].padStart(2,'0')}-${yyyymmdd[3].padStart(2,'0')}T12:00:00`).toISOString();
         }
 
-        // Try standard parsing
+        // Try standard parsing as last resort
         const d = new Date(clean);
         if (!isNaN(d.getTime())) return d.toISOString();
     } catch(e) {}
 
-    return ''; // Return empty if parsing fails
+    return ''; 
 };
 
 // Helper to find user ID by fuzzy name/email match
@@ -841,7 +846,8 @@ export const DatabaseService = {
             const ref = doc(db, "process_matrix", id);
             batch.set(ref, nodeData);
             
-            matrixMap.set(id, { docId: id, ...nodeData } as unknown as ProcessNode);
+            // FIXME: Storing raw analyst name in memory map to allow fallback in Step 3
+            matrixMap.set(id, { docId: id, ...nodeData, rawAnalyst: analystRaw } as any);
             
             opCount++;
             createdCount++;
@@ -866,10 +872,20 @@ export const DatabaseService = {
              const hIdxProject = hHeaders.findIndex(h => h.includes('PROYECTO'));
              const hIdxMicro = hHeaders.findIndex(h => h.includes('MICRO'));
              
-             const typeCols: { type: string, index: number }[] = [];
+             // NEW: Identify separate column indices for Version and Date for each DocType
+             const typeCols: { type: string, versionIndex: number, dateIndex: number }[] = [];
              ['AS IS', 'FCE', 'PM', 'TO BE'].forEach(t => {
-                 const idx = hHeaders.findIndex(h => h.includes(normalizeHeader(t)));
-                 if (idx !== -1) typeCols.push({ type: t, index: idx });
+                 const normType = normalizeHeader(t);
+                 // Look for headers containing both Type and "VERSION"/"FECHA" respectively
+                 // "Versión AS IS" -> "VERSION AS IS"
+                 // "Fecha AS IS" -> "FECHA AS IS"
+                 const versionIndex = hHeaders.findIndex(h => h.includes(normType) && h.includes('VERSION'));
+                 const dateIndex = hHeaders.findIndex(h => h.includes(normType) && h.includes('FECHA'));
+                 
+                 // Only add if at least Version column is found
+                 if (versionIndex !== -1) {
+                     typeCols.push({ type: t, versionIndex, dateIndex });
+                 }
              });
 
              batch = writeBatch(db);
@@ -889,18 +905,26 @@ export const DatabaseService = {
                  
                  if (matrixNode) {
                      for (const tc of typeCols) {
-                         const cellData = cols[tc.index];
-                         if (!cellData || cellData === '-' || cellData === '0') continue;
+                         // Extract Version and Date from separate columns
+                         const versionCell = cols[tc.versionIndex];
+                         const dateCell = tc.dateIndex !== -1 ? cols[tc.dateIndex] : '';
+
+                         if (!versionCell || versionCell === '-' || versionCell === '0') continue;
                          
-                         let version = '0.0';
-                         let date = new Date().toISOString();
+                         const version = versionCell.trim();
+                         let date = new Date().toISOString(); 
                          
-                         const match = cellData.match(/^([^(]+)(?:\(([^)]+)\))?/);
-                         if (match) {
-                             version = match[1].trim();
-                             if (match[2]) date = parseDateString(match[2]);
+                         // Try to parse specific Date column if available
+                         if (dateCell) {
+                             const parsed = parseDateString(dateCell);
+                             if (parsed) date = parsed;
                          } else {
-                             version = cellData;
+                             // Fallback: Check if version cell itself contains a date (legacy logic support)
+                             const match = versionCell.match(/\((.+?)\)/);
+                             if (match) {
+                                 const parsed = parseDateString(match[1]);
+                                 if (parsed) date = parsed;
+                             }
                          }
                          
                          const { state, progress } = determineStateFromVersion(version);
@@ -912,6 +936,15 @@ export const DatabaseService = {
                              ? matrixNode.assignees[0] 
                              : (allUsers.find(u => u.role === UserRole.ADMIN)?.id || 'admin');
 
+                         // FIX 1: Resolve actual name or Fallback to Raw CSV Name
+                         let authorName = 'Sistema (Carga)';
+                         const authorUser = allUsers.find(u => u.id === authorId);
+                         if (authorUser) {
+                             authorName = authorUser.name;
+                         } else if ((matrixNode as any).rawAnalyst) {
+                             authorName = (matrixNode as any).rawAnalyst;
+                         }
+
                          const docData = {
                              title: `${micro} - ${tc.type}`,
                              description: 'Carga Histórica',
@@ -921,14 +954,14 @@ export const DatabaseService = {
                              microprocess: micro,
                              docType: tc.type,
                              authorId,
-                             authorName: 'Sistema (Carga)',
+                             authorName, // Using resolved or raw name
                              assignees: matrixNode.assignees,
                              state,
-                             version,
+                             version, // Just the version string (e.g. v1.0ACG)
                              progress,
                              hasPendingRequest: false,
                              createdAt: date,
-                             updatedAt: date,
+                             updatedAt: date, // FIX 2: Set activity date to historical date found in "Fecha X" column
                              files: []
                          };
                          
