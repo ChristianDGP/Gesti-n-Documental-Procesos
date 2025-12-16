@@ -104,6 +104,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       return resolvedIds;
   };
 
+  // Helper function to find coordinator robustly (Case Insensitive)
+  const findCoordinator = (users: User[]) => {
+      return users.find(u => {
+          const role = (u.role || '').toString().toUpperCase();
+          return role === 'COORDINATOR' || role === 'COORDINADOR';
+      });
+  };
+
   const loadAuxiliaryData = async (docId: string) => {
       try {
           const [h, allUsers, hierarchy] = await Promise.all([
@@ -114,8 +122,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           setHistory(h);
           
           if (doc) {
-              const coordinator = allUsers.find(u => u.role === UserRole.COORDINATOR);
+              const coordinator = findCoordinator(allUsers);
               if (coordinator) setCoordinatorEmail(coordinator.email);
+              
               const author = allUsers.find(u => u.id === doc.authorId);
               if (author) setAuthorEmail(author.email);
               
@@ -147,7 +156,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             setDoc(d);
             setHistory(h);
 
-            const coordinator = allUsers.find(u => u.role === UserRole.COORDINATOR);
+            const coordinator = findCoordinator(allUsers);
             if (coordinator) setCoordinatorEmail(coordinator.email);
 
             const author = allUsers.find(u => u.id === d.authorId);
@@ -396,7 +405,7 @@ ${user.name}`
       DocState.SENT_TO_REFERENT,
       DocState.SENT_TO_CONTROL
   ];
-  // Modificación: Permitir visibilidad del botón incluso si no hay coordinador email, para que el usuario sepa que la funcionalidad existe
+  // Modificación: Permitir visibilidad del botón incluso si no hay coordinador email
   const canNotifyCoordinator = isAnalystAssigned && analystNotificationStates.includes(doc.state);
 
   return (
