@@ -443,12 +443,15 @@ ${user.name}`
                             (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.SENT_TO_CONTROL);
 
   // Condiciones Botón Analista -> Coordinador
+  // Se agregan REFERENT_REVIEW y CONTROL_REVIEW para cubrir versiones v1.n.i y v1.n.iAR
   const analystNotificationStates = [
       DocState.INTERNAL_REVIEW,
       DocState.SENT_TO_REFERENT,
-      DocState.SENT_TO_CONTROL
+      DocState.REFERENT_REVIEW,
+      DocState.SENT_TO_CONTROL,
+      DocState.CONTROL_REVIEW
   ];
-  // Modificación: Permitir visibilidad del botón incluso si no hay coordinador email
+  
   const canNotifyCoordinator = isAnalystAssigned && analystNotificationStates.includes(doc.state);
 
   return (
