@@ -32,7 +32,6 @@ const determineStateFromVersion = (version: string): { state: DocState, progress
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
     
     // 3. Revisión Interna Control (v1.n.iAR) - Detectado si tiene AR y es un sub-ciclo
-    // Regex: v1.n.iAR (3 segmentos numéricos + AR)
     if (/^v1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
 
     // 4. Enviado a Control (v1.nAR) - Versión Limpia con AR
@@ -48,31 +47,27 @@ const determineStateFromVersion = (version: string): { state: DocState, progress
     if (v.startsWith('v0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
     
     // 8. En Proceso (0.x) - SIN 'v'
-    // Si empieza con número (ej: 0.1, 1.0 sin v), se considera trabajo en proceso no formalizado
     if (/^\d+\./.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
     
     // Fallback
     return { state: DocState.IN_PROCESS, progress: 30 };
 };
 
-// Robust string normalization for header matching
 export const normalizeHeader = (header: string): string => {
     if (!header) return '';
     return header
         .trim()
         .toUpperCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-        .replace(/^"|"$/g, ''); // Remove quotes
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+        .replace(/^"|"$/g, ''); 
 };
 
-// Generates a deterministic ID for matrix rows to PREVENT DUPLICATES
 export const generateMatrixId = (project: string, micro: string): string => {
     const p = normalizeHeader(project).replace(/[^A-Z0-9]/g, '').substring(0, 10);
     const m = normalizeHeader(micro).replace(/[^A-Z0-9]+/g, '_').substring(0, 60); 
     return `MTX_${p}_${m}`;
 };
 
-// Generates a deterministic ID for Documents to PREVENT DUPLICATES during import
 export const generateDocumentId = (project: string, micro: string, type: string): string => {
     const p = normalizeHeader(project).replace(/[^A-Z0-9]/g, '').substring(0, 10);
     const m = normalizeHeader(micro).replace(/[^A-Z0-9]+/g, '_').substring(0, 60);
@@ -80,32 +75,24 @@ export const generateDocumentId = (project: string, micro: string, type: string)
     return `DOC_${p}_${m}_${t}`;
 };
 
-// Helper to parse Dates robustly (DD/MM/YYYY, YYYY-MM-DD)
 const parseDateString = (dateStr: string): string => {
     if (!dateStr) return ''; 
     const clean = dateStr.trim();
     if (!clean || clean === '-' || clean === '0' || clean === '') return '';
 
     try {
-        // IMPROVED REGEX: Search for date anywhere in string (removed ^ anchor)
-        // Supports DD/MM/YYYY or DD-MM-YYYY
         const ddmmyyyy = clean.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
         if (ddmmyyyy) {
             let year = parseInt(ddmmyyyy[3]);
-            // Handle 2-digit years (e.g. 23 -> 2023)
             if (year < 100) year += 2000;
-            
-            // Construct ISO string YYYY-MM-DD
             return new Date(`${year}-${ddmmyyyy[2].padStart(2,'0')}-${ddmmyyyy[1].padStart(2,'0')}T12:00:00`).toISOString();
         }
         
-        // YYYY-MM-DD
         const yyyymmdd = clean.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
         if (yyyymmdd) {
             return new Date(`${yyyymmdd[1]}-${yyyymmdd[2].padStart(2,'0')}-${yyyymmdd[3].padStart(2,'0')}T12:00:00`).toISOString();
         }
 
-        // Try standard parsing as last resort
         const d = new Date(clean);
         if (!isNaN(d.getTime())) return d.toISOString();
     } catch(e) {}
@@ -113,7 +100,6 @@ const parseDateString = (dateStr: string): string => {
     return ''; 
 };
 
-// Helper to find user ID by fuzzy name/email match
 const findUserIdsFromCSV = (users: User[], rawValue: string): string[] => {
     if (!rawValue || !rawValue.trim()) return [];
     
@@ -140,8 +126,7 @@ const findUserIdsFromCSV = (users: User[], rawValue: string): string[] => {
 
 const deleteCollectionInBatches = async (collectionName: string, batchSize: number = 400) => {
     const colRef = collection(db, collectionName);
-    const q = query(colRef);
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(query(colRef));
     if (snapshot.size === 0) return;
     let deleted = 0;
     let batch = writeBatch(db);
@@ -157,12 +142,8 @@ const deleteCollectionInBatches = async (collectionName: string, batchSize: numb
         }
     }
     if (operationCounter > 0) await batch.commit();
-    console.log(`Deleted ${deleted} docs from ${collectionName}`);
 };
 
-// --- Services ---
-
-// 1GB POLICY HELPERS
 const STORAGE_ALLOWED_STATES = [
     DocState.INTERNAL_REVIEW,
     DocState.SENT_TO_REFERENT,
@@ -190,13 +171,9 @@ const cleanupOldFiles = async (files: DocFile[]) => {
 };
 
 const uploadToStorage = async (file: File, docId: string): Promise<string> => {
-    // MODIFICACIÓN: Bypass de almacenamiento físico.
-    // Simular éxito inmediato devolviendo una URL ficticia (hash).
-    // Esto permite que el flujo continúe sin intentar conectarse a Firebase Storage.
     console.log(`[SIMULATION] Skipping physical upload for: ${file.name}. Validation was successful.`);
     return `#simulated_upload_${Date.now()}`;
 };
-
 
 export const NotificationService = {
     create: async (userId: string, docId: string, type: Notification['type'], title: string, message: string, actorName: string) => {
@@ -256,7 +233,8 @@ export const AuthService = {
           name: firebaseUser.displayName || 'Usuario',
           role: UserRole.ANALYST,
           avatar: firebaseUser.photoURL || '',
-          organization: 'SSM'
+          organization: 'SSM',
+          active: true
         } as User;
       }
     } catch (error: any) {
@@ -294,7 +272,7 @@ export const UserService = {
   getAll: async (): Promise<User[]> => {
     const q = query(collection(db, "users"));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => doc.data() as User);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, active: true, ...doc.data() } as User));
   },
   update: async (id: string, userData: Partial<User>): Promise<User> => {
     const userRef = doc(db, "users", id);
@@ -303,8 +281,12 @@ export const UserService = {
     const updatedSnap = await getDoc(userRef);
     return updatedSnap.data() as User;
   },
+  toggleActiveStatus: async (id: string, currentStatus: boolean): Promise<void> => {
+    const userRef = doc(db, "users", id);
+    await updateDoc(userRef, { active: !currentStatus });
+  },
   create: async (userData: User): Promise<User> => {
-      const safeData = JSON.parse(JSON.stringify(userData));
+      const safeData = JSON.parse(JSON.stringify({ ...userData, active: userData.active ?? true }));
       await setDoc(doc(db, "users", userData.id), safeData);
       return userData;
   },
@@ -312,7 +294,6 @@ export const UserService = {
       await deleteDoc(doc(db, "users", id));
   },
   migrateLegacyReferences: async (oldId: string, newId: string) => {
-      console.log(`Starting migration from ${oldId} to ${newId}...`);
       const qMatrix = query(collection(db, "process_matrix"), where("assignees", "array-contains", oldId));
       const snapMatrix = await getDocs(qMatrix);
       const matrixPromises = snapMatrix.docs.map(async (docSnap) => {
@@ -335,7 +316,6 @@ export const UserService = {
           await updateDoc(docSnap.ref, { authorId: newId });
       });
       await Promise.all([...matrixPromises, ...docAssigneePromises, ...docAuthorPromises]);
-      console.log("Migration completed.");
   }
 };
 
@@ -385,11 +365,9 @@ export const DocumentService = {
             });
         } catch (e) {
             console.error("File upload skipped/failed:", e);
-            // Continue creation even if upload 'fails' in simulated mode
         }
     }
 
-    // Merge passed assignees (from Matrix) with Author
     const passedAssignees = hierarchy?.assignees || [];
     const mergedAssignees = Array.from(new Set([...passedAssignees, author.id]));
 
@@ -407,27 +385,15 @@ export const DocumentService = {
     const docRef = await addDoc(collection(db, "documents"), safeDocData);
     const docId = docRef.id;
     
-    // Explicit History Logging for State Change
-    const previousStateForLog = DocState.NOT_STARTED; 
-    const stateLabel = STATE_CONFIG[state]?.label || 'Desconocido';
-
-    await HistoryService.log(docId, author, 'Creación', previousStateForLog, state, `Documento creado en estado: ${stateLabel} (Versión ${initialVersion}).`);
+    await HistoryService.log(docId, author, 'Creación', DocState.NOT_STARTED, state, `Documento creado en estado: ${STATE_CONFIG[state]?.label || 'Desconocido'} (Versión ${initialVersion}).`);
     await HistoryService.log(docId, author, 'Asignación', state, state, `Asignado a: ${author.name} ${passedAssignees.length > 0 ? `y ${passedAssignees.length} analistas más` : ''}`);
     
-    // --- NEW: Trigger Notification if created in Review State ---
     if (state === DocState.INTERNAL_REVIEW || state === DocState.SENT_TO_REFERENT || state === DocState.SENT_TO_CONTROL) {
         const allUsers = await UserService.getAll();
         const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
         
         coordinators.forEach(coord => {
-            NotificationService.create(
-                coord.id,
-                docId,
-                'ASSIGNMENT',
-                'Nueva Solicitud de Revisión',
-                `El documento "${title}" ha sido cargado directamente en etapa de revisión (${stateLabel}).`,
-                author.name
-            );
+            NotificationService.create(coord.id, docId, 'ASSIGNMENT', 'Nueva Solicitud de Revisión', `El documento "${title}" ha sido cargado directamente en etapa de revisión.`, author.name);
         });
     }
 
@@ -454,27 +420,21 @@ export const DocumentService = {
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
       
-      // Determine next state
       if (customVersion) {
         newVersion = customVersion;
-        // Auto-determine state from version structure
         const { state } = determineStateFromVersion(customVersion);
         newState = state;
       }
       
-      // Force state override if provided by Approve/Reject logic
       if (action === 'APPROVE') {
           hasPending = false;
-          // State is updated via determineStateFromVersion above if version changed
       } else if (action === 'REJECT') {
           hasPending = false;
-          // IMPORTANT: Rejections might need to go back to specific states based on version
           const { state } = determineStateFromVersion(newVersion);
           newState = state;
           comment = `RECHAZADO: ${comment}`;
       } else if (action === 'REQUEST_APPROVAL') {
           hasPending = true;
-          // If purely requesting approval from In Process, go to Internal Review
           if (currentDoc.state === DocState.IN_PROCESS || currentDoc.state === DocState.INITIATED || currentDoc.state === DocState.REJECTED || currentDoc.state === DocState.NOT_STARTED) {
               newState = DocState.INTERNAL_REVIEW;
           }
@@ -488,8 +448,6 @@ export const DocumentService = {
       let finalFiles = [...(currentDoc.files || [])];
 
       if (file) {
-          // In simulation mode, we don't really delete old files either, but we reset the list
-          // await cleanupOldFiles(currentDoc.files); 
           finalFiles = []; 
           if (STORAGE_ALLOWED_STATES.includes(newState) || newState === DocState.IN_PROCESS || newState === DocState.REJECTED) {
               try {
@@ -512,7 +470,6 @@ export const DocumentService = {
       const actionLabel = action === 'COMMENT' ? 'Observación' : action;
       await HistoryService.log(docId, user, actionLabel, currentDoc.state, newState, comment);
       
-      // Async Notifications (Non-blocking)
       const notifyPromises = [];
       if (action === 'APPROVE' || action === 'REJECT') {
           const targetIds = currentDoc.assignees || [currentDoc.authorId];
@@ -544,17 +501,9 @@ export const DocumentService = {
            if (targets.length === 0) targets = allUsers.filter(u => u.role === UserRole.ADMIN);
 
            for (const target of targets) {
-               notifyPromises.push(NotificationService.create(
-                   target.id, 
-                   docId, 
-                   'ASSIGNMENT', 
-                   'Solicitud de Aprobación', 
-                   `El documento "${currentDoc.title}" (v${newVersion}) requiere su revisión.`, 
-                   user.name
-               ));
+               notifyPromises.push(NotificationService.create(target.id, docId, 'ASSIGNMENT', 'Solicitud de Aprobación', `El documento "${currentDoc.title}" (v${newVersion}) requiere su revisión.`, user.name));
            }
       }
-      // Execute notifications in background
       Promise.allSettled(notifyPromises);
   }
 };
@@ -568,7 +517,6 @@ export const HierarchyService = {
     snapshot.docs.forEach(doc => {
       const data = doc.data();
       const proj = data.project;
-      // FIX: Read either 'macro' or 'macroprocess' to support legacy/migrated data without breaking UI
       const macro = data.macro || data.macroprocess || 'Sin Macroproceso';
       const process = data.process;
       const node: ProcessNode = {
@@ -576,7 +524,7 @@ export const HierarchyService = {
         docId: doc.id,
         assignees: data.assignees || [],
         requiredTypes: data.requiredTypes || [],
-        active: data.active !== false // Default true
+        active: data.active !== false 
       };
       
       if (!hierarchy[proj]) hierarchy[proj] = {};
@@ -599,7 +547,6 @@ export const HierarchyService = {
            if (data.active === false) return;
 
           const proj = data.project;
-          // FIX: Read either 'macro' or 'macroprocess'
           const macro = data.macro || data.macroprocess || 'Sin Macroproceso';
           const process = data.process;
           
@@ -657,28 +604,22 @@ export const HierarchyService = {
   
   toggleProcessStatus: async (docId: string, currentStatus: boolean) => {
       const ref = doc(db, "process_matrix", docId);
-      await updateDoc(ref, { active: !currentStatus }); // Invert status
+      await updateDoc(ref, { active: !currentStatus }); 
   },
   
   updateHierarchyNode: async (level: 'PROJECT' | 'MACRO' | 'PROCESS', oldName: string, newName: string, context: { project?: string, macro?: string }) => {
       let q = query(collection(db, "process_matrix"));
-      if (level === 'PROJECT') {
-          q = query(collection(db, "process_matrix"), where("project", "==", oldName));
-      } else if (level === 'MACRO') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", oldName));
-      } else if (level === 'PROCESS') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", oldName));
-      }
+      if (level === 'PROJECT') q = query(collection(db, "process_matrix"), where("project", "==", oldName));
+      else if (level === 'MACRO') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", oldName));
+      else if (level === 'PROCESS') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", oldName));
       
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
-      
       snapshot.docs.forEach(d => {
           const update: any = {};
           if (level === 'PROJECT') update.project = newName;
           if (level === 'MACRO') update.macroprocess = newName;
           if (level === 'PROCESS') update.process = newName;
-          
           if (level === 'PROJECT') {
               const data = d.data();
               const newId = generateMatrixId(newName, data.name);
@@ -694,13 +635,9 @@ export const HierarchyService = {
   
   deleteHierarchyNode: async (level: 'PROJECT' | 'MACRO' | 'PROCESS', name: string, context: { project?: string, macro?: string }) => {
       let q = query(collection(db, "process_matrix"));
-      if (level === 'PROJECT') {
-          q = query(collection(db, "process_matrix"), where("project", "==", name));
-      } else if (level === 'MACRO') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", name));
-      } else if (level === 'PROCESS') {
-           q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", name));
-      }
+      if (level === 'PROJECT') q = query(collection(db, "process_matrix"), where("project", "==", name));
+      else if (level === 'MACRO') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", name));
+      else if (level === 'PROCESS') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", name));
       
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
@@ -712,7 +649,6 @@ export const HierarchyService = {
       const ref = doc(db, "process_matrix", docId);
       const snap = await getDoc(ref);
       if (!snap.exists()) throw new Error("Microprocess not found");
-      
       const data = snap.data();
       if (data.project !== targetProject) {
           const newId = generateMatrixId(targetProject, data.name);
@@ -733,21 +669,11 @@ export const HierarchyService = {
            if (fce) requiredTypes.push('FCE');
            if (pm) requiredTypes.push('PM');
            if (tobe) requiredTypes.push('TO BE');
-           
            const id = generateMatrixId(project, micro);
            const ref = doc(db, "process_matrix", id);
-           
            const snap = await getDoc(ref);
            if (!snap.exists()) {
-               batch.set(ref, {
-                   project,
-                   macroprocess: 'Macroproceso General',
-                   process: 'Proceso General',
-                   name: micro,
-                   assignees: [],
-                   requiredTypes,
-                   active: true
-               });
+               batch.set(ref, { project, macroprocess: 'Macroproceso General', process: 'Proceso General', name: micro, assignees: [], requiredTypes, active: true });
            }
       }
       await batch.commit();
@@ -758,24 +684,19 @@ export const DatabaseService = {
     exportData: async (): Promise<string> => {
         const collections = ['users', 'documents', 'history', 'process_matrix', 'notifications'];
         const data: any = {};
-        
         for (const colName of collections) {
             const snapshot = await getDocs(collection(db, colName));
             data[colName] = snapshot.docs.map(d => ({ _id: d.id, ...d.data() }));
         }
         return JSON.stringify(data, null, 2);
     },
-    
     importData: async (jsonString: string) => {
         const data = JSON.parse(jsonString);
-        
         for (const colName of Object.keys(data)) {
             await deleteCollectionInBatches(colName);
-            
             const items = data[colName];
             let batch = writeBatch(db);
             let count = 0;
-            
             for (const item of items) {
                 const { _id, ...docData } = item;
                 const ref = doc(db, colName, _id);
@@ -790,76 +711,52 @@ export const DatabaseService = {
             if (count > 0) await batch.commit();
         }
     },
-    
     fullSystemResetAndImport: async (rulesCSV: string, historyCSV: string, onProgress: (percent: number, status: string) => void): Promise<{ created: number, historyMatched: number }> => {
-        // 1. Clear Database
         onProgress(5, "Limpiando base de datos...");
         await deleteCollectionInBatches("documents");
         await deleteCollectionInBatches("history");
         await deleteCollectionInBatches("process_matrix");
         await deleteCollectionInBatches("notifications");
-        
         onProgress(10, "Procesando reglas de estructura...");
-        
-        // 2. Parse Rules CSV (Structure)
         const rows = rulesCSV.split(/\r?\n/).filter(r => r.trim().length > 0);
         const headers = rows[0].split(/[;,]/).map(h => normalizeHeader(h));
-        
         const idxProject = headers.findIndex(h => h.includes('PROYECTO'));
         const idxMacro = headers.findIndex(h => h.includes('MACRO'));
         const idxProcess = headers.findIndex(h => h === 'PROCESO');
         const idxMicro = headers.findIndex(h => h.includes('MICRO'));
         const idxAnalyst = headers.findIndex(h => h.includes('ANALISTA') || h.includes('RESPONSABLE'));
-        
         const idxAsis = headers.findIndex(h => h.includes('ASIS') || h.includes('AS IS'));
         const idxFce = headers.findIndex(h => h.includes('FCE'));
         const idxPm = headers.findIndex(h => h.includes('PM'));
         const idxTobe = headers.findIndex(h => h.includes('TOBE') || h.includes('TO BE'));
-        
         const allUsers = await UserService.getAll();
         let createdCount = 0;
         let batch = writeBatch(db);
         let opCount = 0;
-        
         const matrixMap = new Map<string, ProcessNode>();
-
         for (let i = 1; i < rows.length; i++) {
             const cols = rows[i].split(/[;,]/).map(c => c.trim());
             if (cols.length < 3) continue;
-            
             const project = cols[idxProject] || 'GENERAL';
             const macro = cols[idxMacro] || 'General';
             const process = cols[idxProcess] || 'General';
             const micro = cols[idxMicro];
-            
             if (!micro) continue;
-
             const analystRaw = cols[idxAnalyst];
             const assignees = findUserIdsFromCSV(allUsers, analystRaw);
-
             const requiredTypes: string[] = [];
             if (cols[idxAsis] === '1') requiredTypes.push('AS IS');
             if (cols[idxFce] === '1') requiredTypes.push('FCE');
             if (cols[idxPm] === '1') requiredTypes.push('PM');
             if (cols[idxTobe] === '1') requiredTypes.push('TO BE');
-            if (requiredTypes.length === 0) {
-                 requiredTypes.push('AS IS', 'FCE', 'PM', 'TO BE');
-            }
-
+            if (requiredTypes.length === 0) requiredTypes.push('AS IS', 'FCE', 'PM', 'TO BE');
             const id = generateMatrixId(project, micro);
-            const nodeData = {
-                project, macroprocess: macro, process, name: micro, assignees, requiredTypes, active: true
-            };
-            
+            const nodeData = { project, macroprocess: macro, process, name: micro, assignees, requiredTypes, active: true };
             const ref = doc(db, "process_matrix", id);
             batch.set(ref, nodeData);
-            
-            // FIXME: Storing raw analyst name in memory map to allow fallback in Step 3
             matrixMap.set(id, { docId: id, ...nodeData, rawAnalyst: analystRaw } as any);
-            
             opCount++;
             createdCount++;
-            
             if (opCount >= 400) {
                 await batch.commit();
                 batch = writeBatch(db);
@@ -868,111 +765,58 @@ export const DatabaseService = {
             }
         }
         if (opCount > 0) await batch.commit();
-
-        // 3. Process History CSV (Optional)
         let historyMatched = 0;
-        
         if (historyCSV) {
              onProgress(50, "Procesando histórico...");
              const hRows = historyCSV.split(/\r?\n/).filter(r => r.trim().length > 0);
              const hHeaders = hRows[0].split(/[;,]/).map(h => normalizeHeader(h));
-             
              const hIdxProject = hHeaders.findIndex(h => h.includes('PROYECTO'));
              const hIdxMicro = hHeaders.findIndex(h => h.includes('MICRO'));
-             
-             // NEW: Identify separate column indices for Version and Date for each DocType
              const typeCols: { type: string, versionIndex: number, dateIndex: number }[] = [];
              ['AS IS', 'FCE', 'PM', 'TO BE'].forEach(t => {
                  const normType = normalizeHeader(t);
-                 // Look for headers containing both Type and "VERSION"/"FECHA" respectively
-                 // "Versión AS IS" -> "VERSION AS IS"
-                 // "Fecha AS IS" -> "FECHA AS IS"
                  const versionIndex = hHeaders.findIndex(h => h.includes(normType) && h.includes('VERSION'));
                  const dateIndex = hHeaders.findIndex(h => h.includes(normType) && h.includes('FECHA'));
-                 
-                 // Only add if at least Version column is found
-                 if (versionIndex !== -1) {
-                     typeCols.push({ type: t, versionIndex, dateIndex });
-                 }
+                 if (versionIndex !== -1) typeCols.push({ type: t, versionIndex, dateIndex });
              });
-
              batch = writeBatch(db);
              opCount = 0;
-             
              for (let i = 1; i < hRows.length; i++) {
                  const cols = hRows[i].split(/[;,]/).map(c => c.trim());
                  if (cols.length < 2) continue;
-                 
                  const project = cols[hIdxProject];
                  const micro = cols[hIdxMicro];
-                 
                  if (!project || !micro) continue;
-                 
                  const matrixId = generateMatrixId(project, micro);
                  const matrixNode = matrixMap.get(matrixId);
-                 
                  if (matrixNode) {
                      for (const tc of typeCols) {
-                         // Extract Version and Date from separate columns
                          const versionCell = cols[tc.versionIndex];
                          const dateCell = tc.dateIndex !== -1 ? cols[tc.dateIndex] : '';
-
                          if (!versionCell || versionCell === '-' || versionCell === '0') continue;
-                         
                          const version = versionCell.trim();
                          let date = new Date().toISOString(); 
-                         
-                         // Try to parse specific Date column if available
                          if (dateCell) {
                              const parsed = parseDateString(dateCell);
                              if (parsed) date = parsed;
                          } else {
-                             // Fallback: Check if version cell itself contains a date (legacy logic support)
                              const match = versionCell.match(/\((.+?)\)/);
                              if (match) {
                                  const parsed = parseDateString(match[1]);
                                  if (parsed) date = parsed;
                              }
                          }
-                         
                          const { state, progress } = determineStateFromVersion(version);
-                         
                          const docId = generateDocumentId(project, micro, tc.type);
                          const docRef = doc(db, "documents", docId);
-                         
-                         const authorId = (matrixNode.assignees && matrixNode.assignees.length > 0) 
-                             ? matrixNode.assignees[0] 
-                             : (allUsers.find(u => u.role === UserRole.ADMIN)?.id || 'admin');
-
-                         // FIX 1: Resolve actual name or Fallback to Raw CSV Name
+                         const authorId = (matrixNode.assignees && matrixNode.assignees.length > 0) ? matrixNode.assignees[0] : (allUsers.find(u => u.role === UserRole.ADMIN)?.id || 'admin');
                          let authorName = 'Sistema (Carga)';
                          const authorUser = allUsers.find(u => u.id === authorId);
-                         if (authorUser) {
-                             authorName = authorUser.name;
-                         } else if ((matrixNode as any).rawAnalyst) {
-                             authorName = (matrixNode as any).rawAnalyst;
-                         }
-
+                         if (authorUser) authorName = authorUser.name;
+                         else if ((matrixNode as any).rawAnalyst) authorName = (matrixNode as any).rawAnalyst;
                          const docData = {
-                             title: `${micro} - ${tc.type}`,
-                             description: 'Carga Histórica',
-                             project,
-                             macroprocess: (matrixNode as any).macroprocess,
-                             process: (matrixNode as any).process,
-                             microprocess: micro,
-                             docType: tc.type,
-                             authorId,
-                             authorName, // Using resolved or raw name
-                             assignees: matrixNode.assignees,
-                             state,
-                             version, // Just the version string (e.g. v1.0ACG)
-                             progress,
-                             hasPendingRequest: false,
-                             createdAt: date,
-                             updatedAt: date, // FIX 2: Set activity date to historical date found in "Fecha X" column
-                             files: []
+                             title: `${micro} - ${tc.type}`, description: 'Carga Histórica', project, macroprocess: (matrixNode as any).macroprocess, process: (matrixNode as any).process, microprocess: micro, docType: tc.type, authorId, authorName, assignees: matrixNode.assignees, state, version, progress, hasPendingRequest: false, createdAt: date, updatedAt: date, files: []
                          };
-                         
                          batch.set(docRef, docData);
                          historyMatched++;
                          opCount++;
@@ -983,12 +827,10 @@ export const DatabaseService = {
                          }
                      }
                  }
-                 
                  if (i % 50 === 0) onProgress(50 + Math.floor((i / hRows.length) * 40), `Importando documentos: ${historyMatched}...`);
              }
              if (opCount > 0) await batch.commit();
         }
-        
         onProgress(100, "Finalizando...");
         return { created: createdCount, historyMatched };
     }

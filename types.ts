@@ -14,6 +14,7 @@ export interface User {
   avatar: string;
   organization: string;
   password?: string; // Added for mock auth
+  active?: boolean; // New field for logical status
 }
 
 export enum DocState {

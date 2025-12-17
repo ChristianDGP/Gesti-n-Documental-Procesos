@@ -7,7 +7,8 @@ import { STATE_CONFIG } from '../constants';
 import { 
     Plus, Clock, CheckCircle, Filter, X, Calendar, ArrowRight, Activity, 
     BookOpen, Users, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, Loader2,
-    User as UserIcon, Database, AlertTriangle, Archive, PlayCircle, Search
+    User as UserIcon, Database, AlertTriangle, Archive, PlayCircle, Search,
+    ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -15,15 +16,15 @@ interface DashboardProps {
   user: User;
 }
 
-// Extend Document interface locally to handle the "Required" flag for the Dashboard view
 interface DashboardDoc extends Document {
-    isRequired: boolean; // True if it matches the Matrix, False if it's an extra historical doc
+    isRequired: boolean;
 }
 
 type SortKey = 'project' | 'microprocess' | 'state' | 'updatedAt';
 type QuickFilterType = 'ALL' | 'NOT_STARTED' | 'IN_PROCESS' | 'REFERENT' | 'CONTROL' | 'FINISHED';
 
-// Helper to order DocTypes logically
+const ITEMS_PER_PAGE = 10;
+
 const getDocTypeOrder = (type: string | undefined): number => {
     switch (type) {
         case 'AS IS': return 1;
@@ -36,38 +37,35 @@ const getDocTypeOrder = (type: string | undefined): number => {
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const navigate = useNavigate();
-  const location = useLocation(); // Used to receive filters from Reports
+  const location = useLocation(); 
   
   const [mergedDocs, setMergedDocs] = useState<DashboardDoc[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSystemEmpty, setIsSystemEmpty] = useState(false);
 
-  // Filters State
+  // Filtros de Estado
   const [filterProject, setFilterProject] = useState('');
-  const [filterAnalyst, setFilterAnalyst] = useState('');
   const [filterMacro, setFilterMacro] = useState('');
   const [filterProcess, setFilterProcess] = useState('');
-  const [filterSearch, setFilterSearch] = useState(''); // New Search Filter
+  const [filterSearch, setFilterSearch] = useState(''); 
   const [filterDocType, setFilterDocType] = useState('');
-  const [filterState, setFilterState] = useState(''); // Dropdown state filter
+  const [filterState, setFilterState] = useState(''); 
+  const [filterAnalyst, setFilterAnalyst] = useState('');
   
-  // External Filter (From Reports)
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
   const [externalFilterIds, setExternalFilterIds] = useState<string[] | null>(null);
-
-  // Quick Stats Filter (Cards)
   const [quickFilter, setQuickFilter] = useState<QuickFilterType>('ALL');
 
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
-    key: 'project', // Default sort by Project Hierarchy
+    key: 'project', 
     direction: 'asc'
   });
 
   useEffect(() => {
-    // Check for incoming report filters
     if (location.state?.filterIds && Array.isArray(location.state.filterIds)) {
         setExternalFilterIds(location.state.filterIds);
-        // Clear quick filter to avoid conflict logic
         setQuickFilter('ALL');
     } else {
         setExternalFilterIds(null);
@@ -75,7 +73,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     loadData();
   }, [location.state]);
 
-  // Helper to normalize strings for robust comparison
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterProject, filterMacro, filterProcess, filterSearch, filterDocType, filterState, filterAnalyst, quickFilter, sortConfig]);
+
   const normalize = (str: string | undefined) => {
       if (!str) return '';
       return str.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -91,7 +92,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         ]);
 
         setAllUsers(users);
-
         const hierarchyKeys = Object.keys(fullHierarchy);
         
         if (hierarchyKeys.length === 0 && realDocsData.length === 0) {
@@ -102,19 +102,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         }
         setIsSystemEmpty(false);
 
-        // 1. Map Real Docs for fast lookup & Deduplication
         const realDocMap = new Map<string, Document>();
         const processedDocIds = new Set<string>();
 
         realDocsData.forEach(doc => {
             if (doc.project && (doc.microprocess || doc.title)) {
-                // Assuming format "Microprocess Name - Type" if microprocess field is empty
                 const microName = doc.microprocess || doc.title.split(' - ')[0] || doc.title;
-                
                 const docType = doc.docType || 'AS IS';
                 const key = `${normalize(doc.project)}|${normalize(microName)}|${normalize(docType)}`;
                 
-                // Keep the most recent version if duplicates exist (by updatedAt)
                 const existing = realDocMap.get(key);
                 if (!existing || new Date(doc.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
                     realDocMap.set(key, { ...doc, microprocess: microName, docType: docType as DocType });
@@ -122,7 +118,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             }
         });
 
-        // 2. Generate Virtual List based on Hierarchy Rules (THE SOURCE OF TRUTH)
         const finalDocsList: DashboardDoc[] = [];
 
         hierarchyKeys.forEach(proj => {
@@ -147,13 +142,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     process: proc,
                                     project: proj,
                                     assignees: (node.assignees && node.assignees.length > 0) ? node.assignees : (realDoc.assignees || []),
-                                    isRequired: true // <--- MARK AS REQUIRED (Matches Matrix)
+                                    isRequired: true 
                                 });
                                 processedDocIds.add(realDoc.id); 
                             } else {
-                                // Create Virtual Placeholder
                                 finalDocsList.push({
-                                    id: `virtual-${key}`, // Needs to match ID generation in Reports for linking to work (or close enough)
+                                    id: `virtual-${key}`, 
                                     title: `${node.name} - ${type}`,
                                     description: 'Pendiente de inicio',
                                     project: proj,
@@ -172,7 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     createdAt: new Date().toISOString(),
                                     updatedAt: new Date(0).toISOString(), 
                                     hasPendingRequest: false,
-                                    isRequired: true // <--- MARK AS REQUIRED (Placeholder from Matrix)
+                                    isRequired: true 
                                 });
                             }
                         });
@@ -181,14 +175,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             });
         });
 
-        // 3. Add Orphans (Documents that exist but match NO active matrix requirement)
         realDocMap.forEach((doc) => {
             if (!processedDocIds.has(doc.id)) {
                 finalDocsList.push({
                     ...doc,
                     macroprocess: doc.macroprocess || 'Sin Clasificar',
                     process: doc.process || 'Sin Clasificar',
-                    isRequired: false // <--- MARK AS NOT REQUIRED (Extra/Historic)
+                    isRequired: false 
                 });
             }
         });
@@ -202,27 +195,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     }
   };
 
-  // --- 1. CONTEXT FILTERING (Dropdowns + External) ---
   const contextDocs = useMemo(() => {
       let filtered = mergedDocs;
 
-      // PRIORITY: If external filter exists (from Reports), use it exclusively first
       if (externalFilterIds && externalFilterIds.length > 0) {
           filtered = filtered.filter(d => externalFilterIds.includes(d.id));
       } else {
-          // Standard Filters
           if (filterProject) filtered = filtered.filter(d => d.project === filterProject);
-          
-          if (filterAnalyst) {
-              filtered = filtered.filter(d => {
-                  return d.assignees && d.assignees.includes(filterAnalyst);
-              });
-          }
-
           if (filterMacro) filtered = filtered.filter(d => d.macroprocess === filterMacro);
           if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
           if (filterDocType) filtered = filtered.filter(d => d.docType === filterDocType);
           if (filterState) filtered = filtered.filter(d => d.state === filterState);
+          if (filterAnalyst) filtered = filtered.filter(d => d.assignees && d.assignees.includes(filterAnalyst));
           
           if (filterSearch) {
               const term = filterSearch.toLowerCase();
@@ -234,11 +218,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       }
 
       return filtered;
-  }, [mergedDocs, filterProject, filterAnalyst, filterMacro, filterProcess, filterDocType, filterState, filterSearch, externalFilterIds]);
+  }, [mergedDocs, filterProject, filterMacro, filterProcess, filterDocType, filterState, filterAnalyst, filterSearch, externalFilterIds]);
 
-  // --- 2. STATS CALCULATION (ONLY COUNT REQUIRED DOCS) ---
   const stats = useMemo(() => {
-      // Filter the context to only include REQUIRED documents for stats
       const requiredDocs = contextDocs.filter(d => d.isRequired);
 
       return {
@@ -251,11 +233,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       };
   }, [contextDocs]);
 
-  // --- 3. TABLE FILTERING (Context + Quick Filter) ---
+  // Fix: Added chartData useMemo to resolve missing variable errors in the pie chart section.
+  const chartData = useMemo(() => {
+    return [
+      { name: 'No Iniciado', value: stats.notStarted, color: '#94a3b8' },
+      { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' },
+      { name: 'Referente', value: stats.referent, color: '#a855f7' },
+      { name: 'Control', value: stats.control, color: '#f97316' },
+      { name: 'Terminados', value: stats.finished, color: '#22c55e' }
+    ].filter(d => d.value > 0);
+  }, [stats]);
+
   const tableDocs = useMemo(() => {
       let filtered = contextDocs;
 
-      // Apply Quick Filter (Cards) - Applies to ALL documents (Required + Orphans) visible in table
       if (quickFilter !== 'ALL') {
           switch (quickFilter) {
               case 'NOT_STARTED': filtered = filtered.filter(d => d.state === DocState.NOT_STARTED); break;
@@ -268,10 +259,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return filtered;
   }, [contextDocs, quickFilter]);
 
-  // --- 4. SORTING ---
   const sortedDocs = useMemo(() => {
       return [...tableDocs].sort((a, b) => {
-          // Priority Sort: Required first, then Orphans
           if (a.isRequired !== b.isRequired) {
               return a.isRequired ? -1 : 1;
           }
@@ -285,15 +274,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   return (timeA - timeB) * modifier;
               
               case 'project': 
-                  // 1. Project
                   if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '') * modifier;
-                  // 2. Macroprocess
                   if ((a.macroprocess || '') !== (b.macroprocess || '')) return (a.macroprocess || '').localeCompare(b.macroprocess || '') * modifier;
-                  // 3. Process
                   if ((a.process || '') !== (b.process || '')) return (a.process || '').localeCompare(b.process || '') * modifier;
-                  // 4. Microprocess
                   if ((a.microprocess || '') !== (b.microprocess || '')) return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
-                  // 5. DocType
                   return (getDocTypeOrder(a.docType) - getDocTypeOrder(b.docType)) * modifier;
 
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
@@ -303,197 +287,180 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       });
   }, [tableDocs, sortConfig]);
 
+  const totalItems = sortedDocs.length;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  const paginatedDocs = useMemo(() => {
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+      return sortedDocs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [sortedDocs, currentPage]);
 
-  const chartData = [
-    { name: 'No Iniciado', value: stats.notStarted, color: '#e2e8f0' },
-    { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' },
-    { name: 'Referente', value: stats.referent, color: '#a855f7' },
-    { name: 'Control', value: stats.control, color: '#f97316' },
-    { name: 'Finalizado', value: stats.finished, color: '#22c55e' },
-  ].filter(d => d.value > 0);
+  const handleExportExcel = () => {
+      if (sortedDocs.length === 0) return;
+      const getUserNames = (ids: string[]) => ids.map(id => allUsers.find(u => u.id === id)?.name || id).join('; ');
+      
+      // Orden definitivo solicitado: PROYECTO, MACROPROCESO, PROCESO, MICROPROCESO, DOCUMENTO, VERSION, ESTADO, FECHA, ANALISTA
+      const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'DOCUMENTO', 'VERSION', 'ESTADO', 'FECHA', 'ANALISTA'];
+      const rows = sortedDocs.map(d => {
+          // Formateo de fecha DD-MM-YYYY sin hora
+          let fechaStr = 'Sin actividad';
+          if (d.state !== DocState.NOT_STARTED && d.updatedAt) {
+              const date = new Date(d.updatedAt);
+              const day = String(date.getDate()).padStart(2, '0');
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const year = date.getFullYear();
+              fechaStr = `${day}-${month}-${year}`;
+          }
+
+          return [
+              d.project || '-',
+              d.macroprocess || '-',
+              d.process || '-',
+              d.microprocess || '-',
+              d.docType || '-',
+              d.version || '-',
+              STATE_CONFIG[d.state]?.label.split('(')[0] || '-',
+              fechaStr,
+              getUserNames(d.assignees || [])
+          ];
+      });
+
+      const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
+      const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `SGD_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
 
   const handleSort = (key: SortKey) => {
       setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
   };
 
+  // Added handleQuickFilter to fix missing reference errors in StatCard usages
   const handleQuickFilter = (type: QuickFilterType) => {
-      setQuickFilter(quickFilter === type ? 'ALL' : type);
+    setQuickFilter(type);
+    setCurrentPage(1);
   };
 
   const clearFilters = () => {
-      setFilterProject('');
-      setFilterAnalyst('');
-      setFilterMacro('');
-      setFilterProcess('');
-      setFilterSearch(''); // Clear Search
-      setFilterDocType('');
-      setFilterState('');
-      setQuickFilter('ALL');
-      setExternalFilterIds(null); // Clear external filter
-      // Clear location state
-      navigate(location.pathname, { replace: true, state: {} });
+      setFilterProject(''); setFilterMacro(''); setFilterProcess(''); setFilterSearch(''); 
+      setFilterDocType(''); setFilterState(''); setFilterAnalyst(''); setQuickFilter('ALL');
+      setExternalFilterIds(null); navigate(location.pathname, { replace: true, state: {} });
   };
 
   const SortIcon = ({ column }: { column: SortKey }) => (
       sortConfig.key === column ? (sortConfig.direction === 'asc' ? <ArrowUp size={12} className="text-indigo-600"/> : <ArrowDown size={12} className="text-indigo-600"/>) : <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100"/>
   );
 
-  const availableProjects = useMemo(() => {
-      const set = new Set(mergedDocs.map(d => d.project).filter(Boolean));
-      return Array.from(set).sort();
-  }, [mergedDocs]);
-
+  const availableProjects = useMemo(() => Array.from(new Set(mergedDocs.map(d => d.project).filter(Boolean))).sort(), [mergedDocs]);
   const availableMacros = useMemo(() => {
       const docs = filterProject ? mergedDocs.filter(d => d.project === filterProject) : mergedDocs;
-      const set = new Set(docs.map(d => d.macroprocess).filter(Boolean));
-      return Array.from(set).sort();
+      return Array.from(new Set(docs.map(d => d.macroprocess).filter(Boolean))).sort();
   }, [mergedDocs, filterProject]);
-
   const availableProcesses = useMemo(() => {
       let docs = mergedDocs;
       if (filterProject) docs = docs.filter(d => d.project === filterProject);
       if (filterMacro) docs = docs.filter(d => d.macroprocess === filterMacro);
-      const set = new Set(docs.map(d => d.process).filter(Boolean));
-      return Array.from(set).sort();
+      return Array.from(new Set(docs.map(d => d.process).filter(Boolean))).sort();
   }, [mergedDocs, filterProject, filterMacro]);
 
-  const getUserName = (id: string) => {
-      const u = allUsers.find(user => user.id === id);
-      return u ? u.name : 'Sin Asignar';
-  };
-
-  const isAssignedToMe = (doc: DashboardDoc) => {
-      return doc.assignees && doc.assignees.includes(user.id);
-  };
+  const getUserName = (id: string) => allUsers.find(user => user.id === id)?.name || 'Sin Asignar';
 
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Actualizando dashboard...</div>;
 
   if (isSystemEmpty) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-xl shadow-sm border border-slate-200">
-              <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
-                  <Database size={40} className="text-indigo-600" />
-              </div>
+              <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6"><Database size={40} className="text-indigo-600" /></div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">Sistema sin Inicializar</h2>
-              <p className="text-slate-500 max-w-md mb-8">
-                  La matriz de procesos está vacía. Para visualizar el avance, es necesario cargar la estructura de procesos inicial.
-              </p>
-              {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? (
-                  <Link 
-                    to="/admin/assignments" 
-                    className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-md transition-transform active:scale-95"
-                  >
-                      <Database size={18} className="mr-2" />
-                      Ir a Carga de Datos
+              <p className="text-slate-500 max-w-md mb-8">La matriz de procesos está vacía. Cargue la estructura de procesos para comenzar.</p>
+              {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
+                  <Link to="/admin/assignments" className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-md transition-transform active:scale-95">
+                      <Database size={18} className="mr-2" /> Ir a Carga de Datos
                   </Link>
-              ) : (
-                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-2 rounded-lg border border-amber-100">
-                      <AlertTriangle size={18} />
-                      <span>Contacte al administrador para inicializar el sistema.</span>
-                  </div>
               )}
           </div>
       );
   }
 
-  const hasActiveFilters = filterProject || filterAnalyst || filterMacro || filterProcess || filterSearch || filterDocType || filterState || externalFilterIds;
+  const hasActiveFilters = filterProject || filterMacro || filterProcess || filterSearch || filterDocType || filterState || filterAnalyst || externalFilterIds;
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="flex justify-between items-center">
-        <div><h1 className="text-2xl font-bold text-slate-900">Dashboard</h1><p className="text-slate-500">Vista general</p></div>
-        {user.role === UserRole.ANALYST && <Link to="/new" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center shadow-sm font-medium"><Plus size={18} className="mr-2"/> Nueva Solicitud</Link>}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div><h1 className="text-2xl font-bold text-slate-900">Dashboard</h1><p className="text-slate-500">Vista general de avance institucional</p></div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 flex items-center justify-center shadow-sm font-medium transition-colors">
+                <FileSpreadsheet size={18} className="mr-2 text-green-600"/> <span className="hidden md:inline">Exportar Excel</span><span className="md:hidden">Excel</span>
+            </button>
+            {user.role === UserRole.ANALYST && <Link to="/new" className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center shadow-sm font-medium"><Plus size={18} className="mr-2"/> Nueva Solicitud</Link>}
+        </div>
       </div>
 
-      {/* STATS CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Doc. Requeridos" value={stats.total} icon={BookOpen} color="bg-slate-50 text-slate-600 border-slate-200" onClick={() => handleQuickFilter('ALL')} isActive={quickFilter === 'ALL'}/>
-        <StatCard title="No Iniciado" value={stats.notStarted} icon={Clock} color="bg-white text-slate-600 border-slate-200" onClick={() => handleQuickFilter('NOT_STARTED')} isActive={quickFilter === 'NOT_STARTED'}/>
-        <StatCard title="En Proceso" value={stats.inProcess} icon={Activity} color="bg-blue-50 text-blue-600 border-blue-100" onClick={() => handleQuickFilter('IN_PROCESS')} isActive={quickFilter === 'IN_PROCESS'}/>
-        <StatCard title="Referente" value={stats.referent} icon={Users} color="bg-purple-50 text-purple-600 border-purple-100" onClick={() => handleQuickFilter('REFERENT')} isActive={quickFilter === 'REFERENT'}/>
-        <StatCard title="Control Gestión" value={stats.control} icon={ShieldCheck} color="bg-orange-50 text-orange-600 border-orange-100" onClick={() => handleQuickFilter('CONTROL')} isActive={quickFilter === 'CONTROL'}/>
-        <StatCard title="Terminados" value={stats.finished} icon={CheckCircle} color="bg-green-50 text-green-600 border-green-100" onClick={() => handleQuickFilter('FINISHED')} isActive={quickFilter === 'FINISHED'}/>
+        <StatCard title="Doc. Requeridos" value={stats.total} icon={BookOpen} color="bg-slate-50 text-slate-600" onClick={() => handleQuickFilter('ALL')} isActive={quickFilter === 'ALL'}/>
+        <StatCard title="No Iniciado" value={stats.notStarted} icon={Clock} color="bg-white text-slate-600" onClick={() => handleQuickFilter('NOT_STARTED')} isActive={quickFilter === 'NOT_STARTED'}/>
+        <StatCard title="En Proceso" value={stats.inProcess} icon={Activity} color="bg-blue-50 text-blue-600" onClick={() => handleQuickFilter('IN_PROCESS')} isActive={quickFilter === 'IN_PROCESS'}/>
+        <StatCard title="Referente" value={stats.referent} icon={Users} color="bg-purple-50 text-purple-600" onClick={() => handleQuickFilter('REFERENT')} isActive={quickFilter === 'REFERENT'}/>
+        <StatCard title="Control Gestión" value={stats.control} icon={ShieldCheck} color="bg-orange-50 text-orange-600" onClick={() => handleQuickFilter('CONTROL')} isActive={quickFilter === 'CONTROL'}/>
+        <StatCard title="Terminados" value={stats.finished} icon={CheckCircle} color="bg-green-50 text-green-600" onClick={() => handleQuickFilter('FINISHED')} isActive={quickFilter === 'FINISHED'}/>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* MAIN TABLE */}
-        <div className="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            
-            {/* FILTER BAR */}
+        <div className="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[500px]">
             <div className="p-4 border-b border-slate-100 bg-white">
                 <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm">
-                        <Filter size={16} /> Filtros de Visualización
-                    </div>
-                    {hasActiveFilters && (
-                        <button 
-                            onClick={clearFilters}
-                            className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium transition-colors"
-                        >
-                            <X size={14} /> Limpiar filtros
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm"><Filter size={16} /> Filtros de Visualización</div>
+                    {hasActiveFilters && <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium"><X size={14} /> Limpiar filtros</button>}
                 </div>
-
                 {externalFilterIds ? (
                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg mb-2 flex justify-between items-center animate-fadeIn">
-                        <span className="text-xs text-blue-700 font-semibold">
-                            Filtro Activo desde Reportes: Visualizando {externalFilterIds.length} documentos específicos.
-                        </span>
-                        <button onClick={clearFilters} className="text-xs bg-white border border-blue-200 px-2 py-1 rounded text-blue-600 hover:bg-blue-50">
-                            Mostrar Todo
-                        </button>
+                        <span className="text-xs text-blue-700 font-semibold">Filtro Activo: Visualizando {externalFilterIds.length} documentos específicos desde reportes.</span>
+                        <button onClick={clearFilters} className="text-xs bg-white border border-blue-200 px-2 py-1 rounded text-blue-600">Mostrar Todo</button>
                      </div>
                 ) : (
-                    <div className="flex flex-wrap gap-3">
-                        <select value={filterProject} onChange={(e) => { setFilterProject(e.target.value); setFilterMacro(''); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-32">
-                            <option value="">Proyecto (Todos)</option>
+                    <div className="flex flex-wrap gap-2">
+                        <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-28">
+                            <option value="">PROYECTO</option>
                             {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
-
-                        <select value={filterMacro} onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">
-                            <option value="">Macro (Todos)</option>
+                        <select value={filterMacro} onChange={(e) => setFilterMacro(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-32">
+                            <option value="">MACROPROCESO</option>
                             {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
-
-                        <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">
-                            <option value="">Proceso (Todos)</option>
+                        <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-32">
+                            <option value="">PROCESO</option>
                             {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
-
-                        <div className="relative w-40">
-                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input 
-                                type="text"
-                                value={filterSearch}
-                                onChange={(e) => setFilterSearch(e.target.value)}
-                                placeholder="Buscar..."
-                                className="w-full text-xs pl-8 p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
+                        <div className="relative w-36">
+                            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="BUSCAR..." className="w-full text-[11px] pl-7 p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none" />
                         </div>
-
-                        <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-32">
-                            <option value="">Doc (Todos)</option>
-                            {['AS IS', 'FCE', 'PM', 'TO BE'].map(t => <option key={t} value={t}>{t}</option>)}
+                        <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
+                            <option value="">DOC</option>
+                            <option value="AS IS">AS IS</option>
+                            <option value="FCE">FCE</option>
+                            <option value="PM">PM</option>
+                            <option value="TO BE">TO BE</option>
                         </select>
-
-                        <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
-                            <option value="">Estado (Todos)</option>
-                            {Object.keys(STATE_CONFIG).map(k => <option key={k} value={k}>{STATE_CONFIG[k as DocState].label.split('(')[0]}</option>)}
+                        <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
+                            <option value="">ESTADO</option>
+                            {Object.entries(STATE_CONFIG).map(([key, cfg]) => <option key={key} value={key}>{cfg.label.split('(')[0]}</option>)}
                         </select>
-
-                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
-                            <option value="">Analista (Todos)</option>
-                            {allUsers
-                                .filter(u => u.role === UserRole.ANALYST) // Strict Filter
-                                .map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-32">
+                            <option value="">ANALISTA</option>
+                            {allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
                     </div>
                 )}
             </div>
 
             <div className="overflow-x-auto flex-1">
-                <table className="w-full text-xs text-left">
+                <table className="w-full text-[11px] text-left">
                     <thead className="text-[10px] text-slate-400 uppercase font-bold bg-white border-b border-slate-100">
                         <tr>
                             <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('project')}>PROYECTO <SortIcon column="project"/></th>
@@ -501,160 +468,93 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('microprocess')}>MICROPROCESO <SortIcon column="microprocess"/></th>
                             <th className="px-4 py-3">DOCUMENTO</th>
                             <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('state')}>ESTADO ACTUAL <SortIcon column="state"/></th>
-                            <th className="px-4 py-3 cursor-pointer group text-right" onClick={() => handleSort('updatedAt')}>ÚLTIMA ACTIVIDAD <SortIcon column="updatedAt"/></th>
+                            <th className="px-4 py-3 text-right cursor-pointer group" onClick={() => handleSort('updatedAt')}>ÚLTIMA ACTIVIDAD <SortIcon column="updatedAt"/></th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {sortedDocs.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">Sin resultados.</td></tr> : sortedDocs.map((doc, idx) => (
-                            <tr 
-                                key={`${doc.id}-${idx}`} 
-                                className={`transition-colors ${
-                                    !doc.isRequired 
-                                        ? 'bg-gray-100 hover:bg-gray-200' // <--- VISUALIZACIÓN GRIS PARA DOCUMENTOS "EXTRA"
-                                        : 'hover:bg-slate-50'
-                                }`}
-                            >
-                                {/* PROYECTO */}
+                        {paginatedDocs.length === 0 ? (
+                            <tr><td colSpan={6} className="p-12 text-center text-slate-400"><Search size={40} className="mx-auto mb-2 opacity-20"/><p>Sin resultados.</p></td></tr>
+                        ) : paginatedDocs.map((doc, idx) => (
+                            <tr key={`${doc.id}-${idx}`} className={`transition-colors ${!doc.isRequired ? 'bg-gray-100 hover:bg-gray-200' : 'hover:bg-slate-50'}`}>
                                 <td className={`px-4 py-3 font-bold align-top ${!doc.isRequired ? 'text-gray-500' : 'text-slate-700'}`}>{doc.project}</td>
-                                
-                                {/* JERARQUÍA */}
-                                <td className={`px-4 py-3 align-top ${!doc.isRequired ? 'text-gray-400' : ''}`}>
+                                <td className="px-4 py-3 align-top">
                                     <div className={`font-bold ${!doc.isRequired ? 'text-gray-500' : 'text-slate-700'}`}>{doc.macroprocess}</div>
-                                    <div className={`${!doc.isRequired ? 'text-gray-400' : 'text-slate-500'}`}>{doc.process}</div>
+                                    <div className="text-slate-500 text-[10px]">{doc.process}</div>
                                 </td>
-                                
-                                {/* MICROPROCESO & ANALISTA */}
                                 <td className="px-4 py-3 align-top">
-                                    <div className={`font-bold mb-1 ${!doc.isRequired ? 'text-gray-600' : 'text-slate-800'}`}>
-                                        {doc.microprocess}
-                                        {!doc.isRequired && <span className="ml-2 text-[9px] uppercase bg-gray-200 text-gray-500 px-1 rounded">No Requerido</span>}
-                                    </div>
-                                    <div className={`flex items-center gap-1 ${!doc.isRequired ? 'text-gray-400' : 'text-slate-500'}`} title="Analista Asignado">
-                                        <UserIcon size={10} />
-                                        <span className={`text-[10px] font-medium ${!doc.isRequired ? 'text-gray-500' : 'text-indigo-600'}`}>
-                                            {doc.assignees && doc.assignees.length > 0 
-                                                ? getUserName(doc.assignees[0]) 
-                                                : 'Sin Asignar'}
-                                        </span>
+                                    <div className={`font-bold mb-1 ${!doc.isRequired ? 'text-gray-600' : 'text-slate-800'}`}>{doc.microprocess}</div>
+                                    <div className="flex items-center gap-1 text-slate-400" title="Analista Asignado">
+                                        <UserIcon size={10} /> <span className="text-[10px] truncate max-w-[120px]">{doc.assignees && doc.assignees.length > 0 ? getUserName(doc.assignees[0]) : 'Sin Asignar'}</span>
                                     </div>
                                 </td>
-                                
-                                {/* DOCUMENTO (TYPE & LINK) */}
                                 <td className="px-4 py-3 align-top">
-                                    <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold mb-1 ${
-                                        !doc.isRequired 
-                                            ? 'bg-gray-200 text-gray-500 border-gray-300' 
-                                            : 'bg-indigo-50 text-indigo-700 border-indigo-100'
-                                    }`}>
-                                        {doc.docType}
-                                    </span>
-                                    {/* LINK UNIFICADO "VER DETALLE" */}
-                                    <Link 
-                                        to={`/doc/${doc.id}`} 
-                                        state={{ docData: doc }} // Pasamos el doc en state para manejar virtuales
-                                        className={`flex items-center gap-1 text-[10px] font-bold ${!doc.isRequired ? 'text-gray-500 hover:text-gray-700' : 'text-indigo-500 hover:text-indigo-700'}`}
-                                    >
-                                        Ver Detalle <ArrowRight size={10}/>
-                                    </Link>
+                                    <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold mb-1 ${!doc.isRequired ? 'bg-gray-200 text-gray-400 border-gray-300' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>{doc.docType}</span>
+                                    <Link to={`/doc/${doc.id}`} state={{ docData: doc }} className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 hover:text-indigo-700 underline">Ver Detalle</Link>
                                 </td>
-                                
-                                {/* ESTADO ACTUAL */}
                                 <td className="px-4 py-3 align-top">
-                                    <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1 border ${
-                                        !doc.isRequired 
-                                            ? 'bg-gray-200 text-gray-500 border-gray-300' 
-                                            : STATE_CONFIG[doc.state].color
-                                    }`}>
-                                        {STATE_CONFIG[doc.state].label.split('(')[0]}
-                                    </div>
-                                    <div className={`text-[10px] font-mono ${!doc.isRequired ? 'text-gray-400' : 'text-slate-500'}`}>
-                                        Ver: {doc.version} ({doc.progress}%)
-                                    </div>
+                                    <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1 border ${!doc.isRequired ? 'bg-gray-200 text-gray-500 border-gray-300' : STATE_CONFIG[doc.state].color}`}>{STATE_CONFIG[doc.state].label.split('(')[0]}</div>
+                                    <div className="text-[10px] font-mono text-slate-500">v{doc.version} ({doc.progress}%)</div>
                                 </td>
-                                
-                                {/* ÚLTIMA ACTIVIDAD */}
                                 <td className="px-4 py-3 align-top text-right">
                                     {doc.state !== DocState.NOT_STARTED ? (
-                                        <div className="flex flex-col items-end">
-                                            <div className={`flex items-center gap-1 font-medium ${!doc.isRequired ? 'text-gray-500' : 'text-slate-600'}`}>
-                                                <Calendar size={10} />
-                                                {new Date(doc.updatedAt).toLocaleDateString()}
-                                            </div>
-                                            <span className="text-[10px] text-slate-400">
-                                                {new Date(doc.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                            </span>
-                                        </div>
-                                    ) : (
-                                        <span className="text-slate-300 text-[10px]">-</span>
-                                    )}
+                                        <div className="text-slate-600 font-medium">{new Date(doc.updatedAt).toLocaleDateString()}</div>
+                                    ) : <span className="text-slate-300">-</span>}
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
+            {totalItems > 0 && (
+                <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-[11px] text-slate-500">Mostrando <b>{Math.min(totalItems, (currentPage - 1) * ITEMS_PER_PAGE + 1)}</b> a <b>{Math.min(totalItems, currentPage * ITEMS_PER_PAGE)}</b> de <b>{totalItems}</b> registros</div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronLeft size={16} /></button>
+                        <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum = i + 1;
+                                if (totalPages > 5 && currentPage > 3) { pageNum = currentPage - 2 + i; if (pageNum > totalPages) pageNum = totalPages - (4 - i); }
+                                return <button key={pageNum} onClick={() => setCurrentPage(pageNum)} className={`w-7 h-7 rounded-lg text-xs font-bold border transition-all ${currentPage === pageNum ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>{pageNum}</button>;
+                            })}
+                        </div>
+                        <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronRight size={16} /></button>
+                    </div>
+                </div>
+            )}
         </div>
 
-        {/* RIGHT COLUMN: CHART & SUMMARY */}
         <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 min-h-[250px] flex flex-col items-center justify-center">
-                <h3 className="font-bold text-center mb-2 text-slate-700 text-sm">Estado (Requeridos)</h3>
+                <h3 className="font-bold text-center mb-2 text-slate-700 text-xs uppercase">Estado Universo Requerido</h3>
                 {chartData.length > 0 ? (
-                    <div className="h-48 w-full">
+                    <div className="h-44 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie 
-                                    data={chartData} 
-                                    cx="50%" cy="50%" 
-                                    innerRadius={50} outerRadius={70} 
-                                    paddingAngle={2} 
-                                    dataKey="value"
-                                >
+                                <Pie data={chartData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value">
                                     {chartData.map((e, i) => <Cell key={i} fill={e.color}/>)}
                                 </Pie>
-                                <Tooltip contentStyle={{fontSize: '12px'}}/>
+                                <Tooltip contentStyle={{fontSize: '11px', borderRadius: '8px'}}/>
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                ) : <p className="text-center text-slate-400 text-xs">Sin datos requeridos.</p>}
-                
-                <div className="flex flex-wrap justify-center gap-2 mt-2">
+                ) : <p className="text-center text-slate-400 text-[10px]">Sin datos.</p>}
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2">
                     {chartData.map((d, i) => (
-                        <div key={i} className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full" style={{backgroundColor: d.color}}></span>
-                            <span className="text-[10px] text-slate-500">{d.name}</span>
-                        </div>
+                        <div key={i} className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{backgroundColor: d.color}}></span><span className="text-[9px] text-slate-500 uppercase font-bold">{d.name}</span></div>
                     ))}
                 </div>
             </div>
-
             <div className="bg-indigo-50 rounded-xl shadow-sm border border-indigo-100 p-4">
-                <h3 className="font-bold text-indigo-900 text-sm mb-3">Resumen de Cumplimiento</h3>
-                <p className="text-xs text-indigo-700 mb-3">
-                    Visualizando {contextDocs.length} filas totales.<br/>
-                    <strong>{stats.total} documentos requeridos.</strong>
-                </p>
-                <ul className="space-y-2 text-xs">
-                    <li className="border-t border-indigo-200 pt-1 flex justify-between text-slate-600">
-                        <span>No Iniciados:</span> <span>{stats.notStarted}</span>
-                    </li>
-                    <li className="flex justify-between text-blue-600 font-medium">
-                        <span>En Proceso:</span> <span>{stats.inProcess}</span>
-                    </li>
-                    <li className="flex justify-between text-purple-600 font-medium">
-                        <span>Referente:</span> <span>{stats.referent}</span>
-                    </li>
-                    <li className="flex justify-between text-orange-600 font-medium">
-                        <span>Control Gestión:</span> <span>{stats.control}</span>
-                    </li>
-                    <li className="border-t border-indigo-200 pt-1 flex justify-between text-green-600 font-bold">
-                        <span>Terminados:</span> <span>{stats.finished}</span>
-                    </li>
+                <h3 className="font-bold text-indigo-900 text-xs uppercase mb-3">Resumen de Cumplimiento</h3>
+                <ul className="space-y-2 text-[11px]">
+                    <li className="flex justify-between text-slate-600"><span>No Iniciados:</span> <b>{stats.notStarted}</b></li>
+                    <li className="flex justify-between text-blue-600"><span>En Proceso:</span> <b>{stats.inProcess}</b></li>
+                    <li className="flex justify-between text-purple-600"><span>Referente:</span> <b>{stats.referent}</b></li>
+                    <li className="flex justify-between text-orange-600"><span>Control Gestión:</span> <b>{stats.control}</b></li>
+                    <li className="border-t border-indigo-200 pt-1 flex justify-between text-green-600 font-bold"><span>Terminados:</span> <span>{stats.finished}</span></li>
                 </ul>
-                <div className="mt-4 pt-3 border-t border-indigo-200 text-[10px] text-slate-500 flex items-center gap-2">
-                    <Archive size={12} />
-                    <span>Los registros en <span className="font-bold text-gray-500">GRIS</span> son históricos/extra y no suman al cumplimiento.</span>
-                </div>
+                <div className="mt-4 pt-3 border-t border-indigo-200 text-[9px] text-slate-500 flex items-center gap-2"><Archive size={12} /><span>Registros en <b>GRIS</b> son históricos externos.</span></div>
             </div>
         </div>
       </div>
@@ -663,10 +563,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 };
 
 const StatCard = ({ title, value, icon: Icon, color, isActive, onClick }: any) => (
-    <div onClick={onClick} className={`p-3 rounded-xl shadow-sm border cursor-pointer flex items-center space-x-3 transition-all ${isActive ? 'ring-2 ring-indigo-200 scale-105' : 'hover:border-indigo-300'} ${color}`}>
-        <div className="p-1.5 bg-white/50 rounded-lg"><Icon size={18}/></div>
-        <div>
-            <p className="text-[9px] uppercase font-bold opacity-70">{title}</p>
+    <div onClick={onClick} className={`p-3 rounded-xl shadow-sm border cursor-pointer flex items-center space-x-3 transition-all ${isActive ? 'ring-2 ring-indigo-300 scale-105' : 'hover:border-indigo-300'} ${color} border-transparent`}>
+        <div className="p-1.5 bg-white/50 rounded-lg shrink-0"><Icon size={18}/></div>
+        <div className="min-w-0">
+            <p className="text-[9px] uppercase font-bold opacity-70 truncate">{title}</p>
             <p className="text-lg font-bold leading-none">{value}</p>
         </div>
     </div>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
-import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle } from 'lucide-react';
 
 const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -30,13 +30,26 @@ const AdminUsers: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar este usuario?')) return;
+    if (!window.confirm('¿Estás seguro de que quieres eliminar permanentemente este usuario? Esta acción es irreversible.')) return;
     try {
         await UserService.delete(id);
         await loadUsers();
     } catch (error) {
         console.error(error);
     }
+  };
+
+  const handleToggleStatus = async (user: User) => {
+      const action = user.active !== false ? 'inactivar' : 'activar';
+      if (!window.confirm(`¿Está seguro que desea ${action} al usuario ${user.name}?`)) return;
+      
+      try {
+          await UserService.toggleActiveStatus(user.id, user.active !== false);
+          await loadUsers();
+      } catch (error) {
+          console.error(error);
+          alert('Error al cambiar estado del usuario');
+      }
   };
 
   const handleEdit = (user: User) => {
@@ -46,7 +59,7 @@ const AdminUsers: React.FC = () => {
       setNickname(user.nickname || '');
       setRole(user.role);
       setOrganization(user.organization);
-      setPassword(''); // Don't show current password
+      setPassword(''); 
       setShowForm(true);
   };
 
@@ -66,7 +79,6 @@ const AdminUsers: React.FC = () => {
     e.preventDefault();
     if (!name || !email || !organization) return;
     
-    // Auto-append domain if missing for ease of use
     let finalEmail = email;
     if (!finalEmail.includes('@')) {
         finalEmail += '@ugp-ssmso.cl';
@@ -74,7 +86,6 @@ const AdminUsers: React.FC = () => {
 
     try {
         if (editingUserId) {
-            // Update
             const updatePayload: Partial<User> = {
                 name,
                 email: finalEmail,
@@ -87,15 +98,15 @@ const AdminUsers: React.FC = () => {
             }
             await UserService.update(editingUserId, updatePayload);
         } else {
-            // Create
             await UserService.create({
-                id: `user-${Date.now()}`, // Generate basic ID for manual creation
+                id: `user-${Date.now()}`,
                 name,
                 email: finalEmail,
                 nickname: nickname || undefined,
                 role,
                 organization,
-                password: password || undefined // Password optional for Google Auth users
+                password: password || undefined,
+                active: true
             } as User);
         }
         
@@ -122,7 +133,7 @@ const AdminUsers: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 className="text-2xl font-bold text-slate-900">Gestión de Usuarios</h1>
-                <p className="text-slate-500">Administra perfiles y permisos del sistema.</p>
+                <p className="text-slate-500">Administra perfiles, permisos y estados de acceso.</p>
             </div>
             <button 
                 onClick={showForm ? handleCancel : handleCreateNew}
@@ -133,7 +144,6 @@ const AdminUsers: React.FC = () => {
             </button>
         </div>
 
-        {/* Create/Edit User Form */}
         {showForm && (
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 animate-fadeIn">
                 <h2 className="font-semibold text-slate-800 mb-4">{editingUserId ? 'Editar Usuario' : 'Registrar Nuevo Usuario'}</h2>
@@ -145,34 +155,14 @@ const AdminUsers: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
                         <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="usuario@ugp-ssmso.cl" />
-                        <p className="text-[10px] text-slate-400 mt-1">Si omite el dominio, se agregará @ugp-ssmso.cl automáticamente.</p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Usuario Corto / Nickname</label>
-                        <div className="relative">
-                            <input 
-                                type="text" 
-                                value={nickname} 
-                                onChange={(e) => setNickname(e.target.value)} 
-                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                                placeholder="Ej: jsmith"
-                            />
-                        </div>
+                        <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ej: jsmith" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                            Contraseña
-                            <span className="text-slate-400 font-normal ml-2">(Opcional si usa Google)</span>
-                        </label>
-                        <div className="relative">
-                            <input 
-                                type="text" 
-                                value={password} 
-                                onChange={(e) => setPassword(e.target.value)} 
-                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" 
-                                placeholder={editingUserId ? "••••••••" : "Opcional"}
-                            />
-                        </div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                        <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder={editingUserId ? "••••••••" : "Opcional"} />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Organización / Área</label>
@@ -195,7 +185,6 @@ const AdminUsers: React.FC = () => {
             </div>
         )}
 
-        {/* Users List */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
@@ -203,6 +192,7 @@ const AdminUsers: React.FC = () => {
                         <tr>
                             <th className="px-6 py-3">Usuario</th>
                             <th className="px-6 py-3">Nickname</th>
+                            <th className="px-6 py-3 text-center">Estado</th>
                             <th className="px-6 py-3">Rol</th>
                             <th className="px-6 py-3">Organización</th>
                             <th className="px-6 py-3 text-right">Acciones</th>
@@ -210,7 +200,7 @@ const AdminUsers: React.FC = () => {
                     </thead>
                     <tbody>
                         {users.map(u => (
-                            <tr key={u.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                            <tr key={u.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${u.active === false ? 'opacity-60 bg-slate-50/50' : ''}`}>
                                 <td className="px-6 py-4 flex items-center gap-3">
                                     <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full bg-slate-200" />
                                     <div>
@@ -220,6 +210,11 @@ const AdminUsers: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 font-mono text-slate-600">
                                     {u.nickname || '-'}
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${u.active !== false ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-slate-200 text-slate-500 border border-slate-300'}`}>
+                                        {u.active !== false ? 'Activo' : 'Inactivo'}
+                                    </span>
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
@@ -231,18 +226,25 @@ const AdminUsers: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 text-slate-600">{u.organization}</td>
                                 <td className="px-6 py-4 text-right">
-                                    <div className="flex justify-end gap-2">
+                                    <div className="flex justify-end gap-1">
+                                        <button 
+                                            onClick={() => handleToggleStatus(u)}
+                                            className={`p-1.5 rounded transition-colors ${u.active !== false ? 'text-slate-400 hover:text-red-600 hover:bg-red-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`}
+                                            title={u.active !== false ? "Inactivar usuario" : "Activar usuario"}
+                                        >
+                                            <Power size={18} />
+                                        </button>
                                         <button 
                                             onClick={() => handleEdit(u)}
-                                            className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded transition-colors"
+                                            className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors"
                                             title="Editar usuario"
                                         >
                                             <Pencil size={18} />
                                         </button>
                                         <button 
                                             onClick={() => handleDelete(u.id)}
-                                            className="text-slate-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors"
-                                            title="Eliminar usuario"
+                                            className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors"
+                                            title="Eliminar permanentemente"
                                         >
                                             <Trash2 size={18} />
                                         </button>
@@ -251,12 +253,19 @@ const AdminUsers: React.FC = () => {
                             </tr>
                         ))}
                         {users.length === 0 && !loading && (
-                            <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-400">No hay usuarios registrados.</td></tr>
+                            <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-400">No hay usuarios registrados.</td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
         </div>
+        
+        {users.some(u => u.active === false) && (
+            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 text-xs">
+                <AlertCircle size={16} />
+                <span>Los usuarios <b>Inactivos</b> no pueden iniciar sesión ni realizar gestiones en el sistema.</span>
+            </div>
+        )}
     </div>
   );
 };
