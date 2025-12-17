@@ -21,6 +21,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [doc, setDoc] = useState<Document | null>(null);
   const [history, setHistory] = useState<DocHistory[]>([]);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
+  const [assigneeEmails, setAssigneeEmails] = useState<string[]>([]);
   const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
   const [authorEmail, setAuthorEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                  UserService.getAll().then(users => {
                      const names = passedDoc.assignees.map((aid: string) => users.find(u => u.id === aid)?.name).filter((n: string) => n) as string[];
                      setAssigneeNames(names);
+                     const emails = passedDoc.assignees.map((aid: string) => users.find(u => u.id === aid)?.email).filter((e: string) => e) as string[];
+                     setAssigneeEmails(emails);
                  });
              }
         }
@@ -160,6 +163,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                       .map(aid => allUsers.find(u => u.id === aid)?.name)
                       .filter(n => n) as string[];
                   setAssigneeNames(names);
+                  const emails = resolvedIds
+                      .map(aid => allUsers.find(u => u.id === aid)?.email)
+                      .filter(e => e) as string[];
+                  setAssigneeEmails(emails);
               }
           }
       } catch (e) {
@@ -205,8 +212,13 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     .map(aid => allUsers.find(u => u.id === aid)?.name)
                     .filter(n => n) as string[];
                 setAssigneeNames(names);
+                const emails = resolvedIds
+                    .map(aid => allUsers.find(u => u.id === aid)?.email)
+                    .filter(e => e) as string[];
+                setAssigneeEmails(emails);
             } else {
                 setAssigneeNames([]);
+                setAssigneeEmails([]);
             }
         } else {
             setDoc(null);
@@ -352,21 +364,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     
     // Safety check for missing coordinator
     if (!coordinatorEmail) {
-        // Fallback: If no email found, try to find one on the fly (Last Resort)
-        // This handles cases where state might still be weird
-        alert(`Aviso: No se ha detectado un usuario con rol 'Coordinador' ni 'Administrador' en el sistema.
-        
-Esto puede deberse a que la lista de usuarios no se cargó correctamente.
-Por favor, refresque la página (F5) e intente nuevamente.
-
-Si el error persiste, contacte a soporte.`);
+        alert(`Aviso: No se ha detectado un usuario con rol 'Coordinador' ni 'Administrador' en el sistema.\n\nPor favor, refresque la página (F5) e intente nuevamente.`);
         return;
     }
     
-    // Subject Format
     const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.project} - ${doc.docType || ''} - ${doc.microprocess}`);
     
-    // Body Format
+    // Al añadir múltiples saltos de línea al final, la mayoría de los clientes de correo respetan el espacio
+    // e insertan la firma después de este cuerpo.
     const bodyRaw = `Estimado,
 Para vuestra aprobación, adjunto el Informe:
 
@@ -379,17 +384,19 @@ Para vuestra aprobación, adjunto el Informe:
 
 Atento a comentarios
 Saludos
-${user.name}`;
+
+\n\n\n`; // Saltos de línea para la firma
 
     const body = encodeURIComponent(bodyRaw);
-    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
+    const cc = encodeURIComponent(assigneeEmails.join(','));
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&cc=${cc}&su=${subject}&body=${body}`, '_blank');
   };
 
   // 2. COORDINADOR -> ANALISTA (FEEDBACK)
   const handleNotifyAnalyst = () => {
       if (!doc || !authorEmail) return;
       const subject = encodeURIComponent(`Respuesta Solicitud SGD: ${doc.project} - ${doc.microprocess}`);
-      const body = encodeURIComponent(`Estimado/a ${doc.authorName},\n\nRevisión completada.\nEstado: ${STATE_CONFIG[doc.state].label}\nObservaciones: ${comment}\n\nAtentamente,\n${user.name}`);
+      const body = encodeURIComponent(`Estimado/a ${doc.authorName},\n\nRevisión completada.\nEstado: ${STATE_CONFIG[doc.state].label}\nObservaciones: ${comment}\n\nAtentamente,\n\n\n\n`);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
@@ -397,6 +404,7 @@ ${user.name}`;
   const handleNotifyExternal = () => {
       if (!doc) return;
       const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} ${doc.microprocess || ''}`);
+      const cc = encodeURIComponent(assigneeEmails.join(','));
       const body = encodeURIComponent(
 `Estimados,
 Para vuestra aprobación, adjunto el Informe ${doc.docType || ''} - ${doc.microprocess || ''} ${doc.version}, 
@@ -404,9 +412,9 @@ Para vuestra aprobación, adjunto el Informe ${doc.docType || ''} - ${doc.microp
 Atento a comentarios
 Saludos
 
-${user.name}`
+\n\n\n`
       );
-      window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank');
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&cc=${cc}&su=${subject}&body=${body}`, '_blank');
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
@@ -443,7 +451,6 @@ ${user.name}`
                             (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.SENT_TO_CONTROL);
 
   // Condiciones Botón Analista -> Coordinador
-  // Se agregan REFERENT_REVIEW y CONTROL_REVIEW para cubrir versiones v1.n.i y v1.n.iAR
   const analystNotificationStates = [
       DocState.INTERNAL_REVIEW,
       DocState.SENT_TO_REFERENT,
@@ -521,7 +528,7 @@ ${user.name}`
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                      <h3 className="font-semibold text-slate-800 mb-4">Acciones de Flujo</h3>
                      
-                     {/* NUEVA SOLICITUD (Available for Analysts independent of state, unless Approved) */}
+                     {/* NUEVA SOLICITUD */}
                      {user.role === UserRole.ANALYST && doc.state !== DocState.APPROVED && (
                          <div className="mb-6 pb-6 border-b border-slate-100">
                              <button 
@@ -531,9 +538,6 @@ ${user.name}`
                                  <PlusCircle size={20} className="mr-2" />
                                  {doc.state === DocState.NOT_STARTED ? 'Iniciar Solicitud' : 'Nueva Solicitud / Continuar Flujo'}
                              </button>
-                             <p className="text-xs text-center text-slate-500 mt-2">
-                                 Crea una nueva solicitud basada en este documento para avanzar a la siguiente etapa.
-                             </p>
                          </div>
                      )}
 
@@ -584,7 +588,7 @@ ${user.name}`
             )}
         </div>
 
-        {/* Historial (Right Column) */}
+        {/* Historial */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-fit max-h-[600px] overflow-y-auto">
             <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Historial</h3>
             <div className="space-y-6 pl-4 border-l-2 border-slate-100 relative">
@@ -600,7 +604,7 @@ ${user.name}`
         </div>
       </div>
 
-      {/* MODAL DE RESPUESTA (COORDINADOR) - CON CARGA DE ARCHIVO */}
+      {/* MODAL DE RESPUESTA */}
       {showResponseModal && pendingAction && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
@@ -625,7 +629,6 @@ ${user.name}`
                             </div>
                         </div>
 
-                        {/* File Upload Zone */}
                         <div className={`border-2 border-dashed rounded-lg p-6 transition-colors flex flex-col items-center justify-center text-center group relative
                             ${isFileValid ? 'border-green-300 bg-green-50' : 
                               fileError.length > 0 ? 'border-red-300 bg-red-50' : 
