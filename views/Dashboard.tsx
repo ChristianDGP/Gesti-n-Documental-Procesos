@@ -5,9 +5,9 @@ import { DocumentService, UserService, HierarchyService } from '../services/fire
 import { Document, User, UserRole, DocState, DocType, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
-    Plus, Clock, CheckCircle, Filter, X, Calendar, ArrowRight, Activity, 
+    Plus, Clock, CheckCircle, Filter, X, Activity, 
     BookOpen, Users, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, Loader2,
-    User as UserIcon, Database, AlertTriangle, Archive, PlayCircle, Search,
+    User as UserIcon, Database, Archive, Search,
     ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -233,7 +233,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       };
   }, [contextDocs]);
 
-  // Fix: Added chartData useMemo to resolve missing variable errors in the pie chart section.
   const chartData = useMemo(() => {
     return [
       { name: 'No Iniciado', value: stats.notStarted, color: '#94a3b8' },
@@ -298,10 +297,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       if (sortedDocs.length === 0) return;
       const getUserNames = (ids: string[]) => ids.map(id => allUsers.find(u => u.id === id)?.name || id).join('; ');
       
-      // Orden definitivo solicitado: PROYECTO, MACROPROCESO, PROCESO, MICROPROCESO, DOCUMENTO, VERSION, ESTADO, FECHA, ANALISTA
       const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'DOCUMENTO', 'VERSION', 'ESTADO', 'FECHA', 'ANALISTA'];
       const rows = sortedDocs.map(d => {
-          // Formateo de fecha DD-MM-YYYY sin hora
           let fechaStr = 'Sin actividad';
           if (d.state !== DocState.NOT_STARTED && d.updatedAt) {
               const date = new Date(d.updatedAt);
@@ -340,7 +337,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
   };
 
-  // Added handleQuickFilter to fix missing reference errors in StatCard usages
   const handleQuickFilter = (type: QuickFilterType) => {
     setQuickFilter(type);
     setCurrentPage(1);
@@ -424,6 +420,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                      </div>
                 ) : (
                     <div className="flex flex-wrap gap-2">
+                        {/* ORDEN SOLICITADO: PROYECTO, MACROPROCESO, PROCESO, BUSCAR, DOC, ESTADO, ANALISTA */}
                         <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-28">
                             <option value="">PROYECTO</option>
                             {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
@@ -463,6 +460,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <table className="w-full text-[11px] text-left">
                     <thead className="text-[10px] text-slate-400 uppercase font-bold bg-white border-b border-slate-100">
                         <tr>
+                            {/* CABECERAS SOLICITADAS: PROYECTO, JERARQUÍA (MACRO / PROCESO), MICROPROCESO, DOCUMENTO, ESTADO ACTUAL, ÚLTIMA ACTIVIDAD */}
                             <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('project')}>PROYECTO <SortIcon column="project"/></th>
                             <th className="px-4 py-3">JERARQUÍA (MACRO / PROCESO)</th>
                             <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('microprocess')}>MICROPROCESO <SortIcon column="microprocess"/></th>
@@ -493,7 +491,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                 </td>
                                 <td className="px-4 py-3 align-top">
                                     <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1 border ${!doc.isRequired ? 'bg-gray-200 text-gray-500 border-gray-300' : STATE_CONFIG[doc.state].color}`}>{STATE_CONFIG[doc.state].label.split('(')[0]}</div>
-                                    <div className="text-[10px] font-mono text-slate-500">v{doc.version} ({doc.progress}%)</div>
+                                    {/* CORRECCIÓN: Se eliminó la 'v' duplicada. La variable {doc.version} ya trae el prefijo si corresponde */}
+                                    <div className="text-[10px] font-mono text-slate-500">{doc.version} ({doc.progress}%)</div>
                                 </td>
                                 <td className="px-4 py-3 align-top text-right">
                                     {doc.state !== DocState.NOT_STARTED ? (
