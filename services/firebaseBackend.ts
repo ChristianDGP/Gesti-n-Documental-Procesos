@@ -28,18 +28,26 @@ const determineStateFromVersion = (version: string): { state: DocState, progress
     // 1. Iniciado Estricto
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
     
-    // 2. Estados Finales/Control (Siempre tienen sufijo)
+    // 2. Estados Finales/Control
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
-    if (v.endsWith('AR')) return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     
-    // 3. Revisión Referente y Control (v1.x) - ESTRICTO CON 'v'
-    // Detecta v1.0, v1.0.1, v1.1, etc.
-    if (v.startsWith('v1.') && !v.includes('AR') && !v.includes('ACG')) return { state: DocState.SENT_TO_REFERENT, progress: 80 };
+    // 3. Revisión Interna Control (v1.n.iAR) - Detectado si tiene AR y es un sub-ciclo
+    // Regex: v1.n.iAR (3 segmentos numéricos + AR)
+    if (/^v1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
+
+    // 4. Enviado a Control (v1.nAR) - Versión Limpia con AR
+    if (/^v1\.\d+AR$/.test(v)) return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     
-    // 4. Revisión Interna (v0.x) - ESTRICTO CON 'v'
+    // 5. Revisión Interna Referente (v1.n.i) - Sin AR/ACG, 3 segmentos
+    if (/^v1\.\d+\.\d+$/.test(v)) return { state: DocState.REFERENT_REVIEW, progress: 80 };
+
+    // 6. Enviado a Referente (v1.n) - Sin AR/ACG, 2 segmentos
+    if (/^v1\.\d+$/.test(v)) return { state: DocState.SENT_TO_REFERENT, progress: 80 };
+    
+    // 7. Revisión Interna (v0.x) - ESTRICTO CON 'v'
     if (v.startsWith('v0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
     
-    // 5. En Proceso (0.x) - SIN 'v'
+    // 8. En Proceso (0.x) - SIN 'v'
     // Si empieza con número (ej: 0.1, 1.0 sin v), se considera trabajo en proceso no formalizado
     if (/^\d+\./.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
     

@@ -8,9 +8,9 @@ export const STATE_CONFIG: Record<DocState, { label: string; color: string; prog
   [DocState.IN_PROCESS]: { label: 'En Proceso (0.n)', color: 'bg-blue-100 text-blue-800', progress: 30 },
   [DocState.INTERNAL_REVIEW]: { label: 'Revisión Interna (v0.n)', color: 'bg-yellow-100 text-yellow-800', progress: 60 },
   [DocState.SENT_TO_REFERENT]: { label: 'Enviado a Referente (v1.n)', color: 'bg-purple-100 text-purple-800', progress: 80 },
-  [DocState.REFERENT_REVIEW]: { label: 'Revisión Referente (v1.n.i)', color: 'bg-indigo-100 text-indigo-800', progress: 80 },
-  [DocState.SENT_TO_CONTROL]: { label: 'Control de Gestión (v1.nAR)', color: 'bg-orange-100 text-orange-800', progress: 90 },
-  [DocState.CONTROL_REVIEW]: { label: 'Revisión Control (v1.n.iAR)', color: 'bg-pink-100 text-pink-800', progress: 90 },
+  [DocState.REFERENT_REVIEW]: { label: 'Revisión Interna Referente (v1.n.i)', color: 'bg-indigo-100 text-indigo-800', progress: 80 },
+  [DocState.SENT_TO_CONTROL]: { label: 'Enviado a Control (v1.nAR)', color: 'bg-orange-100 text-orange-800', progress: 90 },
+  [DocState.CONTROL_REVIEW]: { label: 'Revisión Interna Control (v1.n.iAR)', color: 'bg-pink-100 text-pink-800', progress: 90 },
   [DocState.APPROVED]: { label: 'Aprobado Final (v1.nACG)', color: 'bg-green-100 text-green-800', progress: 100 },
   [DocState.REJECTED]: { label: 'Rechazado', color: 'bg-red-100 text-red-800', progress: 0 },
 };
@@ -112,8 +112,7 @@ export const REQUIRED_DOCS_MATRIX = [
     ["HPC", "Hospitalización", 0, 1, 0, 1],
     ["HPC", "Quimioterapia", 0, 1, 0, 1],
     
-    // HSR (Note: HSR data provided had "Actual" column which is skipped here)
-    // Format mapped to: [Project, Micro, AS IS, FCE, PM, TO BE]
+    // HSR
     ["HSR", "Adquisición de Servicios", 0, 0, 0, 1],
     ["HSR", "Esterilización", 0, 0, 0, 1],
     ["HSR", "Farmacia Ambulatoria", 0, 0, 0, 1],

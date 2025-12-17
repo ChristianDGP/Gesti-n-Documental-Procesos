@@ -263,10 +263,13 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           case 'Iniciado': return DocState.INITIATED;
           case 'En Proceso': return DocState.IN_PROCESS;
           case 'En revisión interna': return DocState.INTERNAL_REVIEW;
+          
           case 'Enviado a Referente': return DocState.SENT_TO_REFERENT;
-          case 'Revisión con referentes': return DocState.REFERENT_REVIEW;
+          case 'Revisión Interna Referente': return DocState.REFERENT_REVIEW; // Updated mapping
+          
           case 'Enviado a Control de Gestión': return DocState.SENT_TO_CONTROL;
-          case 'Revisión con Control de Gestión': return DocState.CONTROL_REVIEW;
+          case 'Revisión Interna Control': return DocState.CONTROL_REVIEW; // Updated mapping
+          
           case 'Aprobado': return DocState.APPROVED;
           default: return DocState.INITIATED;
       }
@@ -519,8 +522,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 {shouldShowOption('INITIATED') && <option value="INITIATED">Iniciado (Versión 0.0)</option>}
                                 {shouldShowOption('IN_PROCESS') && <option value="IN_PROCESS">En Proceso / Avance (Versión 0.n)</option>}
                                 {shouldShowOption('INTERNAL') && <option value="INTERNAL">Revisión Interna (Versión v0.n)</option>}
-                                {shouldShowOption('REFERENT') && <option value="REFERENT">Revisión Referente (Versión v1.n)</option>}
-                                {shouldShowOption('CONTROL') && <option value="CONTROL">Control de Gestión (Versión v1.nAR)</option>}
+                                {shouldShowOption('REFERENT') && <option value="REFERENT">Revisión Interna Referente (Versión v1.n.i)</option>}
+                                {shouldShowOption('CONTROL') && <option value="CONTROL">Revisión Interna Control (Versión v1.n.iAR)</option>}
                             </select>
                             
                             <p className="text-[10px] text-indigo-600 mt-2">

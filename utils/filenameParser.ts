@@ -112,21 +112,21 @@ export const parseDocumentFilename = (
       } else if (expectedRequestType === 'REFERENT') {
           const match = version.match(regexReferent);
           if (!match) {
-              result.errores.push('Para Revisión Referente el formato debe ser "v1.n.i" (ej: v1.0.1).');
+              result.errores.push('Para Revisión Interna Referente el formato debe ser "v1.n.i" (ej: v1.0.1).');
           } else {
               const i = parseInt(match[2]);
               if (i % 2 === 0) {
-                  result.errores.push(`Para Revisión Referente el dígito "i" (${i}) debe ser IMPAR (ej: v1.0.1, v1.0.3).`);
+                  result.errores.push(`Para Revisión Interna Referente el dígito "i" (${i}) debe ser IMPAR (ej: v1.0.1, v1.0.3).`);
               }
           }
       } else if (expectedRequestType === 'CONTROL') {
           const match = version.match(regexControl);
           if (!match) {
-              result.errores.push('Para Control de Gestión el formato debe ser "v1.n.iAR" (ej: v1.0.1AR).');
+              result.errores.push('Para Revisión Interna Control el formato debe ser "v1.n.iAR" (ej: v1.0.1AR).');
           } else {
               const i = parseInt(match[2]);
               if (i % 2 === 0) {
-                  result.errores.push(`Para Control de Gestión el dígito "i" (${i}) debe ser IMPAR (ej: v1.0.1AR).`);
+                  result.errores.push(`Para Revisión Interna Control el dígito "i" (${i}) debe ser IMPAR (ej: v1.0.1AR).`);
               }
           }
       }
@@ -141,19 +141,29 @@ export const parseDocumentFilename = (
   }
 
   // Logic map for state detection (Auto-detect if not enforced)
+  // IMPROVED LOGIC FOR INTERMEDIATE STATES
   if (result.errores.length === 0) {
       if (version.endsWith('ACG')) {
           result.estado = 'Aprobado';
           result.porcentaje = 100;
       } else if (version.endsWith('AR')) {
-          result.estado = 'Enviado a Control de Gestión'; // v1.nAR
-          result.porcentaje = 90;
-      } else if (version.startsWith('v1.') && !version.includes('AR') && (version.split('.').length > 2)) {
-          result.estado = 'Revisión con referentes';
-          result.porcentaje = 80;
-      } else if (version.startsWith('v1.') && !version.includes('AR')) {
-          result.estado = 'Enviado a Referente'; 
-          result.porcentaje = 80;
+          // v1.nAR vs v1.n.iAR
+          if (version.match(/^v1\.(\d+)\.(\d+)AR$/)) {
+              result.estado = 'Revisión Interna Control'; // Intermediate
+              result.porcentaje = 90;
+          } else {
+              result.estado = 'Enviado a Control de Gestión'; // v1.nAR
+              result.porcentaje = 90;
+          }
+      } else if (version.startsWith('v1.')) {
+          // v1.n vs v1.n.i
+          if (version.split('.').length > 2) {
+              result.estado = 'Revisión Interna Referente'; // v1.n.i
+              result.porcentaje = 80;
+          } else {
+              result.estado = 'Enviado a Referente'; // v1.n
+              result.porcentaje = 80;
+          }
       } else if (version.startsWith('v0.')) {
           result.estado = 'En revisión interna'; 
           result.porcentaje = 60;
