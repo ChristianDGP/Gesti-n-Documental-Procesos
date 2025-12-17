@@ -7,7 +7,7 @@ import { STATE_CONFIG } from '../constants';
 import { 
     Plus, Clock, CheckCircle, Filter, X, Calendar, ArrowRight, Activity, 
     BookOpen, Users, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, Loader2,
-    User as UserIcon, Database, AlertTriangle, Archive, PlayCircle
+    User as UserIcon, Database, AlertTriangle, Archive, PlayCircle, Search
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -23,6 +23,17 @@ interface DashboardDoc extends Document {
 type SortKey = 'project' | 'microprocess' | 'state' | 'updatedAt';
 type QuickFilterType = 'ALL' | 'NOT_STARTED' | 'IN_PROCESS' | 'REFERENT' | 'CONTROL' | 'FINISHED';
 
+// Helper to order DocTypes logically
+const getDocTypeOrder = (type: string | undefined): number => {
+    switch (type) {
+        case 'AS IS': return 1;
+        case 'FCE': return 2;
+        case 'PM': return 3;
+        case 'TO BE': return 4;
+        default: return 99;
+    }
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const navigate = useNavigate();
   const location = useLocation(); // Used to receive filters from Reports
@@ -37,6 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [filterAnalyst, setFilterAnalyst] = useState('');
   const [filterMacro, setFilterMacro] = useState('');
   const [filterProcess, setFilterProcess] = useState('');
+  const [filterSearch, setFilterSearch] = useState(''); // New Search Filter
   const [filterDocType, setFilterDocType] = useState('');
   const [filterState, setFilterState] = useState(''); // Dropdown state filter
   
@@ -47,8 +59,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [quickFilter, setQuickFilter] = useState<QuickFilterType>('ALL');
 
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({
-    key: 'updatedAt',
-    direction: 'desc'
+    key: 'project', // Default sort by Project Hierarchy
+    direction: 'asc'
   });
 
   useEffect(() => {
@@ -211,10 +223,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
           if (filterDocType) filtered = filtered.filter(d => d.docType === filterDocType);
           if (filterState) filtered = filtered.filter(d => d.state === filterState);
+          
+          if (filterSearch) {
+              const term = filterSearch.toLowerCase();
+              filtered = filtered.filter(d => 
+                  (d.microprocess || '').toLowerCase().includes(term) || 
+                  (d.title || '').toLowerCase().includes(term)
+              );
+          }
       }
 
       return filtered;
-  }, [mergedDocs, filterProject, filterAnalyst, filterMacro, filterProcess, filterDocType, filterState, externalFilterIds]);
+  }, [mergedDocs, filterProject, filterAnalyst, filterMacro, filterProcess, filterDocType, filterState, filterSearch, externalFilterIds]);
 
   // --- 2. STATS CALCULATION (ONLY COUNT REQUIRED DOCS) ---
   const stats = useMemo(() => {
@@ -257,12 +277,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           }
 
           const modifier = sortConfig.direction === 'asc' ? 1 : -1;
+          
           switch (sortConfig.key) {
               case 'updatedAt': 
                   const timeA = new Date(a.updatedAt).getTime();
                   const timeB = new Date(b.updatedAt).getTime();
                   return (timeA - timeB) * modifier;
-              case 'project': return (a.project || '').localeCompare(b.project || '') * modifier;
+              
+              case 'project': 
+                  // 1. Project
+                  if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '') * modifier;
+                  // 2. Macroprocess
+                  if ((a.macroprocess || '') !== (b.macroprocess || '')) return (a.macroprocess || '').localeCompare(b.macroprocess || '') * modifier;
+                  // 3. Process
+                  if ((a.process || '') !== (b.process || '')) return (a.process || '').localeCompare(b.process || '') * modifier;
+                  // 4. Microprocess
+                  if ((a.microprocess || '') !== (b.microprocess || '')) return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
+                  // 5. DocType
+                  return (getDocTypeOrder(a.docType) - getDocTypeOrder(b.docType)) * modifier;
+
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
               case 'state': return (a.progress - b.progress) * modifier;
               default: return 0;
@@ -292,6 +325,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       setFilterAnalyst('');
       setFilterMacro('');
       setFilterProcess('');
+      setFilterSearch(''); // Clear Search
       setFilterDocType('');
       setFilterState('');
       setQuickFilter('ALL');
@@ -362,7 +396,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       );
   }
 
-  const hasActiveFilters = filterProject || filterAnalyst || filterMacro || filterProcess || filterDocType || filterState || externalFilterIds;
+  const hasActiveFilters = filterProject || filterAnalyst || filterMacro || filterProcess || filterSearch || filterDocType || filterState || externalFilterIds;
 
   return (
     <div className="space-y-6 pb-12">
@@ -417,13 +451,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
 
-                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
-                            <option value="">Analista (Todos)</option>
-                            {allUsers
-                                .filter(u => u.role === UserRole.ANALYST) // Strict Filter
-                                .map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
-
                         <select value={filterMacro} onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-40">
                             <option value="">Macro (Todos)</option>
                             {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
@@ -434,6 +461,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
 
+                        <div className="relative w-40">
+                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input 
+                                type="text"
+                                value={filterSearch}
+                                onChange={(e) => setFilterSearch(e.target.value)}
+                                placeholder="Buscar..."
+                                className="w-full text-xs pl-8 p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                        </div>
+
                         <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-32">
                             <option value="">Doc (Todos)</option>
                             {['AS IS', 'FCE', 'PM', 'TO BE'].map(t => <option key={t} value={t}>{t}</option>)}
@@ -443,6 +481,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             <option value="">Estado (Todos)</option>
                             {Object.keys(STATE_CONFIG).map(k => <option key={k} value={k}>{STATE_CONFIG[k as DocState].label.split('(')[0]}</option>)}
                         </select>
+
+                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 w-36">
+                            <option value="">Analista (Todos)</option>
+                            {allUsers
+                                .filter(u => u.role === UserRole.ANALYST) // Strict Filter
+                                .map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
                     </div>
                 )}
             </div>
@@ -451,11 +496,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <table className="w-full text-xs text-left">
                     <thead className="text-[10px] text-slate-400 uppercase font-bold bg-white border-b border-slate-100">
                         <tr>
-                            <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('project')}>PROYECTO</th>
+                            <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('project')}>PROYECTO <SortIcon column="project"/></th>
                             <th className="px-4 py-3">JERARQUÍA (MACRO / PROCESO)</th>
-                            <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('microprocess')}>MICROPROCESO</th>
+                            <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('microprocess')}>MICROPROCESO <SortIcon column="microprocess"/></th>
                             <th className="px-4 py-3">DOCUMENTO</th>
-                            <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('state')}>ESTADO ACTUAL</th>
+                            <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('state')}>ESTADO ACTUAL <SortIcon column="state"/></th>
                             <th className="px-4 py-3 cursor-pointer group text-right" onClick={() => handleSort('updatedAt')}>ÚLTIMA ACTIVIDAD <SortIcon column="updatedAt"/></th>
                         </tr>
                     </thead>
