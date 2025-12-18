@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, HistoryService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
-import { Document, User, DocHistory, UserRole, DocState, FullHierarchy } from '../types';
+import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader } from '../services/firebaseBackend';
+import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
 import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink } from 'lucide-react';
@@ -19,6 +19,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [history, setHistory] = useState<DocHistory[]>([]);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [assigneeEmails, setAssigneeEmails] = useState<string[]>([]);
+  const [referentEmails, setReferentEmails] = useState<string[]>([]);
   const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
   const [authorEmail, setAuthorEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -63,11 +64,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     }
   }, [id, location.state]);
 
-  const resolveAssignees = (d: Document, hierarchy: FullHierarchy): string[] => {
-      let resolvedIds = d.assignees || [];
+  const resolveMatrixData = (d: Document, hierarchy: FullHierarchy, allReferents: Referent[]) => {
+      let resolvedAssigneeIds = d.assignees || [];
+      let resolvedReferentEmails: string[] = [];
       const isLegacy = d.authorName.includes('Sistema') || d.authorName.includes('Carga');
       
-      if ((resolvedIds.length === 0 || isLegacy) && d.project && d.microprocess) {
+      if (d.project && d.microprocess) {
            const targetMicro = normalizeHeader(d.microprocess);
            const targetProject = normalizeHeader(d.project);
            
@@ -92,9 +94,20 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                    if (node) break;
                }
            }
-           if (node?.assignees && node.assignees.length > 0) resolvedIds = node.assignees;
+           
+           // Resolve Assignees if missing or legacy
+           if ((resolvedAssigneeIds.length === 0 || isLegacy) && node?.assignees) {
+               resolvedAssigneeIds = node.assignees;
+           }
+
+           // Resolve Referents (Always from Matrix for accuracy)
+           if (node?.referentIds && node.referentIds.length > 0) {
+               resolvedReferentEmails = allReferents
+                   .filter(r => node.referentIds.includes(r.id))
+                   .map(r => r.email);
+           }
       }
-      return resolvedIds;
+      return { assignees: resolvedAssigneeIds, referents: resolvedReferentEmails };
   };
 
   const findCoordinator = (users: User[]) => {
@@ -112,10 +125,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const loadAuxiliaryData = async (docId: string, currentDoc: Document | null) => {
       try {
-          const [h, allUsers, hierarchy] = await Promise.all([
+          const [h, allUsers, hierarchy, allReferents] = await Promise.all([
               HistoryService.getHistory(docId),
               UserService.getAll(),
-              HierarchyService.getFullHierarchy()
+              HierarchyService.getFullHierarchy(),
+              ReferentService.getAll()
           ]);
           setHistory(h);
           const targetDoc = currentDoc || doc;
@@ -124,11 +138,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               if (coordinator) setCoordinatorEmail(coordinator.email);
               const author = allUsers.find(u => u.id === targetDoc.authorId);
               if (author) setAuthorEmail(author.email);
-              const resolvedIds = resolveAssignees(targetDoc, hierarchy);
-              if (resolvedIds.length > 0) {
-                  const names = resolvedIds.map(aid => allUsers.find(u => u.id === aid)?.name).filter(n => n) as string[];
+              
+              const matrix = resolveMatrixData(targetDoc, hierarchy, allReferents);
+              setReferentEmails(matrix.referents);
+
+              if (matrix.assignees.length > 0) {
+                  const names = matrix.assignees.map(aid => allUsers.find(u => u.id === aid)?.name).filter(n => n) as string[];
                   setAssigneeNames(names);
-                  const emails = resolvedIds.map(aid => allUsers.find(u => u.id === aid)?.email).filter(e => e) as string[];
+                  const emails = matrix.assignees.map(aid => allUsers.find(u => u.id === aid)?.email).filter(e => e) as string[];
                   setAssigneeEmails(emails);
               }
           }
@@ -140,11 +157,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const loadData = async (docId: string) => {
     setLoading(true);
     try {
-        const [d, h, allUsers, hierarchy] = await Promise.all([
+        const [d, h, allUsers, hierarchy, allReferents] = await Promise.all([
           DocumentService.getById(docId),
           HistoryService.getHistory(docId),
           UserService.getAll(),
-          HierarchyService.getFullHierarchy()
+          HierarchyService.getFullHierarchy(),
+          ReferentService.getAll()
         ]);
         if (d) {
             setDoc(d);
@@ -153,11 +171,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             if (coordinator) setCoordinatorEmail(coordinator.email);
             const author = allUsers.find(u => u.id === d.authorId);
             if (author) setAuthorEmail(author.email);
-            const resolvedIds = resolveAssignees(d, hierarchy);
-            if (resolvedIds.length > 0) {
-                const names = resolvedIds.map(aid => allUsers.find(u => u.id === aid)?.name).filter(n => n) as string[];
+            
+            const matrix = resolveMatrixData(d, hierarchy, allReferents);
+            setReferentEmails(matrix.referents);
+
+            if (matrix.assignees.length > 0) {
+                const names = matrix.assignees.map(aid => allUsers.find(u => u.id === aid)?.name).filter(n => n) as string[];
                 setAssigneeNames(names);
-                const emails = resolvedIds.map(aid => allUsers.find(u => u.id === aid)?.email).filter(e => e) as string[];
+                const emails = matrix.assignees.map(aid => allUsers.find(u => u.id === aid)?.email).filter(e => e) as string[];
                 setAssigneeEmails(emails);
             } else {
                 setAssigneeNames([]);
@@ -271,6 +292,7 @@ ${user.name}`;
   const handleNotifyExternal = () => {
       if (!doc) return;
       const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} ${doc.microprocess || ''}`);
+      const to = encodeURIComponent(referentEmails.join(','));
       const cc = encodeURIComponent(assigneeEmails.join(','));
       const bodyRaw = `Estimado,
 Para vuestra aprobación, adjunto el Informe:
@@ -283,8 +305,7 @@ Saludos
 ${user.name}`;
 
       const body = encodeURIComponent(bodyRaw);
-      // Destinatario vacío (to=), analistas en CC.
-      window.open(`https://mail.google.com/mail/?view=cm&fs=1&cc=${cc}&su=${subject}&body=${body}`, '_blank');
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&cc=${cc}&su=${subject}&body=${body}`, '_blank');
   };
 
   // 3. COORDINADOR -> ANALISTA (Comunicación Interna: Con PROYECTO)
@@ -335,7 +356,7 @@ ${user.name}`;
   const canApprove = isCoordinatorOrAdmin && isDocActive;
   const canReject = isCoordinatorOrAdmin && isDocActive;
   const canNotifyAuthor = isCoordinatorOrAdmin && doc.state !== DocState.NOT_STARTED; 
-  const canNotifyExternal = (isCoordinatorOrAdmin) && (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.SENT_TO_CONTROL);
+  const canNotifyExternal = (isCoordinatorOrAdmin) && (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.REFERENT_REVIEW || doc.state === DocState.CONTROL_REVIEW);
   const analystNotificationStates = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW];
   const canNotifyCoordinator = isAnalystAssigned && analystNotificationStates.includes(doc.state);
 
@@ -385,7 +406,11 @@ ${user.name}`;
                         <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium shadow-sm transition-colors"><MessageSquare size={16} className="mr-2" /> Guardar Observación</button>
                         {canNotifyCoordinator && <button onClick={handleAnalystNotificationToCoordinator} className="flex items-center px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg text-sm font-medium border border-blue-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar al coordinador</button>}
                         {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
-                        {canNotifyExternal && <button onClick={handleNotifyExternal} className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium shadow-sm border border-purple-700 transition-colors"><ExternalLink size={16} className="mr-2" /> Notificar Referente / Control</button>}
+                        {canNotifyExternal && (
+                            <button onClick={handleNotifyExternal} className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium shadow-sm border border-purple-700 transition-colors">
+                                <ExternalLink size={16} className="mr-2" /> Notificar Referentes ({referentEmails.length})
+                            </button>
+                        )}
                         {canRestart && <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">Reiniciar Flujo</button>}
                         {canApprove && <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium shadow-sm"><CheckCircle size={16} className="mr-2" /> Aprobar</button>}
                         {canReject && <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium border border-red-200"><XCircle size={16} className="mr-2" /> Rechazar</button>}
