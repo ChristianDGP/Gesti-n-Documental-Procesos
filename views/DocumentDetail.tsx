@@ -4,8 +4,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader } from '../services/firebaseBackend';
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Mail, MessageSquare, ExternalLink, Trash2, Lock, Save, PlusCircle, Upload, Loader2, UserCheck, Users as UsersIcon, FileCheck, FileX, Info, AlertTriangle } from 'lucide-react';
+import { validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
+import { 
+    ArrowLeft, FileText, CheckCircle, XCircle, Activity, Mail, 
+    MessageSquare, ExternalLink, PlusCircle, Upload, Loader2, 
+    UserCheck, Users as UsersIcon, FileCheck, FileX, Info, 
+    AlertTriangle, Send, History, ChevronRight, Save
+} from 'lucide-react';
 
 interface Props {
   user: User;
@@ -21,6 +26,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [referentEmails, setReferentEmails] = useState<string[]>([]);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [referentNames, setReferentNames] = useState<string[]>([]);
+  const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
+  
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -47,14 +54,20 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           HierarchyService.getFullHierarchy(),
           ReferentService.getAll()
         ]);
+
         if (d) {
             setDoc(d);
             setHistory(h);
             
-            // Resolve names and emails from Hierarchy Matrix
+            // Resolve Coordinator Fallback
+            const admin = allUsers.find(u => u.role === UserRole.ADMIN || u.role === UserRole.COORDINATOR);
+            if (admin) setCoordinatorEmail(admin.email);
+
+            // Resolve Hierarchy Matrix Assignments & Referents
             const targetMicro = normalizeHeader(d.microprocess || '');
             const targetProject = normalizeHeader(d.project || '');
             let node = null;
+            
             for (const p of Object.keys(hierarchy)) {
                 if (normalizeHeader(p) === targetProject) {
                     for (const m of Object.keys(hierarchy[p])) {
@@ -73,23 +86,43 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 setAssigneeEmails(aUsers.map(u => u.email));
                 setAssigneeNames(aUsers.map(u => u.name));
 
-                const rUsers = (node.referentIds || []).map(rid => allReferents.find(ref => ref.id === rid)).filter(r => r) as Referent[];
-                setReferentEmails(rUsers.map(r => r.email));
-                setReferentNames(rUsers.map(r => r.name));
+                // Critical: Adequacy for ReferentService preserved
+                const rRefs = (node.referentIds || []).map(rid => allReferents.find(ref => ref.id === rid)).filter(r => r) as Referent[];
+                setReferentEmails(rRefs.map(r => r.email));
+                setReferentNames(rRefs.map(r => r.name));
             } else {
                 setAssigneeNames([d.authorName]);
             }
         }
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+    } catch (e) { 
+        console.error("Error loading document detail:", e); 
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const handleNotifyReferent = () => {
       if (!doc) return;
       const subject = encodeURIComponent(`Solicitud de Aprobación Técnica: ${doc.microprocess || ''}`);
       const to = referentEmails.join(',');
-      const cc = assigneeEmails.join(',');
-      const body = encodeURIComponent(`Estimados,\nPara vuestra validación técnica, adjunto el Informe:\n- ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}\n\nAtento a comentarios.\nSaludos,\n${user.name}`);
+      const cc = [user.email, coordinatorEmail, ...assigneeEmails].filter((v, i, a) => a.indexOf(v) === i).join(',');
+      const body = encodeURIComponent(`Estimados,\nPara vuestra validación técnica, adjunto el Informe:\n- ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}\n\nQuedo atento a sus valiosos comentarios.\n\nSaludos,\n${user.name}`);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&cc=${cc}&su=${subject}&body=${body}`, '_blank');
+  };
+
+  const handleAdvanceWorkflow = () => {
+    if (!doc) return;
+    navigate('/new', { 
+        state: { 
+            prefill: {
+                project: doc.project,
+                macro: doc.macroprocess,
+                process: doc.process,
+                micro: doc.microprocess,
+                docType: doc.docType
+            }
+        }
+    });
   };
 
   const handleActionClick = (action: 'APPROVE' | 'REJECT') => {
@@ -111,7 +144,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               setDetectedVersion(parts[parts.length - 1]);
           } else {
               setResponseFile(null);
-              setFileValidationError(validation.error || 'Archivo inválido');
+              setFileValidationError(validation.error || 'Nombre de archivo no cumple las reglas.');
           }
       }
   };
@@ -125,7 +158,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               doc.id, 
               user, 
               pendingAction, 
-              comment || (pendingAction === 'APPROVE' ? 'Aprobado por coordinación' : 'Rechazado por coordinación'),
+              comment || (pendingAction === 'APPROVE' ? 'Etapa aprobada formalmente.' : 'Documento rechazado para correcciones.'),
               responseFile,
               detectedVersion
           );
@@ -139,153 +172,215 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
-  if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center min-h-[400px]"><Loader2 className="animate-spin mb-2 text-indigo-600" /> Cargando detalle...</div>;
+  if (loading) return (
+      <div className="flex flex-col h-screen items-center justify-center bg-slate-50 gap-4">
+          <Loader2 className="animate-spin text-indigo-600" size={40} />
+          <p className="text-slate-500 font-medium animate-pulse">Cargando expediente...</p>
+      </div>
+  );
+
   if (!doc) return <div className="p-8 text-center text-slate-500">Documento no encontrado.</div>;
 
   const config = STATE_CONFIG[doc.state];
   const isCoordinator = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+  const isAnalyst = user.role === UserRole.ANALYST;
+  const canAdvance = doc.state !== DocState.APPROVED;
   const showNotifyReferent = isCoordinator && (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      {/* Header Card */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <button onClick={() => navigate(-1)} className="flex items-center text-slate-400 hover:text-slate-600 mb-4 text-xs font-medium transition-colors">
-            <ArrowLeft size={14} className="mr-1" /> Volver al listado
-        </button>
-        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-            <div>
-                <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-white">{doc.project}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700">{doc.docType}</span>
-                </div>
-                <h1 className="text-2xl font-bold text-slate-900">{doc.title}</h1>
-            </div>
-            <div className={`px-3 py-1.5 rounded-lg text-sm font-bold h-fit border shadow-sm ${config.color}`}>{config.label}</div>
-        </div>
+    <div className="max-w-5xl mx-auto space-y-6 pb-20 px-2 md:px-0">
+      {/* Top Navigation */}
+      <button onClick={() => navigate(-1)} className="flex items-center text-slate-400 hover:text-indigo-600 mb-2 text-sm font-semibold transition-all">
+          <ArrowLeft size={18} className="mr-1" /> Volver al Tablero
+      </button>
+
+      {/* Main Container */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-sm border-t border-slate-100 pt-6">
-            <div className="space-y-1">
-                <p className="text-slate-500 font-bold uppercase text-[10px] flex items-center gap-1"><UsersIcon size={12}/> Analistas</p>
-                <p className="font-medium text-slate-800 leading-relaxed">
-                    {assigneeNames.length > 0 ? assigneeNames.join(', ') : <span className="text-slate-400 italic">Sin asignar</span>}
-                </p>
-            </div>
-            <div className="space-y-1">
-                <p className="text-slate-500 font-bold uppercase text-[10px] flex items-center gap-1"><UserCheck size={12}/> Referentes</p>
-                <p className="font-medium text-indigo-600 leading-relaxed">
-                    {referentNames.length > 0 ? referentNames.join(', ') : <span className="text-slate-400 italic">Sin referentes vinculados</span>}
-                </p>
-            </div>
-            <div className="space-y-1">
-                <p className="text-slate-500 font-bold uppercase text-[10px]">Versión Actual</p>
-                <p className="font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200 w-fit">{doc.version}</p>
-            </div>
-            <div className="space-y-1">
-                <p className="text-slate-500 font-bold uppercase text-[10px]">Progreso General</p>
-                <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-                        <div className="bg-indigo-600 h-full transition-all duration-700 ease-out" style={{ width: `${doc.progress}%` }}></div>
+        {/* Left Column: Metadata & Actions */}
+        <div className="lg:col-span-2 space-y-6">
+            
+            {/* Header Identity Card */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-slate-900 p-6 text-white relative">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex gap-2">
+                            <span className="px-2 py-1 rounded bg-white/20 text-[10px] font-bold uppercase backdrop-blur-sm">{doc.project}</span>
+                            <span className="px-2 py-1 rounded bg-indigo-500 text-[10px] font-bold uppercase">{doc.docType}</span>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[11px] font-bold border ${config.color.includes('bg-green') ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-white/10 border-white/20'}`}>
+                            {config.label.split('(')[0]}
+                        </div>
                     </div>
-                    <span className="font-bold text-indigo-700 text-xs">{doc.progress}%</span>
+                    <h1 className="text-2xl font-bold mb-2 leading-tight">{doc.title}</h1>
+                    <p className="text-slate-400 text-sm line-clamp-2 mb-4">{doc.description}</p>
+                    
+                    <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                        <div className="text-xs">
+                             <span className="text-slate-500 block uppercase font-bold tracking-widest text-[9px]">Versión</span>
+                             <span className="font-mono text-lg font-bold">{doc.version}</span>
+                        </div>
+                        <div className="text-right">
+                             <span className="text-slate-500 block uppercase font-bold tracking-widest text-[9px]">Progreso</span>
+                             <span className="text-lg font-bold text-indigo-400">{doc.progress}%</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Details Grid */}
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6 bg-white">
+                    <div className="space-y-1">
+                        <p className="text-slate-400 font-bold uppercase text-[10px] flex items-center gap-1 tracking-wider"><UsersIcon size={12}/> Analistas Responsables</p>
+                        <p className="text-sm font-semibold text-slate-800">
+                            {assigneeNames.length > 0 ? assigneeNames.join(', ') : <span className="text-slate-300 italic">No asignado</span>}
+                        </p>
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-slate-400 font-bold uppercase text-[10px] flex items-center gap-1 tracking-wider"><UserCheck size={12}/> Referentes Técnicos</p>
+                        <p className="text-sm font-semibold text-indigo-600">
+                            {referentNames.length > 0 ? referentNames.join(', ') : <span className="text-slate-300 italic">Sin referentes</span>}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Action Panel */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-widest">
+                        <Activity size={18} className="text-indigo-600" /> Panel de Gestión
+                    </h3>
+                    {doc.hasPendingRequest && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full animate-pulse border border-red-100">
+                            <AlertTriangle size={12}/> Pendiente de Revisión
+                        </span>
+                    )}
+                </div>
+
+                <div className="space-y-6">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">Observaciones / Comentarios</label>
+                        <textarea 
+                            className="w-full p-4 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 min-h-[100px]" 
+                            placeholder="Ingrese notas sobre esta versión o motivos de rechazo..." 
+                            value={comment} 
+                            onChange={(e) => setComment(e.target.value)} 
+                        />
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                        {/* Primary Analysts Actions */}
+                        {isAnalyst && canAdvance && (
+                            <button 
+                                onClick={handleAdvanceWorkflow}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-bold shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                            >
+                                <PlusCircle size={18} /> Nueva Solicitud / Continuar Flujo
+                            </button>
+                        )}
+
+                        {/* Coordinator Review Actions */}
+                        {isCoordinator && doc.state !== DocState.APPROVED && (
+                            <>
+                                <button 
+                                    onClick={() => handleActionClick('APPROVE')} 
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-green-200 hover:bg-green-700 transition-all active:scale-95"
+                                >
+                                    <CheckCircle size={18} /> Aprobar Etapa
+                                </button>
+                                <button 
+                                    onClick={() => handleActionClick('REJECT')} 
+                                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-red-600 border border-red-200 rounded-xl text-sm font-bold hover:bg-red-50 transition-all active:scale-95"
+                                >
+                                    <XCircle size={18} /> Rechazar Cambios
+                                </button>
+                            </>
+                        )}
+
+                        {/* Communication Actions */}
+                        {showNotifyReferent && (
+                            <button 
+                                onClick={handleNotifyReferent} 
+                                className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-white text-slate-700 border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+                            >
+                                <Send size={18} className="text-indigo-600" /> Notificar Referentes ({referentEmails.length})
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Main Actions Column */}
-        <div className="md:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
-                    <Activity size={18} className="text-indigo-600" /> Gestión del Documento
-                </h3>
-                <textarea 
-                    className="w-full p-3 border border-slate-300 rounded-lg text-sm mb-4 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow bg-slate-50" 
-                    rows={3} 
-                    placeholder="Escriba observaciones, motivos de rechazo o comentarios para el historial..." 
-                    value={comment} 
-                    onChange={(e) => setComment(e.target.value)} 
-                />
-                <div className="flex flex-wrap gap-3">
-                    {showNotifyReferent && (
-                        <button onClick={handleNotifyReferent} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-bold shadow-md transition-all active:scale-95">
-                            <Mail size={16} /> Notificar a Referentes ({referentNames.length})
-                        </button>
-                    )}
-                    {isCoordinator && doc.state !== DocState.APPROVED && (
-                        <>
-                            <button onClick={() => handleActionClick('APPROVE')} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-green-700 transition-all active:scale-95">
-                                <CheckCircle size={18} /> Aprobar Etapa
-                            </button>
-                            <button onClick={() => handleActionClick('REJECT')} className="flex items-center gap-2 px-5 py-2.5 bg-white text-red-600 border-2 border-red-100 rounded-lg text-sm font-bold hover:bg-red-50 transition-all active:scale-95">
-                                <XCircle size={18} /> Rechazar Cambios
-                            </button>
-                        </>
-                    )}
+        {/* Right Column: Timeline & Sidebars */}
+        <div className="space-y-6">
+            
+            {/* Timeline Sidebar */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full max-h-[800px]">
+                <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-widest">
+                        <History size={16} className="text-slate-400" /> Historial de Cambios
+                    </h3>
+                    <span className="text-[10px] font-bold bg-white px-2 py-1 rounded border border-slate-200 text-slate-500">
+                        {history.length} Eventos
+                    </span>
                 </div>
-            </div>
-        </div>
-
-        {/* History Sidebar */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
-                <FileText size={18} className="text-slate-400" /> Línea de Tiempo
-            </h3>
-            <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin">
-                {history.length === 0 ? (
-                    <p className="text-center text-slate-400 text-xs py-8 italic">No hay actividad registrada aún.</p>
-                ) : history.map(h => (
-                    <div key={h.id} className="relative pl-6 pb-2 border-l-2 border-slate-100 last:border-0">
-                        <div className="absolute left-[-5px] top-0 w-2 h-2 rounded-full bg-slate-300"></div>
-                        <div className="text-[10px] text-slate-400 font-mono mb-0.5">{new Date(h.timestamp).toLocaleString()}</div>
-                        <div className="text-xs font-bold text-slate-800">{h.action}</div>
-                        <div className="text-[11px] text-slate-500 mb-2">{h.userName}</div>
-                        {h.comment && <div className="mt-1 p-2 bg-slate-50 rounded border border-slate-100 text-[10px] italic text-slate-600 leading-relaxed">"{h.comment}"</div>}
+                
+                <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+                    <div className="relative border-l-2 border-slate-100 ml-3 space-y-8">
+                        {history.length === 0 ? (
+                            <p className="text-center text-slate-400 text-xs py-10 italic">Sin actividad registrada.</p>
+                        ) : history.map((h, i) => (
+                            <div key={h.id} className="relative pl-8 animate-fadeIn" style={{ animationDelay: `${i * 0.1}s` }}>
+                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm transition-all
+                                    ${h.action.includes('Aprob') ? 'bg-green-500' : h.action.includes('Rechaz') ? 'bg-red-500' : 'bg-indigo-500'}`}>
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-bold mb-1">{new Date(h.timestamp).toLocaleString()}</div>
+                                <h4 className="text-sm font-bold text-slate-800 leading-tight">{h.action}</h4>
+                                <p className="text-xs text-slate-500 font-medium">{h.userName}</p>
+                                {h.comment && (
+                                    <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs italic text-slate-600 leading-relaxed shadow-sm">
+                                        "{h.comment}"
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
-                ))}
+                </div>
             </div>
         </div>
       </div>
 
       {/* RESPONSE MODAL (Action Verification) */}
       {showResponseModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
-                  <div className={`p-5 flex justify-between items-center text-white ${pendingAction === 'APPROVE' ? 'bg-green-600' : 'bg-red-600'}`}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col transform transition-all scale-100">
+                  <div className={`p-6 flex justify-between items-center text-white ${pendingAction === 'APPROVE' ? 'bg-green-600' : 'bg-red-600'}`}>
                       <h3 className="text-lg font-bold flex items-center gap-2">
-                          {pendingAction === 'APPROVE' ? <CheckCircle size={20}/> : <XCircle size={20}/>}
-                          Confirmar {pendingAction === 'APPROVE' ? 'Aprobación' : 'Rechazo'}
+                          {pendingAction === 'APPROVE' ? <CheckCircle size={22}/> : <XCircle size={22}/>}
+                          {pendingAction === 'APPROVE' ? 'Validar Aprobación' : 'Validar Rechazo'}
                       </h3>
-                      <button onClick={() => setShowResponseModal(false)} className="hover:bg-black/10 p-1 rounded transition-colors"><XCircle size={24} /></button>
+                      <button onClick={() => setShowResponseModal(false)} className="hover:bg-black/10 p-2 rounded-full transition-colors"><XCircle size={24} /></button>
                   </div>
                   
-                  <div className="p-6 space-y-6">
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                          <div className="flex justify-between text-xs">
-                              <span className="text-slate-500 font-bold uppercase">Estado Actual</span>
-                              <span className="font-bold text-slate-800">{config.label.split('(')[0]}</span>
+                  <div className="p-8 space-y-6">
+                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                          <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-400 font-bold uppercase tracking-widest">Nomenclatura Requerida</span>
+                              <span className="bg-white px-2 py-1 rounded border border-slate-200 text-indigo-600 font-bold">{detectedVersion || 'Pendiente'}</span>
                           </div>
-                          <div className="flex justify-between text-xs">
-                              <span className="text-slate-500 font-bold uppercase">Versión Actual</span>
-                              <span className="font-mono font-bold text-indigo-600">{doc.version}</span>
-                          </div>
-                          <div className="pt-2 border-t border-slate-200">
-                              <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Nomenclatura requerida:</p>
-                              <p className="text-xs font-mono bg-white p-2 rounded border border-slate-200 text-indigo-700">
-                                  {getCoordinatorRuleHint(doc.state, pendingAction!)}
-                              </p>
+                          <div className="p-3 bg-white rounded-xl border border-indigo-100 text-sm font-mono font-bold text-indigo-800 text-center break-all">
+                              {getCoordinatorRuleHint(doc.state, pendingAction!)}
                           </div>
                       </div>
 
                       <div className="space-y-3">
-                          <label className="block text-sm font-bold text-slate-700">Subir Archivo de Respuesta</label>
+                          <label className="block text-sm font-bold text-slate-700 ml-1">Documento de Respaldo / Respuesta</label>
                           <div 
                               onClick={() => fileInputRef.current?.click()}
-                              className={`border-2 border-dashed rounded-xl p-8 transition-all flex flex-col items-center justify-center text-center cursor-pointer group
-                              ${responseFile ? 'border-green-300 bg-green-50' : 
+                              className={`border-2 border-dashed rounded-2xl p-10 transition-all flex flex-col items-center justify-center text-center cursor-pointer group
+                              ${responseFile ? 'border-green-300 bg-green-50 shadow-inner' : 
                                 fileValidationError ? 'border-red-300 bg-red-50' : 
-                                'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'}`}
+                                'border-slate-200 hover:border-indigo-400 hover:bg-slate-50'}`}
                           >
                               <input 
                                   type="file" 
@@ -296,21 +391,21 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
                               {responseFile ? (
                                   <div className="text-green-700 animate-fadeIn">
-                                      <FileCheck size={40} className="mx-auto mb-2" />
-                                      <p className="font-bold text-sm">{responseFile.name}</p>
-                                      <p className="text-[10px] mt-1 uppercase font-bold">Versión detectada: {detectedVersion}</p>
+                                      <FileCheck size={48} className="mx-auto mb-3" />
+                                      <p className="font-bold text-sm truncate max-w-[300px]">{responseFile.name}</p>
+                                      <p className="text-[10px] mt-2 uppercase font-bold tracking-widest bg-white/50 px-2 py-1 rounded inline-block">Versión OK</p>
                                   </div>
                               ) : fileValidationError ? (
                                   <div className="text-red-600 animate-fadeIn">
-                                      <FileX size={40} className="mx-auto mb-2" />
-                                      <p className="text-xs font-bold">{fileValidationError}</p>
-                                      <p className="text-[10px] mt-2 text-slate-400">Haga clic para reintentar</p>
+                                      <FileX size={48} className="mx-auto mb-3" />
+                                      <p className="text-xs font-bold leading-relaxed">{fileValidationError}</p>
+                                      <p className="text-[10px] mt-4 text-slate-400 font-bold uppercase">Haga clic para reintentar</p>
                                   </div>
                               ) : (
                                   <div className="text-slate-400 group-hover:text-indigo-500">
-                                      <Upload size={40} className="mx-auto mb-2" />
-                                      <p className="text-sm font-bold">Seleccionar archivo</p>
-                                      <p className="text-[10px] mt-1">Debe cumplir con las reglas de versión</p>
+                                      <Upload size={48} className="mx-auto mb-3 transition-transform group-hover:-translate-y-1" />
+                                      <p className="text-sm font-bold">Subir archivo validado</p>
+                                      <p className="text-[10px] mt-1 text-slate-300">Debe coincidir con la regla de versión</p>
                                   </div>
                               )}
                           </div>
@@ -320,19 +415,19 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                           <button 
                             disabled={actionLoading}
                             onClick={() => setShowResponseModal(false)} 
-                            className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold text-sm"
+                            className="px-5 py-3 text-slate-500 hover:text-slate-800 font-bold text-sm transition-colors"
                           >
                             Cancelar
                           </button>
                           <button 
                               disabled={!responseFile || actionLoading}
                               onClick={handleConfirmAction}
-                              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white font-bold text-sm shadow-md transition-all
-                                  ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} 
-                                  disabled:opacity-50 disabled:cursor-not-allowed`}
+                              className={`flex items-center gap-2 px-8 py-3 rounded-xl text-white font-bold text-sm shadow-xl transition-all
+                                  ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700 shadow-green-100' : 'bg-red-600 hover:bg-red-700 shadow-red-100'} 
+                                  disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95`}
                           >
-                              {actionLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                              Confirmar y Guardar
+                              {actionLoading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                              Confirmar y Procesar
                           </button>
                       </div>
                   </div>
