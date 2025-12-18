@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   COORDINATOR = 'COORDINATOR',
@@ -9,25 +10,33 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  nickname?: string; // Short username
+  nickname?: string;
   role: UserRole;
   avatar: string;
   organization: string;
-  password?: string; // Added for mock auth
-  active?: boolean; // New field for logical status
+  password?: string;
+  active?: boolean;
+}
+
+export interface Referent {
+  id: string;
+  name: string;
+  email: string;
+  specialty: string;
+  organization: string;
 }
 
 export enum DocState {
-  NOT_STARTED = 'NOT_STARTED',           // 0.0 - 0% (Sin actividad)
-  INITIATED = 'INITIATED',               // 0.0 - 10%
-  IN_PROCESS = 'IN_PROCESS',             // 0.n - 30%
-  INTERNAL_REVIEW = 'INTERNAL_REVIEW',   // v0.n - 60%
-  SENT_TO_REFERENT = 'SENT_TO_REFERENT', // v1.n - 80%
-  REFERENT_REVIEW = 'REFERENT_REVIEW',   // v1.n.i - N/A
-  SENT_TO_CONTROL = 'SENT_TO_CONTROL',   // v1.nAR - 90%
-  CONTROL_REVIEW = 'CONTROL_REVIEW',     // v1.n.iAR - N/A
-  APPROVED = 'APPROVED',                 // v1.nACG - 100%
-  REJECTED = 'REJECTED'                  // Workflow Loopback
+  NOT_STARTED = 'NOT_STARTED',
+  INITIATED = 'INITIATED',
+  IN_PROCESS = 'IN_PROCESS',
+  INTERNAL_REVIEW = 'INTERNAL_REVIEW',
+  SENT_TO_REFERENT = 'SENT_TO_REFERENT',
+  REFERENT_REVIEW = 'REFERENT_REVIEW',
+  SENT_TO_CONTROL = 'SENT_TO_CONTROL',
+  CONTROL_REVIEW = 'CONTROL_REVIEW',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
 }
 
 export type DocType = 'AS IS' | 'FCE' | 'PM' | 'TO BE';
@@ -37,7 +46,7 @@ export interface DocFile {
   name: string;
   size: number;
   type: string;
-  url: string; // Blob URL in this mock
+  url: string;
   uploadedAt: string;
 }
 
@@ -53,105 +62,74 @@ export interface DocHistory {
   timestamp: string;
 }
 
-// New Interface for Inbox System
 export interface Notification {
   id: string;
-  userId: string; // Recipient
+  userId: string;
   documentId: string;
   type: 'ASSIGNMENT' | 'APPROVAL' | 'REJECTION' | 'COMMENT';
   title: string;
   message: string;
   isRead: boolean;
   timestamp: string;
-  actorName: string; // Who triggered it
+  actorName: string;
 }
 
 export interface Document {
   id: string;
   title: string;
   description: string;
-  
-  // Hierarchy Metadata
   project?: string;
   macroprocess?: string;
   process?: string;
   microprocess?: string;
-  docType?: DocType; // New field
-
+  docType?: DocType;
   authorId: string;
   authorName: string;
-  
-  assignedTo?: string; // Legacy/Primary Display
-  assignees: string[]; // Multi-user assignment support
-  assignedByName?: string; // Name of Admin who assigned
-  
+  assignedTo?: string;
+  assignees: string[];
+  assignedByName?: string;
   state: DocState;
   version: string;
   progress: number;
-  hasPendingRequest?: boolean; // Flag for Buffer visibility
-
+  hasPendingRequest?: boolean;
   files: DocFile[];
   createdAt: string;
   updatedAt: string;
 }
 
-// Assignment Module Types
-export interface AssignmentLog {
-  id: string;
-  documentId: string;
-  analystId: string;
-  assignedBy: string; // Admin ID
-  assignedAt: string;
-  reason?: string;
+export interface ProcessNode {
+  name: string;
+  docId: string;
+  assignees: string[];
+  referentIds?: string[]; // New field
+  requiredTypes: DocType[];
+  active?: boolean;
 }
 
-export interface AnalystWorkload {
-  analyst: User;
-  activeDocs: number;
-  completedDocs: number; // Approved
-  lastAssignment?: string;
+export interface FullHierarchy {
+  [project: string]: {
+    [macro: string]: {
+      [process: string]: ProcessNode[];
+    };
+  };
 }
 
+export interface UserHierarchy {
+  [project: string]: {
+    [macro: string]: {
+      [process: string]: string[];
+    };
+  };
+}
+
+// Added missing interface for filename parser results
 export interface ParsedFilenameResult {
   valido: boolean;
+  errores: string[];
   proyecto?: 'HPC' | 'HSR';
   microproceso?: string;
   tipo?: string;
   nomenclatura?: string;
   estado?: string;
   porcentaje?: number;
-  explicacion?: string;
-  errores: string[];
-}
-
-// Hierarchy Types for strict typing
-export interface UserHierarchy {
-  [project: string]: {
-    [macro: string]: {
-      [process: string]: string[]; // Array of microprocess names
-    };
-  };
-}
-
-export interface ProcessNode {
-  name: string;
-  docId: string; // This acts as the matrix ID
-  assignees: string[];
-  requiredTypes: DocType[]; // List of types defined in initial load
-  active?: boolean; // Soft Delete support
-}
-
-export interface FullHierarchy {
-  [project: string]: {
-    [macro: string]: {
-      [process: string]: ProcessNode[]; // Array of nodes with metadata
-    };
-  };
-}
-
-// Response for mock API
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
 }

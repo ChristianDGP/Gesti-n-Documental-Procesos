@@ -10,7 +10,8 @@ import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
 import AdminHierarchy from './views/AdminHierarchy'; 
 import AdminDatabase from './views/AdminDatabase';
-import Reports from './views/Reports'; // Import Reports View
+import AdminReferents from './views/AdminReferents';
+import Reports from './views/Reports'; 
 import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
 import Profile from './views/Profile';
@@ -24,7 +25,6 @@ const App: React.FC = () => {
 
     const handleLogout = async () => {
         await logoutUser(); 
-        // Eliminado window.location.reload() para permitir redirección suave por estado
     };
     
     if (cargando) {
@@ -41,11 +41,7 @@ const App: React.FC = () => {
     return (
         <HashRouter>
             <Routes>
-                <Route 
-                    path="/login" 
-                    element={!user ? <Login /> : <Navigate to="/" />} 
-                />
-                
+                <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
                 <Route
                     path="*"
                     element={
@@ -53,37 +49,25 @@ const App: React.FC = () => {
                             <Layout user={user} onLogout={handleLogout}>
                                 <Routes>
                                     <Route path="/" element={<Dashboard user={user} />} />
-                                    
                                     <Route path="/inbox" element={<Buffer user={user} />} />
                                     <Route path="/worklist" element={<WorkList user={user} />} />
                                     <Route path="/new" element={<CreateDocument user={user} />} />
                                     <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
-                                    
                                     <Route path="/profile" element={<Profile user={user} onUpdate={() => window.location.reload()} />} /> 
-
-                                    {/* Rutas de Administración */}
-                                    <Route 
-                                        path="/admin/users" 
-                                        element={user.role === UserRole.ADMIN ? <AdminUsers /> : <Navigate to="/" />} 
-                                    />
-                                    <Route 
-                                        path="/admin/assignments" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminAssignments user={user} /> : <Navigate to="/" />} 
-                                    />
-                                    <Route 
-                                        path="/admin/structure" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <AdminHierarchy user={user} /> : <Navigate to="/" />} 
-                                    />
-                                    {/* New Reports Route */}
-                                    <Route 
-                                        path="/admin/reports" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) ? <Reports user={user} /> : <Navigate to="/" />} 
-                                    />
-                                    
-                                    <Route 
-                                        path="/admin/database" 
-                                        element={user.role === UserRole.ADMIN ? <AdminDatabase /> : <Navigate to="/" />} 
-                                    />
+                                    {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
+                                      <>
+                                        <Route path="/admin/reports" element={<Reports user={user} />} />
+                                        <Route path="/admin/structure" element={<AdminHierarchy user={user} />} />
+                                        <Route path="/admin/assignments" element={<AdminAssignments user={user} />} />
+                                        <Route path="/admin/referents" element={<AdminReferents />} />
+                                      </>
+                                    )}
+                                    {user.role === UserRole.ADMIN && (
+                                        <>
+                                            <Route path="/admin/users" element={<AdminUsers />} />
+                                            <Route path="/admin/database" element={<AdminDatabase />} />
+                                        </>
+                                    )}
                                     <Route path="*" element={<Navigate to="/" />} />
                                 </Routes>
                             </Layout>

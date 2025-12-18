@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HierarchyService, UserService, NotificationService } from '../services/firebaseBackend';
 import { User, FullHierarchy, ProcessNode, DocType, UserRole } from '../types';
@@ -148,7 +147,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       if (!matrixKeyToUpdate) return;
 
       try {
-          await HierarchyService.updateMatrixAssignment(matrixKeyToUpdate, currentAssignees, user.id);
+          await HierarchyService.updateMatrixAssignment(matrixKeyToUpdate, currentAssignees);
           
           const addedAssignees = currentAssignees.filter(id => !originalAssignees.includes(id));
           if (addedAssignees.length > 0) {
