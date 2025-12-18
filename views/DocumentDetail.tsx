@@ -279,7 +279,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     const bodyRaw = `Estimada/o,
 Para vuestra aprobación, adjunto el Informe "${doc.project} - ${doc.macroprocess || ''} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}",
 
-Atento a comentarios
+Atento a los comentarios
 Saludos
 
 ${user.name}`;
@@ -299,7 +299,7 @@ Para vuestra aprobación, adjunto el Informe:
 
 - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}
 
-Atento a comentarios
+Atento a los comentarios
 Saludos
 
 ${user.name}`;
@@ -326,6 +326,7 @@ Adjunto el Informe:
 
 Estado: ${estadoLabel}
 
+Atento a los comentarios
 Saludos
 
 ${user.name}`;
@@ -408,7 +409,7 @@ ${user.name}`;
                         {canNotifyAuthor && <button onClick={handleNotifyAnalyst} className="flex items-center px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium border border-slate-200 shadow-sm"><Mail size={16} className="mr-2" /> Notificar Analista</button>}
                         {canNotifyExternal && (
                             <button onClick={handleNotifyExternal} className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium shadow-sm border border-purple-700 transition-colors">
-                                <ExternalLink size={16} className="mr-2" /> Notificar Referentes ({referentEmails.length})
+                                <ExternalLink size={16} className="mr-2" /> Notificar Referentes
                             </button>
                         )}
                         {canRestart && <button onClick={() => handleActionClick('ADVANCE')} disabled={actionLoading} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm">Reiniciar Flujo</button>}
