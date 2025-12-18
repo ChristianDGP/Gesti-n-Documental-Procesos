@@ -41,6 +41,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     </Link>
   );
 
+  const canAccessAdmin = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.role === UserRole.ANALYST;
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {isSidebarOpen && (
@@ -63,13 +65,20 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
             <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
             <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
-            {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
+            
+            {canAccessAdmin && (
               <>
                 <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Administración</div>
-                <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />
-                <NavItem to="/admin/structure" icon={Network} label="Estructura" />
-                <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
+                {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
+                    <>
+                        <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />
+                        <NavItem to="/admin/structure" icon={Network} label="Estructura" />
+                        <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
+                    </>
+                )}
+                {/* Referentes ahora es visible para Analistas también */}
                 <NavItem to="/admin/referents" icon={UserCheck} label="Referentes" />
+                
                 {user.role === UserRole.ADMIN && (
                     <>
                         <NavItem to="/admin/database" icon={Database} label="Base de Datos" />

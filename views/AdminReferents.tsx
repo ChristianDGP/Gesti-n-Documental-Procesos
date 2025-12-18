@@ -1,14 +1,20 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ReferentService, HierarchyService } from '../services/firebaseBackend';
-import { Referent, FullHierarchy, ProcessNode } from '../types';
+import { Referent, FullHierarchy, ProcessNode, User, UserRole, UserHierarchy } from '../types';
 import { 
     UserPlus, Search, Edit, Trash2, X, Save, Building, Mail, Briefcase, 
-    Loader2, AlertCircle, FolderTree, Layers, Network, CheckSquare, Square, ChevronRight
+    Loader2, AlertCircle, FolderTree, Layers, Network, CheckSquare, Square, ChevronRight, Lock
 } from 'lucide-react';
 
-const AdminReferents: React.FC = () => {
+interface Props {
+    user: User;
+}
+
+const AdminReferents: React.FC<Props> = ({ user }) => {
     const [referents, setReferents] = useState<Referent[]>([]);
-    const [hierarchy, setHierarchy] = useState<FullHierarchy>({});
+    const [fullHierarchy, setFullHierarchy] = useState<FullHierarchy>({});
+    const [userHierarchy, setUserHierarchy] = useState<UserHierarchy | null>(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -27,20 +33,38 @@ const AdminReferents: React.FC = () => {
     const [linkMicroSearch, setLinkMicroSearch] = useState('');
     const [selectedMicroIds, setSelectedMicroIds] = useState<string[]>([]);
 
+    const isAnalyst = user.role === UserRole.ANALYST;
+
     useEffect(() => {
         loadData();
-    }, []);
+    }, [user.id]);
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const [r, h] = await Promise.all([
+            const [r, fh] = await Promise.all([
                 ReferentService.getAll(),
                 HierarchyService.getFullHierarchy()
             ]);
-            setReferents(r);
-            setHierarchy(h);
-        } catch (e) { console.error(e); } finally { setLoading(false); }
+            
+            setFullHierarchy(fh);
+
+            if (isAnalyst) {
+                const uh = await HierarchyService.getUserHierarchy(user.id);
+                setUserHierarchy(uh);
+                
+                // Filtramos los referentes para que el analista solo vea los de sus proyectos asignados
+                const userProjects = Object.keys(uh);
+                setReferents(r.filter(ref => userProjects.includes(ref.organization)));
+            } else {
+                setReferents(r);
+                setUserHierarchy(null);
+            }
+        } catch (e) { 
+            console.error(e); 
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     const handleEdit = (r: Referent) => {
@@ -52,10 +76,10 @@ const AdminReferents: React.FC = () => {
         
         // Cargar microprocesos vinculados actualmente
         const linkedIds: string[] = [];
-        Object.keys(hierarchy).forEach(proj => {
-            Object.keys(hierarchy[proj]).forEach(macro => {
-                Object.keys(hierarchy[proj][macro]).forEach(proc => {
-                    hierarchy[proj][macro][proc].forEach(node => {
+        Object.keys(fullHierarchy).forEach(proj => {
+            Object.keys(fullHierarchy[proj]).forEach(macro => {
+                Object.keys(fullHierarchy[proj][macro]).forEach(proc => {
+                    fullHierarchy[proj][macro][proc].forEach(node => {
                         if (node.referentIds?.includes(r.id)) linkedIds.push(node.docId);
                     });
                 });
@@ -73,6 +97,13 @@ const AdminReferents: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Seguridad extra: Validar que el analista no esté guardando en un proyecto no permitido
+        if (isAnalyst && userHierarchy && !Object.keys(userHierarchy).includes(organization)) {
+            alert("No tiene permisos para asignar referentes a este proyecto.");
+            return;
+        }
+
         const data = { name, email, specialty, organization };
         try {
             let refId = editingId;
@@ -106,13 +137,25 @@ const AdminReferents: React.FC = () => {
     const filteredMicros = useMemo(() => {
         let list: { project: string, macro: string, process: string, node: ProcessNode }[] = [];
         
-        Object.keys(hierarchy).forEach(proj => {
+        // Usamos la jerarquía filtrada si es analista para el buscador de micros
+        const sourceHierarchy = (isAnalyst && userHierarchy) ? fullHierarchy : fullHierarchy;
+
+        Object.keys(sourceHierarchy).forEach(proj => {
+            // Si es analista, solo mostramos sus proyectos
+            if (isAnalyst && userHierarchy && !userHierarchy[proj]) return;
+            
             if (linkProject && proj !== linkProject) return;
-            Object.keys(hierarchy[proj]).forEach(macro => {
+            
+            Object.keys(sourceHierarchy[proj]).forEach(macro => {
                 if (linkMacro && macro !== linkMacro) return;
-                Object.keys(hierarchy[proj][macro]).forEach(proc => {
+                Object.keys(sourceHierarchy[proj][macro]).forEach(proc => {
                     if (linkProcess && proc !== linkProcess) return;
-                    hierarchy[proj][macro][proc].forEach(node => {
+                    sourceHierarchy[proj][macro][proc].forEach(node => {
+                        // Si es analista, solo mostramos los micros donde él mismo está asignado
+                        if (isAnalyst && userHierarchy && (!userHierarchy[proj][macro] || !userHierarchy[proj][macro][proc] || !userHierarchy[proj][macro][proc].includes(node.name))) {
+                            return;
+                        }
+
                         const matchesSearch = !linkMicroSearch || node.name.toLowerCase().includes(linkMicroSearch.toLowerCase());
                         if (matchesSearch) {
                             list.push({ project: proj, macro, process: proc, node });
@@ -122,11 +165,15 @@ const AdminReferents: React.FC = () => {
             });
         });
         return list;
-    }, [hierarchy, linkProject, linkMacro, linkProcess, linkMicroSearch]);
+    }, [fullHierarchy, userHierarchy, isAnalyst, linkProject, linkMacro, linkProcess, linkMicroSearch]);
 
-    const availableProjects = Object.keys(hierarchy).sort();
-    const availableMacros = linkProject ? Object.keys(hierarchy[linkProject] || {}).sort() : [];
-    const availableProcesses = (linkProject && linkMacro) ? Object.keys(hierarchy[linkProject][linkMacro] || {}).sort() : [];
+    const availableProjects = useMemo(() => {
+        if (isAnalyst && userHierarchy) return Object.keys(userHierarchy).sort();
+        return Object.keys(fullHierarchy).sort();
+    }, [fullHierarchy, userHierarchy, isAnalyst]);
+
+    const availableMacros = linkProject ? Object.keys(fullHierarchy[linkProject] || {}).sort() : [];
+    const availableProcesses = (linkProject && linkMacro) ? Object.keys(fullHierarchy[linkProject][linkMacro] || {}).sort() : [];
 
     const handleToggleMicro = (docId: string) => {
         setSelectedMicroIds(prev => 
@@ -139,14 +186,18 @@ const AdminReferents: React.FC = () => {
         r.specialty.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    if (loading && referents.length === 0) return <div className="p-8 text-center text-slate-500"><Loader2 className="animate-spin mx-auto mb-2" /> Cargando referentes...</div>;
+    if (loading && referents.length === 0) return <div className="p-8 text-center text-slate-500"><Loader2 className="animate-spin mx-auto mb-2" /> Cargando referentes y permisos...</div>;
 
     return (
         <div className="space-y-6 pb-12">
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Mantenedor de Referentes</h1>
-                    <p className="text-slate-500">Gestión de expertos técnicos y sus asignaciones a microprocesos.</p>
+                    <p className="text-slate-500">
+                        {isAnalyst 
+                          ? "Gestión de expertos técnicos para tus proyectos asignados." 
+                          : "Gestión global de expertos técnicos y sus asignaciones."}
+                    </p>
                 </div>
                 <button 
                     onClick={() => { resetForm(); setShowForm(true); }}
@@ -155,6 +206,13 @@ const AdminReferents: React.FC = () => {
                     <UserPlus size={18} /> Nuevo Referente
                 </button>
             </div>
+
+            {isAnalyst && (
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center gap-3 text-amber-800 text-sm">
+                    <Lock size={18} className="text-amber-600 flex-shrink-0" />
+                    <span>Como <b>Analista</b>, solo puedes gestionar referentes dentro de los proyectos y procesos que tienes asignados.</span>
+                </div>
+            )}
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
                 <div className="relative max-w-md">
@@ -189,6 +247,9 @@ const AdminReferents: React.FC = () => {
                         </div>
                     </div>
                 ))}
+                {filteredReferents.length === 0 && (
+                    <div className="col-span-full py-12 text-center text-slate-400 italic">No se encontraron referentes en tu ámbito de gestión.</div>
+                )}
             </div>
 
             {showForm && (
@@ -223,7 +284,7 @@ const AdminReferents: React.FC = () => {
                                         <select value={organization} onChange={(e) => setOrganization(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" required>
                                             <option value="">Seleccione Proyecto</option>
                                             {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
-                                            <option value="GENERAL">GENERAL</option>
+                                            {!isAnalyst && <option value="GENERAL">GENERAL</option>}
                                         </select>
                                     </div>
                                 </div>
@@ -242,7 +303,7 @@ const AdminReferents: React.FC = () => {
                                         <div className="space-y-1">
                                             <label className="block text-[10px] font-bold text-slate-400 uppercase">Proyecto</label>
                                             <select value={linkProject} onChange={(e) => { setLinkProject(e.target.value); setLinkMacro(''); setLinkProcess(''); }} className="w-full text-[10px] p-1.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-indigo-400">
-                                                <option value="">TODOS</option>
+                                                <option value="">{isAnalyst ? "TUS PROYECTOS" : "TODOS"}</option>
                                                 {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
                                             </select>
                                         </div>
