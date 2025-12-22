@@ -8,7 +8,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, User as UserIcon, ArrowRight, Target, Info, TrendingUp
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, User as UserIcon, ArrowRight, Target, Info, TrendingUp, AlertTriangle
 } from 'lucide-react';
 
 interface Props {
@@ -115,12 +115,35 @@ const Reports: React.FC<Props> = ({ user }) => {
     }, [unifiedData, filterProject, filterAnalyst]);
 
     const kpis = useMemo(() => {
-        const approved = filteredDocs.filter(d => d.state === DocState.APPROVED).length;
+        const now = new Date().getTime();
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
+        const approved = filteredDocs.filter(d => d.state === DocState.APPROVED);
+        
+        // Alertas > 30 días
+        const overdueInternal = filteredDocs.filter(d => 
+            d.state === DocState.INTERNAL_REVIEW && 
+            (now - new Date(d.updatedAt).getTime()) > thirtyDaysMs
+        );
+        
+        const overdueReferent = filteredDocs.filter(d => 
+            (d.state === DocState.SENT_TO_REFERENT || d.state === DocState.REFERENT_REVIEW) && 
+            (now - new Date(d.updatedAt).getTime()) > thirtyDaysMs
+        );
+
+        const overdueControl = filteredDocs.filter(d => 
+            (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) && 
+            (now - new Date(d.updatedAt).getTime()) > thirtyDaysMs
+        );
+
         return { 
             total: filteredDocs.length, 
-            approved, 
-            totalIds: filteredDocs.map(d => d.id), 
-            approvedIds: filteredDocs.filter(d => d.state === DocState.APPROVED).map(d => d.id) 
+            totalIds: filteredDocs.map(d => d.id),
+            approved: approved.length, 
+            approvedIds: approved.map(d => d.id),
+            overdueInternalIds: overdueInternal.map(d => d.id),
+            overdueReferentIds: overdueReferent.map(d => d.id),
+            overdueControlIds: overdueControl.map(d => d.id)
         };
     }, [filteredDocs]);
 
@@ -198,9 +221,9 @@ const Reports: React.FC<Props> = ({ user }) => {
     const handleLegendClick = (o: any) => {
         const { dataKey } = o;
         if (activeType === dataKey) {
-            setActiveType(null); // Si ya estaba activo, mostramos todos
+            setActiveType(null); // Segundo clic: mostrar todos
         } else {
-            setActiveType(dataKey); // Si no, mostramos solo el seleccionado
+            setActiveType(dataKey); // Primer clic: mostrar solo este
         }
     };
 
@@ -228,10 +251,41 @@ const Reports: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard title="Universo Total" value={kpis.total} icon={FileText} color="indigo" sub="Requeridos Matriz" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
-                <KPICard title="Meta Cumplida" value={kpis.approved} icon={CheckCircle} color="green" sub="Total Terminados" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
-                <div className="lg:col-span-2 hidden lg:block"></div>
+            {/* GRILLA DE KPIS ORDENADA Y RENOMBRADA */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub="Universo Matriz" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
+                
+                <KPICard 
+                    title="Alertas Rev. Interna" 
+                    value={kpis.overdueInternalIds.length} 
+                    icon={AlertTriangle} 
+                    color="amber" 
+                    sub="> 30 días en v0.n" 
+                    onClick={() => goToDashboard(kpis.overdueInternalIds)} 
+                    canClick={kpis.overdueInternalIds.length > 0} 
+                />
+                
+                <KPICard 
+                    title="Alertas Referente" 
+                    value={kpis.overdueReferentIds.length} 
+                    icon={AlertTriangle} 
+                    color="amber" 
+                    sub="> 30 días en v1.n" 
+                    onClick={() => goToDashboard(kpis.overdueReferentIds)} 
+                    canClick={kpis.overdueReferentIds.length > 0} 
+                />
+                
+                <KPICard 
+                    title="Alerta Control de Gestión" 
+                    value={kpis.overdueControlIds.length} 
+                    icon={AlertTriangle} 
+                    color="amber" 
+                    sub="> 30 días en v1.nAR" 
+                    onClick={() => goToDashboard(kpis.overdueControlIds)} 
+                    canClick={kpis.overdueControlIds.length > 0} 
+                />
+
+                <KPICard title="Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Meta Cumplida" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
             </div>
 
             {/* SECCIÓN 1: CUMPLIMIENTO POR TIPO */}
@@ -295,10 +349,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            {/* SECCIÓN 3: EVOLUCIÓN MENSUAL (ANCHO COMPLETO - TERCERA POSICIÓN) */}
+            {/* SECCIÓN 3: EVOLUCIÓN MENSUAL (ANCHO COMPLETO) */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><TrendingUp size={16} /> Evolución Mensual</h3>
-                <p className="text-xs text-slate-500 mb-6">Velocidad de cierre: Cantidad de documentos aprobados mensualmente por tipo (Clic en leyenda para filtrar).</p>
+                <p className="text-xs text-slate-500 mb-6">Velocidad de cierre: Cantidad de documentos aprobados mensualmente por tipo (Clic en leyenda para aislar).</p>
                 <div className="h-[350px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={evolutionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -333,7 +387,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 wrapperStyle={{ cursor: 'pointer' }}
                             />
                             
-                            {/* Control de visibilidad mediante el prop hide */}
                             <Area 
                                 type="monotone" 
                                 dataKey="AS IS" 
@@ -383,7 +436,11 @@ const Reports: React.FC<Props> = ({ user }) => {
 };
 
 const KPICard = ({ title, value, icon: Icon, color, sub, onClick, canClick }: any) => {
-    const colorClasses: Record<string, string> = { indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100', green: 'bg-green-50 text-green-600 border-green-100' };
+    const colorClasses: Record<string, string> = { 
+        indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100', 
+        green: 'bg-green-50 text-green-600 border-green-100',
+        amber: 'bg-amber-50 text-amber-600 border-amber-100'
+    };
     return (
         <div onClick={canClick ? onClick : undefined} className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${colorClasses[color] || colorClasses.indigo} ${canClick ? 'cursor-pointer hover:shadow-md transition-all active:scale-95' : ''}`}>
             <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold uppercase tracking-wider opacity-70">{title}</span><Icon size={18} /></div>
