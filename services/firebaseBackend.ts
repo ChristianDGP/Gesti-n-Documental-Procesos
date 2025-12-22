@@ -167,6 +167,11 @@ export const HistoryService = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => doc.data() as DocHistory).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   },
+  getAll: async (): Promise<DocHistory[]> => {
+    const q = query(collection(db, "history"), orderBy("timestamp", "desc"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => doc.data() as DocHistory);
+  },
   log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string) => {
     const newEntry: DocHistory = { id: `hist-${Date.now()}`, documentId: docId, userId: user.id, userName: user.name, action, previousState: prev, newState: next, comment, timestamp: new Date().toISOString() };
     await addDoc(collection(db, "history"), newEntry);
