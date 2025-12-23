@@ -19,11 +19,11 @@ interface ReportDoc extends Document {
 }
 
 const STATE_COLOR_MAP: Record<string, string> = {
-    'No Iniciado': '#e2e8f0',
+    'No Iniciado': '#94a3b8',
     'En Proceso': '#3b82f6',
-    'En Revisión': '#a855f7',
-    'Rechazado': '#ef4444',
-    'Aprobado': '#22c55e'
+    'Referente': '#a855f7',
+    'Control': '#f97316',
+    'Terminados': '#22c55e'
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -150,16 +150,37 @@ const Reports: React.FC<Props> = ({ user }) => {
     }, [filteredDocs]);
 
     const stateData = useMemo(() => {
-        const counts: Record<string, number> = { 'No Iniciado': 0, 'En Proceso': 0, 'En Revisión': 0, 'Rechazado': 0, 'Aprobado': 0 };
+        const stats = {
+            notStarted: 0,
+            inProcess: 0,
+            referent: 0,
+            control: 0,
+            finished: 0
+        };
+
         filteredDocs.forEach(d => {
-            let key = 'En Proceso';
-            if (d.state === DocState.NOT_STARTED) key = 'No Iniciado';
-            else if (d.state === DocState.APPROVED) key = 'Aprobado';
-            else if (d.state === DocState.REJECTED) key = 'Rechazado';
-            else if ([DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW].includes(d.state)) key = 'En Revisión';
-            counts[key]++;
+            if (d.state === DocState.NOT_STARTED) {
+                stats.notStarted++;
+            } else if (d.state === DocState.APPROVED) {
+                stats.finished++;
+            } else if (d.state === DocState.SENT_TO_REFERENT || d.state === DocState.REFERENT_REVIEW) {
+                stats.referent++;
+            } else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) {
+                stats.control++;
+            } else {
+                // Initiated, In process, Internal Review, Rejected
+                stats.inProcess++;
+            }
         });
-        return Object.keys(counts).filter(k => counts[k] > 0).map(name => ({ name, value: counts[name] }));
+
+        // Este array define el orden exacto de los segmentos del gráfico
+        return [
+          { name: 'No Iniciado', value: stats.notStarted },
+          { name: 'En Proceso', value: stats.inProcess },
+          { name: 'Referente', value: stats.referent },
+          { name: 'Control', value: stats.control },
+          { name: 'Terminados', value: stats.finished }
+        ];
     }, [filteredDocs]);
 
     const analystData = useMemo(() => {
@@ -332,11 +353,17 @@ const Reports: React.FC<Props> = ({ user }) => {
                     <div className="h-[250px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
+                                {/* Corrected TS error: payload does not exist on Legend, so we pass all stateData to Pie so Legend generates automatically */}
                                 <Pie data={stateData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                     {stateData.map((entry, index) => <Cell key={index} fill={STATE_COLOR_MAP[entry.name] || '#94a3b8'} />)}
                                 </Pie>
                                 <Tooltip />
-                                <Legend />
+                                <Legend 
+                                    layout="horizontal" 
+                                    align="center" 
+                                    verticalAlign="bottom" 
+                                    iconType="circle"
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
