@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   COORDINATOR = 'COORDINATOR',
@@ -16,6 +15,8 @@ export interface User {
   organization: string;
   password?: string;
   active?: boolean;
+  canAccessReports?: boolean;
+  canAccessReferents?: boolean;
 }
 
 export interface Referent {

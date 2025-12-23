@@ -55,13 +55,19 @@ const App: React.FC = () => {
                                     <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
                                     <Route path="/profile" element={<Profile user={user} onUpdate={() => window.location.reload()} />} /> 
                                     
-                                    {/* Rutas compartidas entre Admin, Coordinador y Analista (Gestión de Referentes y Reportes) */}
-                                    {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.role === UserRole.ANALYST) && (
-                                        <>
-                                            <Route path="/admin/referents" element={<AdminReferents user={user} />} />
-                                            <Route path="/admin/reports" element={<Reports user={user} />} />
-                                        </>
-                                    )}
+                                    {/* Rutas con acceso condicional para Analistas */}
+                                    <Route 
+                                        path="/admin/referents" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessReferents)) 
+                                            ? <AdminReferents user={user} /> 
+                                            : <Navigate to="/" />} 
+                                    />
+                                    <Route 
+                                        path="/admin/reports" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessReports)) 
+                                            ? <Reports user={user} /> 
+                                            : <Navigate to="/" />} 
+                                    />
 
                                     {/* Rutas exclusivas de Coordinación y Admin */}
                                     {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (

@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
-import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2 } from 'lucide-react';
 
 const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   
   // Form State
   const [name, setName] = useState('');
@@ -17,6 +18,8 @@ const AdminUsers: React.FC = () => {
   const [role, setRole] = useState<UserRole>(UserRole.ANALYST);
   const [organization, setOrganization] = useState('');
   const [password, setPassword] = useState('');
+  const [canAccessReports, setCanAccessReports] = useState(false);
+  const [canAccessReferents, setCanAccessReferents] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -27,6 +30,21 @@ const AdminUsers: React.FC = () => {
     const data = await UserService.getAll();
     setUsers(data);
     setLoading(false);
+  };
+
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents') => {
+      setUpdatingId(`${user.id}-${field}`);
+      const newValue = !user[field];
+      try {
+          await UserService.update(user.id, { [field]: newValue });
+          // Actualización optimista local
+          setUsers(prev => prev.map(u => u.id === user.id ? { ...u, [field]: newValue } : u));
+      } catch (error) {
+          console.error(error);
+          alert('Error al actualizar permisos');
+      } finally {
+          setUpdatingId(null);
+      }
   };
 
   const handleDelete = async (id: string) => {
@@ -60,6 +78,8 @@ const AdminUsers: React.FC = () => {
       setRole(user.role);
       setOrganization(user.organization);
       setPassword(''); 
+      setCanAccessReports(user.canAccessReports || false);
+      setCanAccessReferents(user.canAccessReferents || false);
       setShowForm(true);
   };
 
@@ -92,6 +112,8 @@ const AdminUsers: React.FC = () => {
                 nickname: nickname || undefined,
                 role,
                 organization,
+                canAccessReports: role === UserRole.ANALYST ? canAccessReports : true,
+                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : true
             };
             if (password) {
                 updatePayload.password = password;
@@ -106,7 +128,9 @@ const AdminUsers: React.FC = () => {
                 role,
                 organization,
                 password: password || undefined,
-                active: true
+                active: true,
+                canAccessReports: role === UserRole.ANALYST ? canAccessReports : true,
+                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : true
             } as User);
         }
         
@@ -126,6 +150,8 @@ const AdminUsers: React.FC = () => {
       setOrganization('');
       setRole(UserRole.ANALYST);
       setPassword('');
+      setCanAccessReports(false);
+      setCanAccessReferents(false);
   };
 
   return (
@@ -176,6 +202,42 @@ const AdminUsers: React.FC = () => {
                             <option value={UserRole.ADMIN}>Administrador</option>
                         </select>
                     </div>
+
+                    {/* SECCIÓN DE PERMISOS PARA ANALISTAS */}
+                    {role === UserRole.ANALYST && (
+                        <div className="md:col-span-2 bg-indigo-50 p-4 rounded-lg border border-indigo-100 mt-2">
+                            <h3 className="text-xs font-bold text-indigo-900 uppercase mb-3 flex items-center gap-2">
+                                <Shield size={14} /> Permisos de Analista (Control de Acceso)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={canAccessReports}
+                                        onChange={(e) => setCanAccessReports(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <PieChart size={16} className="text-indigo-500" />
+                                        <span className="text-sm font-medium text-slate-700">Habilitar Vista de Reportes</span>
+                                    </div>
+                                </label>
+                                <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={canAccessReferents}
+                                        onChange={(e) => setCanAccessReferents(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <UserCheck size={16} className="text-indigo-500" />
+                                        <span className="text-sm font-medium text-slate-700">Habilitar Vista de Referentes</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="md:col-span-2 flex justify-end mt-2">
                         <button type="submit" className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
                             {editingUserId ? 'Guardar Cambios' : 'Crear Usuario'}
@@ -191,7 +253,7 @@ const AdminUsers: React.FC = () => {
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                         <tr>
                             <th className="px-6 py-3">Usuario</th>
-                            <th className="px-6 py-3">Nickname</th>
+                            <th className="px-6 py-3">Permisos</th>
                             <th className="px-6 py-3 text-center">Estado</th>
                             <th className="px-6 py-3">Rol</th>
                             <th className="px-6 py-3">Organización</th>
@@ -208,8 +270,34 @@ const AdminUsers: React.FC = () => {
                                         <p className="text-xs text-slate-500">{u.email}</p>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 font-mono text-slate-600">
-                                    {u.nickname || '-'}
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                        {/* BOTÓN REPORTE */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessReports')}
+                                            disabled={updatingId === `${u.id}-canAccessReports`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessReports !== false 
+                                                    ? 'bg-green-50 text-green-600 hover:bg-green-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessReports !== false ? "Deshabilitar Reportes" : "Habilitar Reportes"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessReports` ? <Loader2 size={16} className="animate-spin" /> : <PieChart size={16} />}
+                                        </button>
+
+                                        {/* BOTÓN REFERENTES */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessReferents')}
+                                            disabled={updatingId === `${u.id}-canAccessReferents`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessReferents !== false 
+                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessReferents !== false ? "Deshabilitar Referentes" : "Habilitar Referentes"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessReferents` ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                                        </button>
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${u.active !== false ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-slate-200 text-slate-500 border border-slate-300'}`}>
@@ -259,13 +347,6 @@ const AdminUsers: React.FC = () => {
                 </table>
             </div>
         </div>
-        
-        {users.some(u => u.active === false) && (
-            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 text-xs">
-                <AlertCircle size={16} />
-                <span>Los usuarios <b>Inactivos</b> no pueden iniciar sesión ni realizar gestiones en el sistema.</span>
-            </div>
-        )}
     </div>
   );
 };

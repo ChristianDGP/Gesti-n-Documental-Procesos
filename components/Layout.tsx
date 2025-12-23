@@ -41,7 +41,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     </Link>
   );
 
-  const canAccessAdmin = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.role === UserRole.ANALYST;
+  const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
+  
+  // Permisos condicionales para Analista
+  const canAccessReports = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReports);
+  const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -66,18 +70,19 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
             <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
             
-            {canAccessAdmin && (
+            {(canAccessReports || canAccessReferents || isAdminOrCoord) && (
               <>
                 <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Administración</div>
-                <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />
-                {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
+                {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
+                
+                {isAdminOrCoord && (
                     <>
                         <NavItem to="/admin/structure" icon={Network} label="Estructura" />
                         <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
                     </>
                 )}
-                {/* Referentes ahora es visible para Analistas también */}
-                <NavItem to="/admin/referents" icon={UserCheck} label="Referentes" />
+                
+                {canAccessReferents && <NavItem to="/admin/referents" icon={UserCheck} label="Referentes" />}
                 
                 {user.role === UserRole.ADMIN && (
                     <>
