@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
@@ -8,7 +7,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, User as UserIcon, ArrowRight, Target, Info, TrendingUp, AlertTriangle
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, User as UserIcon, ArrowRight, Target, Info, TrendingUp, AlertTriangle, CircleDashed
 } from 'lucide-react';
 
 interface Props {
@@ -118,6 +117,7 @@ const Reports: React.FC<Props> = ({ user }) => {
         const now = new Date().getTime();
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
 
+        const notStarted = filteredDocs.filter(d => d.state === DocState.NOT_STARTED);
         const approved = filteredDocs.filter(d => d.state === DocState.APPROVED);
         
         // Alertas > 30 días
@@ -139,6 +139,8 @@ const Reports: React.FC<Props> = ({ user }) => {
         return { 
             total: filteredDocs.length, 
             totalIds: filteredDocs.map(d => d.id),
+            notStarted: notStarted.length,
+            notStartedIds: notStarted.map(d => d.id),
             approved: approved.length, 
             approvedIds: approved.map(d => d.id),
             overdueInternalIds: overdueInternal.map(d => d.id),
@@ -251,10 +253,20 @@ const Reports: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            {/* GRILLA DE KPIS ORDENADA Y RENOMBRADA */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* GRILLA DE KPIS ORDENADA Y RENOMBRADA CON NO INICIADO */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub="Universo Matriz" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
                 
+                <KPICard 
+                    title="No Iniciados" 
+                    value={kpis.notStarted} 
+                    icon={CircleDashed} 
+                    color="slate" 
+                    sub="Pendiente Inicio" 
+                    onClick={() => goToDashboard(kpis.notStartedIds)} 
+                    canClick={kpis.notStarted > 0} 
+                />
+
                 <KPICard 
                     title="Alertas Rev. Interna" 
                     value={kpis.overdueInternalIds.length} 
@@ -439,7 +451,8 @@ const KPICard = ({ title, value, icon: Icon, color, sub, onClick, canClick }: an
     const colorClasses: Record<string, string> = { 
         indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100', 
         green: 'bg-green-50 text-green-600 border-green-100',
-        amber: 'bg-amber-50 text-amber-600 border-amber-100'
+        amber: 'bg-amber-50 text-amber-600 border-amber-100',
+        slate: 'bg-slate-50 text-slate-600 border-slate-100'
     };
     return (
         <div onClick={canClick ? onClick : undefined} className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${colorClasses[color] || colorClasses.indigo} ${canClick ? 'cursor-pointer hover:shadow-md transition-all active:scale-95' : ''}`}>
