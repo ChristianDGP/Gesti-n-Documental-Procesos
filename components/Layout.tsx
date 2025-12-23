@@ -69,9 +69,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             {canAccessAdmin && (
               <>
                 <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Administración</div>
+                <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />
                 {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
                     <>
-                        <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />
                         <NavItem to="/admin/structure" icon={Network} label="Estructura" />
                         <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
                     </>

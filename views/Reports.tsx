@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
@@ -35,6 +36,8 @@ const TYPE_COLORS: Record<string, string> = {
 
 const Reports: React.FC<Props> = ({ user }) => {
     const navigate = useNavigate();
+    const isAnalyst = user.role === UserRole.ANALYST;
+
     const [realDocs, setRealDocs] = useState<Document[]>([]);
     const [history, setHistory] = useState<DocHistory[]>([]);
     const [hierarchy, setHierarchy] = useState<FullHierarchy>({});
@@ -42,7 +45,8 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     
     const [filterProject, setFilterProject] = useState('');
-    const [filterAnalyst, setFilterAnalyst] = useState('');
+    // Si es analista, el filtro por analista se bloquea a su propio ID
+    const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
 
     // Estado para controlar la visibilidad por tipo en el gráfico de áreas
     const [activeType, setActiveType] = useState<string | null>(null);
@@ -109,6 +113,7 @@ const Reports: React.FC<Props> = ({ user }) => {
     const filteredDocs = useMemo(() => {
         let docs = unifiedData;
         if (filterProject) docs = docs.filter(d => d.project === filterProject);
+        // El filtro de analista siempre se aplica
         if (filterAnalyst) docs = docs.filter(d => d.assignees?.includes(filterAnalyst));
         return docs;
     }, [unifiedData, filterProject, filterAnalyst]);
@@ -258,25 +263,33 @@ const Reports: React.FC<Props> = ({ user }) => {
         <div className="space-y-6 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><LayoutDashboard className="text-indigo-600" /> Reportes de Gestión</h1>
-                    <p className="text-slate-500">Métricas institucionales de cumplimiento y cierre de procesos.</p>
+                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                        <LayoutDashboard className="text-indigo-600" /> 
+                        {isAnalyst ? 'Mi Reporte de Gestión' : 'Reportes de Gestión'}
+                    </h1>
+                    <p className="text-slate-500">
+                        {isAnalyst ? 'Resumen de mi desempeño y cumplimiento institucional.' : 'Métricas institucionales de cumplimiento y cierre de procesos.'}
+                    </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
                     <Filter size={16} className="text-slate-400 ml-2" />
-                    <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="bg-transparent text-sm font-medium text-slate-700 outline-none p-1 min-w-[150px] border-r border-slate-100">
+                    <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className={`bg-transparent text-sm font-medium text-slate-700 outline-none p-1 min-w-[150px] ${!isAnalyst ? 'border-r border-slate-100' : ''}`}>
                         <option value="">Todos los Proyectos</option>
                         {Array.from(new Set(unifiedData.map(d => d.project).filter(Boolean))).map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
-                    <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="bg-transparent text-sm font-medium text-slate-700 outline-none p-1 min-w-[150px]">
-                        <option value="">Todos los Analistas</option>
-                        {users.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
+                    
+                    {!isAnalyst && (
+                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="bg-transparent text-sm font-medium text-slate-700 outline-none p-1 min-w-[150px]">
+                            <option value="">Todos los Analistas</option>
+                            {users.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                    )}
                 </div>
             </div>
 
-            {/* GRILLA DE KPIS ORDENADA Y RENOMBRADA CON NO INICIADO */}
+            {/* GRILLA DE KPIS */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub="Universo Matriz" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
+                <KPICard title="Asignados" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Universo Matriz"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
                 
                 <KPICard 
                     title="No Iniciados" 
@@ -324,7 +337,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             {/* SECCIÓN 1: CUMPLIMIENTO POR TIPO */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><Target size={16} /> Cumplimiento por Tipo de Documento</h3>
-                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total requerido.</p>
+                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total asignado.</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     {typeComplianceData.map((item) => (
                         <div key={item.type} className="flex flex-col items-center">
@@ -347,13 +360,12 @@ const Reports: React.FC<Props> = ({ user }) => {
             </div>
 
             {/* SECCIÓN 2: DISTRIBUCIÓN Y PRODUCTIVIDAD */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-1">
+            <div className={`grid grid-cols-1 ${isAnalyst ? '' : 'lg:grid-cols-3'} gap-6`}>
+                <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${isAnalyst ? '' : 'lg:col-span-1'}`}>
                     <h3 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><Briefcase size={16} /> Distribución por Estado</h3>
                     <div className="h-[250px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                {/* Corrected TS error: payload does not exist on Legend, so we pass all stateData to Pie so Legend generates automatically */}
                                 <Pie data={stateData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                     {stateData.map((entry, index) => <Cell key={index} fill={STATE_COLOR_MAP[entry.name] || '#94a3b8'} />)}
                                 </Pie>
@@ -369,23 +381,25 @@ const Reports: React.FC<Props> = ({ user }) => {
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-2">
-                    <h3 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><Users size={16} /> Productividad por Analista</h3>
-                    <div className="h-[250px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={analystData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" tick={{fontSize: 10}} />
-                                <YAxis tick={{fontSize: 10}} />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="Requeridos" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="EnProceso" name="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="Terminados" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                {!isAnalyst && (
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-2">
+                        <h3 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><Users size={16} /> Productividad por Analista</h3>
+                        <div className="h-[250px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={analystData}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" tick={{fontSize: 10}} />
+                                    <YAxis tick={{fontSize: 10}} />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="Requeridos" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="EnProceso" name="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="Terminados" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {/* SECCIÓN 3: EVOLUCIÓN MENSUAL (ANCHO COMPLETO) */}
