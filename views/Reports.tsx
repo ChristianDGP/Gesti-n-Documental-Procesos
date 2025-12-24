@@ -289,7 +289,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
             {/* GRILLA DE KPIS */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <KPICard title="Asignados" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Universo Matriz"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
+                <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Universo Matriz"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
                 
                 <KPICard 
                     title="No Iniciados" 
@@ -337,7 +337,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             {/* SECCIÓN 1: CUMPLIMIENTO POR TIPO */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><Target size={16} /> Cumplimiento por Tipo de Documento</h3>
-                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total asignado.</p>
+                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total requerido.</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     {typeComplianceData.map((item) => (
                         <div key={item.type} className="flex flex-col items-center">
