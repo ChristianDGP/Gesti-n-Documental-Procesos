@@ -275,7 +275,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         alert(`Aviso: No se ha detectado un usuario con rol 'Coordinador' ni 'Administrador'.`);
         return;
     }
-    const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.project} - ${doc.microprocess}`);
+    const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}`);
     const bodyRaw = `Estimada/o,
 Para vuestra aprobación, adjunto el Informe "${doc.project} - ${doc.macroprocess || ''} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}",
 
@@ -291,13 +291,13 @@ ${user.name}`;
   // 2. COORDINADOR -> EXTERNO (Comunicación Externa: SIN PROYECTO)
   const handleNotifyExternal = () => {
       if (!doc) return;
-      const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} ${doc.microprocess || ''}`);
+      const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} - ${doc.microprocess || ''} - ${doc.version}`);
       const to = encodeURIComponent(referentEmails.join(','));
       const cc = encodeURIComponent(assigneeEmails.join(','));
       const bodyRaw = `Estimado,
 Para vuestra aprobación, adjunto el Informe:
 
-- ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}
+${doc.microprocess} - ${doc.docType || ''} - ${doc.version}
 
 Atento a los comentarios
 Saludos
@@ -312,7 +312,7 @@ ${user.name}`;
   const handleNotifyAnalyst = () => {
       if (!doc || assigneeEmails.length === 0) return;
       
-      const subject = encodeURIComponent(`Respuesta Solicitud: ${doc.project} - ${doc.microprocess}`);
+      const subject = encodeURIComponent(`Respuesta Solicitud: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}`);
       const estadoLabel = doc.state === DocState.APPROVED ? 'Aprobado' : 
                           doc.state === DocState.REJECTED ? 'Rechazado' : 
                           STATE_CONFIG[doc.state].label.split('(')[0].trim();
@@ -322,7 +322,7 @@ ${user.name}`;
       const bodyRaw = `Estimado ${primerAnalista},
 Adjunto el Informe:
 
-- ${doc.project} - ${doc.macroprocess || ''} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}
+${doc.project} - ${doc.macroprocess || ''} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}
 
 Estado: ${estadoLabel}
 
