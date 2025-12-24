@@ -268,7 +268,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                         {isAnalyst ? 'Mi Reporte de Gestión' : 'Reportes de Gestión'}
                     </h1>
                     <p className="text-slate-500">
-                        {isAnalyst ? 'Resumen de mi desempeño y cumplimiento institucional.' : 'Métricas institucionales de cumplimiento y cierre de procesos.'}
+                        {isAnalyst ? 'Resumen de mi desempeño y cumplimiento.' : 'Métricas de cumplimiento y cierre de procesos.'}
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
@@ -289,7 +289,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
             {/* GRILLA DE KPIS */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Universo Matriz"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
+                <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Inventario Requeridos"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
                 
                 <KPICard 
                     title="No Iniciados" 
@@ -316,7 +316,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     value={kpis.overdueReferentIds.length} 
                     icon={AlertTriangle} 
                     color="amber" 
-                    sub="> 30 días en v1.n" 
+                    sub="> 30 días en v1.n / v1.n.i" 
                     onClick={() => goToDashboard(kpis.overdueReferentIds)} 
                     canClick={kpis.overdueReferentIds.length > 0} 
                 />
@@ -326,7 +326,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     value={kpis.overdueControlIds.length} 
                     icon={AlertTriangle} 
                     color="amber" 
-                    sub="> 30 días en v1.nAR" 
+                    sub="> 30 días en v1.nAR / v1.n.iAR" 
                     onClick={() => goToDashboard(kpis.overdueControlIds)} 
                     canClick={kpis.overdueControlIds.length > 0} 
                 />
@@ -405,7 +405,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             {/* SECCIÓN 3: EVOLUCIÓN MENSUAL (ANCHO COMPLETO) */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><TrendingUp size={16} /> Evolución Mensual</h3>
-                <p className="text-xs text-slate-500 mb-6">Velocidad de cierre: Cantidad de documentos aprobados mensualmente por tipo (Clic en leyenda para aislar).</p>
+                <p className="text-xs text-slate-500 mb-6">Velocidad de cierre: Cantidad de documentos terminados mensualmente por tipo.</p>
                 <div className="h-[350px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={evolutionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
