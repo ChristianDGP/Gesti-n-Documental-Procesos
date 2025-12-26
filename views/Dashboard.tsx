@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, UserService, HierarchyService } from '../services/firebaseBackend';
+import { DocumentService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
 import { Document, User, UserRole, DocState, DocType, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
@@ -77,11 +77,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     setCurrentPage(1);
   }, [filterProject, filterMacro, filterProcess, filterSearch, filterDocType, filterState, filterAnalyst, quickFilter, sortConfig]);
 
-  const normalize = (str: string | undefined) => {
-      if (!str) return '';
-      return str.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  };
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -109,7 +104,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             if (doc.project && (doc.microprocess || doc.title)) {
                 const microName = doc.microprocess || doc.title.split(' - ')[0] || doc.title;
                 const docType = doc.docType || 'AS IS';
-                const key = `${normalize(doc.project)}|${normalize(microName)}|${normalize(docType)}`;
+                const key = `${normalizeHeader(doc.project)}|${normalizeHeader(microName)}|${normalizeHeader(docType)}`;
                 
                 const existing = realDocMap.get(key);
                 if (!existing || new Date(doc.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
@@ -132,7 +127,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             : ['AS IS', 'FCE', 'PM', 'TO BE'];
 
                         requiredTypes.forEach(type => {
-                            const key = `${normalize(proj)}|${normalize(node.name)}|${normalize(type)}`;
+                            const key = `${normalizeHeader(proj)}|${normalizeHeader(node.name)}|${normalizeHeader(type)}`;
                             
                             if (realDocMap.has(key)) {
                                 const realDoc = realDocMap.get(key)!;

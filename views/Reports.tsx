@@ -85,7 +85,11 @@ const Reports: React.FC<Props> = ({ user }) => {
                 const microName = doc.microprocess || doc.title.split(' - ')[0] || doc.title;
                 const docType = doc.docType || 'AS IS';
                 const key = `${normalizeHeader(doc.project)}|${normalizeHeader(microName)}|${normalizeHeader(docType)}`;
-                realDocMap.set(key, { ...doc, microprocess: microName, docType: docType as DocType });
+                
+                const existing = realDocMap.get(key);
+                if (!existing || new Date(doc.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+                    realDocMap.set(key, { ...doc, microprocess: microName, docType: docType as DocType });
+                }
             }
         });
 
@@ -98,9 +102,29 @@ const Reports: React.FC<Props> = ({ user }) => {
                         requiredTypes.forEach(type => {
                             const key = `${normalizeHeader(proj)}|${normalizeHeader(node.name)}|${normalizeHeader(type)}`;
                             if (realDocMap.has(key)) {
-                                unifiedList.push({ ...realDocMap.get(key)!, macroprocess: macro, process: proc, project: proj, isVirtual: false });
+                                const realDoc = realDocMap.get(key)!;
+                                unifiedList.push({ 
+                                    ...realDoc, 
+                                    macroprocess: macro, 
+                                    process: proc, 
+                                    project: proj, 
+                                    assignees: (node.assignees && node.assignees.length > 0) ? node.assignees : (realDoc.assignees || []),
+                                    isVirtual: false 
+                                });
                             } else {
-                                unifiedList.push({ id: `virtual-${key}`, title: `${node.name} - ${type}`, project: proj, microprocess: node.name, docType: type as DocType, state: DocState.NOT_STARTED, updatedAt: new Date(0).toISOString(), assignees: node.assignees || [], isVirtual: true } as any);
+                                unifiedList.push({ 
+                                    id: `virtual-${key}`, 
+                                    title: `${node.name} - ${type}`, 
+                                    project: proj, 
+                                    macroprocess: macro,
+                                    process: proc,
+                                    microprocess: node.name, 
+                                    docType: type as DocType, 
+                                    state: DocState.NOT_STARTED, 
+                                    updatedAt: new Date(0).toISOString(), 
+                                    assignees: node.assignees || [], 
+                                    isVirtual: true 
+                                } as any);
                             }
                         });
                     });
@@ -113,7 +137,6 @@ const Reports: React.FC<Props> = ({ user }) => {
     const filteredDocs = useMemo(() => {
         let docs = unifiedData;
         if (filterProject) docs = docs.filter(d => d.project === filterProject);
-        // El filtro de analista siempre se aplica
         if (filterAnalyst) docs = docs.filter(d => d.assignees?.includes(filterAnalyst));
         return docs;
     }, [unifiedData, filterProject, filterAnalyst]);
@@ -125,7 +148,6 @@ const Reports: React.FC<Props> = ({ user }) => {
         const notStarted = filteredDocs.filter(d => d.state === DocState.NOT_STARTED);
         const approved = filteredDocs.filter(d => d.state === DocState.APPROVED);
         
-        // Alertas > 30 días
         const overdueInternal = filteredDocs.filter(d => 
             d.state === DocState.INTERNAL_REVIEW && 
             (now - new Date(d.updatedAt).getTime()) > thirtyDaysMs
@@ -156,35 +178,38 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     const stateData = useMemo(() => {
         const stats = {
-            notStarted: 0,
-            inProcess: 0,
-            referent: 0,
-            control: 0,
-            finished: 0
+            notStarted: { value: 0, ids: [] as string[] },
+            inProcess: { value: 0, ids: [] as string[] },
+            referent: { value: 0, ids: [] as string[] },
+            control: { value: 0, ids: [] as string[] },
+            finished: { value: 0, ids: [] as string[] }
         };
 
         filteredDocs.forEach(d => {
             if (d.state === DocState.NOT_STARTED) {
-                stats.notStarted++;
+                stats.notStarted.value++;
+                stats.notStarted.ids.push(d.id);
             } else if (d.state === DocState.APPROVED) {
-                stats.finished++;
+                stats.finished.value++;
+                stats.finished.ids.push(d.id);
             } else if (d.state === DocState.SENT_TO_REFERENT || d.state === DocState.REFERENT_REVIEW) {
-                stats.referent++;
+                stats.referent.value++;
+                stats.referent.ids.push(d.id);
             } else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) {
-                stats.control++;
+                stats.control.value++;
+                stats.control.ids.push(d.id);
             } else {
-                // Initiated, In process, Internal Review, Rejected
-                stats.inProcess++;
+                stats.inProcess.value++;
+                stats.inProcess.ids.push(d.id);
             }
         });
 
-        // Este array define el orden exacto de los segmentos del gráfico
         return [
-          { name: 'No Iniciado', value: stats.notStarted },
-          { name: 'En Proceso', value: stats.inProcess },
-          { name: 'Referente', value: stats.referent },
-          { name: 'Control', value: stats.control },
-          { name: 'Terminados', value: stats.finished }
+          { name: 'No Iniciado', ...stats.notStarted },
+          { name: 'En Proceso', ...stats.inProcess },
+          { name: 'Referente', ...stats.referent },
+          { name: 'Control', ...stats.control },
+          { name: 'Terminados', ...stats.finished }
         ];
     }, [filteredDocs]);
 
@@ -207,10 +232,19 @@ const Reports: React.FC<Props> = ({ user }) => {
     const typeComplianceData = useMemo(() => {
         const types: DocType[] = ['AS IS', 'FCE', 'PM', 'TO BE'];
         return types.map((type) => {
-            const docs = filteredDocs.filter(d => d.docType === type);
-            const finished = docs.filter(d => d.state === DocState.APPROVED).length;
-            const percent = docs.length > 0 ? Math.round((finished / docs.length) * 100) : 0;
-            return { type, total: docs.length, finished, percent, color: TYPE_COLORS[type] };
+            const docsOfType = filteredDocs.filter(d => d.docType === type);
+            const finishedDocs = docsOfType.filter(d => d.state === DocState.APPROVED);
+            const pendingDocs = docsOfType.filter(d => d.state !== DocState.APPROVED);
+            const percent = docsOfType.length > 0 ? Math.round((finishedDocs.length / docsOfType.length) * 100) : 0;
+            return { 
+                type, 
+                total: docsOfType.length, 
+                finished: finishedDocs.length, 
+                percent, 
+                color: TYPE_COLORS[type],
+                finishedIds: finishedDocs.map(d => d.id),
+                pendingIds: pendingDocs.map(d => d.id)
+            };
         });
     }, [filteredDocs]);
 
@@ -249,9 +283,9 @@ const Reports: React.FC<Props> = ({ user }) => {
     const handleLegendClick = (o: any) => {
         const { dataKey } = o;
         if (activeType === dataKey) {
-            setActiveType(null); // Segundo clic: mostrar todos
+            setActiveType(null);
         } else {
-            setActiveType(dataKey); // Primer clic: mostrar solo este
+            setActiveType(dataKey);
         }
     };
 
@@ -287,66 +321,46 @@ const Reports: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            {/* GRILLA DE KPIS */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Inventario Requeridos"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
-                
-                <KPICard 
-                    title="No Iniciados" 
-                    value={kpis.notStarted} 
-                    icon={CircleDashed} 
-                    color="slate" 
-                    sub="Pendiente Inicio" 
-                    onClick={() => goToDashboard(kpis.notStartedIds)} 
-                    canClick={kpis.notStarted > 0} 
-                />
-
-                <KPICard 
-                    title="Alertas Rev. Interna" 
-                    value={kpis.overdueInternalIds.length} 
-                    icon={AlertTriangle} 
-                    color="amber" 
-                    sub="> 30 días en v0.n" 
-                    onClick={() => goToDashboard(kpis.overdueInternalIds)} 
-                    canClick={kpis.overdueInternalIds.length > 0} 
-                />
-                
-                <KPICard 
-                    title="Alertas Referente" 
-                    value={kpis.overdueReferentIds.length} 
-                    icon={AlertTriangle} 
-                    color="amber" 
-                    sub="> 30 días en v1.n / v1.n.i" 
-                    onClick={() => goToDashboard(kpis.overdueReferentIds)} 
-                    canClick={kpis.overdueReferentIds.length > 0} 
-                />
-                
-                <KPICard 
-                    title="Alerta Control de Gestión" 
-                    value={kpis.overdueControlIds.length} 
-                    icon={AlertTriangle} 
-                    color="amber" 
-                    sub="> 30 días en v1.nAR / v1.n.iAR" 
-                    onClick={() => goToDashboard(kpis.overdueControlIds)} 
-                    canClick={kpis.overdueControlIds.length > 0} 
-                />
-
+                <KPICard title="No Iniciados" value={kpis.notStarted} icon={CircleDashed} color="slate" sub="Pendiente Inicio" onClick={() => goToDashboard(kpis.notStartedIds)} canClick={kpis.notStarted > 0} />
+                <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
+                <KPICard title="Alertas Referente" value={kpis.overdueReferentIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.n / v1.n.i" onClick={() => goToDashboard(kpis.overdueReferentIds)} canClick={kpis.overdueReferentIds.length > 0} />
+                <KPICard title="Alerta Control de Gestión" value={kpis.overdueControlIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.nAR / v1.n.iAR" onClick={() => goToDashboard(kpis.overdueControlIds)} canClick={kpis.overdueControlIds.length > 0} />
                 <KPICard title="Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Meta Cumplida" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
             </div>
 
-            {/* SECCIÓN 1: CUMPLIMIENTO POR TIPO */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><Target size={16} /> Cumplimiento por Tipo de Documento</h3>
-                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total requerido.</p>
+                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total requerido. Haga clic en los segmentos (color o gris) para ver detalles.</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     {typeComplianceData.map((item) => (
                         <div key={item.type} className="flex flex-col items-center">
                             <div className="relative w-28 h-28 mb-3">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
-                                        <Pie data={[{ value: item.percent }, { value: 100 - item.percent }]} cx="50%" cy="50%" innerRadius={35} outerRadius={50} startAngle={90} endAngle={-270} dataKey="value" stroke="none">
-                                            <Cell key="progress" fill={item.color} />
-                                            <Cell key="bg" fill="#f1f5f9" />
+                                        <Pie 
+                                            data={[
+                                                { name: 'Aprobados', value: item.percent, ids: item.finishedIds, fill: item.color }, 
+                                                { name: 'Pendientes', value: 100 - item.percent, ids: item.pendingIds, fill: '#f1f5f9' }
+                                            ]} 
+                                            cx="50%" 
+                                            cy="50%" 
+                                            innerRadius={35} 
+                                            outerRadius={50} 
+                                            startAngle={90} 
+                                            endAngle={-270} 
+                                            dataKey="value" 
+                                            stroke="none"
+                                            onClick={(data) => {
+                                                if (data && data.ids && data.ids.length > 0) {
+                                                    goToDashboard(data.ids);
+                                                }
+                                            }}
+                                        >
+                                            {/* Los colores ya están definidos en la data de arriba */}
+                                            <Cell key="progress" className="cursor-pointer" />
+                                            <Cell key="bg" className="cursor-pointer" />
                                         </Pie>
                                     </PieChart>
                                 </ResponsiveContainer>
@@ -359,23 +373,30 @@ const Reports: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            {/* SECCIÓN 2: DISTRIBUCIÓN Y PRODUCTIVIDAD */}
             <div className={`grid grid-cols-1 ${isAnalyst ? '' : 'lg:grid-cols-3'} gap-6`}>
                 <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${isAnalyst ? '' : 'lg:col-span-1'}`}>
                     <h3 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><Briefcase size={16} /> Distribución por Estado</h3>
                     <div className="h-[250px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie data={stateData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                                    {stateData.map((entry, index) => <Cell key={index} fill={STATE_COLOR_MAP[entry.name] || '#94a3b8'} />)}
+                                <Pie 
+                                    data={stateData} 
+                                    cx="50%" 
+                                    cy="50%" 
+                                    innerRadius={60} 
+                                    outerRadius={80} 
+                                    paddingAngle={5} 
+                                    dataKey="value"
+                                    onClick={(data) => {
+                                        if (data && data.ids && data.ids.length > 0) {
+                                            goToDashboard(data.ids);
+                                        }
+                                    }}
+                                >
+                                    {stateData.map((entry, index) => <Cell key={index} fill={STATE_COLOR_MAP[entry.name] || '#94a3b8'} className="cursor-pointer" />)}
                                 </Pie>
                                 <Tooltip />
-                                <Legend 
-                                    layout="horizontal" 
-                                    align="center" 
-                                    verticalAlign="bottom" 
-                                    iconType="circle"
-                                />
+                                <Legend layout="horizontal" align="center" verticalAlign="bottom" iconType="circle" />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -389,7 +410,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 <BarChart data={analystData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis dataKey="name" tick={{fontSize: 10}} />
-                                    <YAxis tick={{fontSize: 10}} />
+                                    <YAxis allowDecimals={false} tick={{fontSize: 10}} />
                                     <Tooltip />
                                     <Legend />
                                     <Bar dataKey="Requeridos" fill="#94a3b8" radius={[4, 4, 0, 0]} />
@@ -402,7 +423,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                 )}
             </div>
 
-            {/* SECCIÓN 3: EVOLUCIÓN MENSUAL (ANCHO COMPLETO) */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><TrendingUp size={16} /> Evolución Mensual</h3>
                 <p className="text-xs text-slate-500 mb-6">Velocidad de cierre: Cantidad de documentos terminados mensualmente por tipo.</p>
@@ -425,13 +445,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 tickLine={false} 
                             />
                             <YAxis 
+                                allowDecimals={false}
+                                domain={[0, 'dataMax']}
                                 tick={{fontSize: 11, fill: '#64748b'}} 
                                 axisLine={{stroke: '#e2e8f0'}} 
                                 tickLine={false} 
                             />
-                            <Tooltip 
-                                contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} 
-                            />
+                            <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                             <Legend 
                                 verticalAlign="top" 
                                 height={40} 
