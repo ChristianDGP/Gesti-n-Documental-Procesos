@@ -8,7 +8,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, User as UserIcon, ArrowRight, Target, Info, TrendingUp, AlertTriangle, CircleDashed
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, ChevronLeft, ChevronRight, ExternalLink
 } from 'lucide-react';
 
 interface Props {
@@ -28,11 +28,13 @@ const STATE_COLOR_MAP: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-    'AS IS': '#3b82f6', // Azul
-    'FCE': '#f87171',   // Salmón
-    'PM': '#facc15',    // Amarillo
-    'TO BE': '#22c55e'  // Verde
+    'AS IS': '#3b82f6',
+    'FCE': '#f87171',
+    'PM': '#facc15',
+    'TO BE': '#22c55e'
 };
+
+const STUCK_ITEMS_PER_PAGE = 9;
 
 const Reports: React.FC<Props> = ({ user }) => {
     const navigate = useNavigate();
@@ -45,11 +47,11 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     
     const [filterProject, setFilterProject] = useState('');
-    // Si es analista, el filtro por analista se bloquea a su propio ID
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
-
-    // Estado para controlar la visibilidad por tipo en el gráfico de áreas
     const [activeType, setActiveType] = useState<string | null>(null);
+
+    // Paginación para documentos críticos
+    const [stuckPage, setStuckPage] = useState(1);
 
     useEffect(() => {
         loadData();
@@ -176,6 +178,39 @@ const Reports: React.FC<Props> = ({ user }) => {
         };
     }, [filteredDocs]);
 
+    const executiveMetrics = useMemo(() => {
+        if (!filteredDocs.length) return { stuckDocs: [] };
+
+        const now = new Date().getTime();
+        const historyByDoc: Record<string, DocHistory[]> = {};
+        history.forEach(h => {
+            if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = [];
+            historyByDoc[h.documentId].push(h);
+        });
+
+        const stuckDocsList: any[] = [];
+
+        filteredDocs.forEach(d => {
+            if (d.state === DocState.APPROVED || d.state === DocState.NOT_STARTED) return;
+            
+            const docHistory = historyByDoc[d.id] || [];
+            const lastTransition = docHistory
+                .filter(h => h.newState === d.state)
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+            
+            const stateEntryDate = lastTransition ? new Date(lastTransition.timestamp).getTime() : new Date(d.createdAt).getTime();
+            const daysInState = Math.max(0, Math.floor((now - stateEntryDate) / (1000 * 60 * 60 * 24)));
+            
+            if (daysInState > 30) {
+                stuckDocsList.push({ ...d, daysStuck: daysInState });
+            }
+        });
+
+        return { 
+            stuckDocs: stuckDocsList.sort((a, b) => b.daysStuck - a.daysStuck)
+        };
+    }, [history, filteredDocs]);
+
     const stateData = useMemo(() => {
         const stats = {
             notStarted: { value: 0, ids: [] as string[] },
@@ -291,7 +326,11 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     const goToDashboard = (ids: string[]) => navigate('/', { state: { filterIds: ids, fromReport: true } });
 
-    if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando métricas...</div>;
+    if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando métricas ejecutivas...</div>;
+
+    const totalStuck = executiveMetrics.stuckDocs.length;
+    const totalStuckPages = Math.ceil(totalStuck / STUCK_ITEMS_PER_PAGE);
+    const displayedStuck = executiveMetrics.stuckDocs.slice((stuckPage - 1) * STUCK_ITEMS_PER_PAGE, stuckPage * STUCK_ITEMS_PER_PAGE);
 
     return (
         <div className="space-y-6 pb-12">
@@ -302,7 +341,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                         {isAnalyst ? 'Mi Reporte de Gestión' : 'Reportes de Gestión'}
                     </h1>
                     <p className="text-slate-500">
-                        {isAnalyst ? 'Resumen de mi desempeño y cumplimiento.' : 'Métricas de cumplimiento y cierre de procesos.'}
+                        {isAnalyst ? 'Resumen de mi desempeño y cumplimiento.' : 'Métricas estratégicas y control de flujo documental.'}
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
@@ -321,6 +360,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
+            {/* KPIs PRINCIPALES */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Inventario Requeridos"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
                 <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
@@ -329,9 +369,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                 <KPICard title="Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Meta Cumplida" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
             </div>
 
+            {/* CUMPLIMIENTO POR TIPO */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><Target size={16} /> Cumplimiento por Tipo de Documento</h3>
-                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total requerido. Haga clic en los segmentos (color o gris) para ver detalles.</p>
+                <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total requerido.</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     {typeComplianceData.map((item) => (
                         <div key={item.type} className="flex flex-col items-center">
@@ -357,7 +398,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 }
                                             }}
                                         >
-                                            {/* Los colores ya están definidos en la data de arriba */}
                                             <Cell key="progress" className="cursor-pointer" />
                                             <Cell key="bg" className="cursor-pointer" />
                                         </Pie>
@@ -437,71 +477,115 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 ))}
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis 
-                                dataKey="label" 
-                                tick={{fontSize: 11, fill: '#64748b'}} 
-                                axisLine={{stroke: '#e2e8f0'}} 
-                                tickLine={false} 
-                            />
-                            <YAxis 
-                                allowDecimals={false}
-                                domain={[0, 'dataMax']}
-                                tick={{fontSize: 11, fill: '#64748b'}} 
-                                axisLine={{stroke: '#e2e8f0'}} 
-                                tickLine={false} 
-                            />
+                            <XAxis dataKey="label" tick={{fontSize: 11, fill: '#64748b'}} axisLine={{stroke: '#e2e8f0'}} tickLine={false} />
+                            <YAxis allowDecimals={false} domain={[0, 'dataMax']} tick={{fontSize: 11, fill: '#64748b'}} axisLine={{stroke: '#e2e8f0'}} tickLine={false} />
                             <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                            <Legend 
-                                verticalAlign="top" 
-                                height={40} 
-                                iconType="circle" 
-                                onClick={handleLegendClick}
-                                wrapperStyle={{ cursor: 'pointer' }}
-                            />
-                            
-                            <Area 
-                                type="monotone" 
-                                dataKey="AS IS" 
-                                stroke={TYPE_COLORS['AS IS']} 
-                                fill={`url(#grad-ASIS)`} 
-                                strokeWidth={2} 
-                                dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
-                                activeDot={{ r: 6 }}
-                                hide={activeType !== null && activeType !== 'AS IS'}
-                            />
-                            <Area 
-                                type="monotone" 
-                                dataKey="FCE" 
-                                stroke={TYPE_COLORS['FCE']} 
-                                fill={`url(#grad-FCE)`} 
-                                strokeWidth={2} 
-                                dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
-                                activeDot={{ r: 6 }}
-                                hide={activeType !== null && activeType !== 'FCE'}
-                            />
-                            <Area 
-                                type="monotone" 
-                                dataKey="PM" 
-                                stroke={TYPE_COLORS['PM']} 
-                                fill={`url(#grad-PM)`} 
-                                strokeWidth={2} 
-                                dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
-                                activeDot={{ r: 6 }}
-                                hide={activeType !== null && activeType !== 'PM'}
-                            />
-                            <Area 
-                                type="monotone" 
-                                dataKey="TO BE" 
-                                stroke={TYPE_COLORS['TO BE']} 
-                                fill={`url(#grad-TOBE)`} 
-                                strokeWidth={2} 
-                                dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
-                                activeDot={{ r: 6 }}
-                                hide={activeType !== null && activeType !== 'TO BE'}
-                            />
+                            <Legend verticalAlign="top" height={40} iconType="circle" onClick={handleLegendClick} wrapperStyle={{ cursor: 'pointer' }} />
+                            <Area type="monotone" dataKey="AS IS" stroke={TYPE_COLORS['AS IS']} fill={`url(#grad-ASIS)`} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} hide={activeType !== null && activeType !== 'AS IS'} />
+                            <Area type="monotone" dataKey="FCE" stroke={TYPE_COLORS['FCE']} fill={`url(#grad-FCE)`} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} hide={activeType !== null && activeType !== 'FCE'} />
+                            <Area type="monotone" dataKey="PM" stroke={TYPE_COLORS['PM']} fill={`url(#grad-PM)`} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} hide={activeType !== null && activeType !== 'PM'} />
+                            <Area type="monotone" dataKey="TO BE" stroke={TYPE_COLORS['TO BE']} fill={`url(#grad-TOBE)`} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} hide={activeType !== null && activeType !== 'TO BE'} />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
+            </div>
+
+            {/* MONITOR DE CONTINUIDAD OPERACIONAL CON PAGINACIÓN EN EL FOOTER */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div className="p-6 pb-2">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
+                                <ShieldAlert size={16} className="text-red-500" /> Monitor de Continuidad Operacional
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1">Documentos con más de 30 días sin cambios de etapa. Priorice la revisión de estos ítems.</p>
+                        </div>
+                        {totalStuck > 0 && (
+                            <button 
+                                onClick={() => goToDashboard(executiveMetrics.stuckDocs.map(d => d.id))}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md font-bold text-xs uppercase tracking-wider"
+                            >
+                                <ExternalLink size={14} /> Ver Consolidado en Dashboard
+                            </button>
+                        )}
+                    </div>
+                </div>
+                
+                <div className="flex-1 px-6 pb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {totalStuck === 0 ? (
+                            <div className="col-span-full py-12 text-center text-slate-400">
+                                <CheckCircle size={32} className="mx-auto mb-2 text-green-200" />
+                                <p className="text-xs">No se detectan riesgos críticos de continuidad.</p>
+                            </div>
+                        ) : displayedStuck.map(d => (
+                            <div 
+                                key={d.id} 
+                                onClick={() => navigate(`/doc/${d.id}`)}
+                                className="p-4 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer group shadow-sm flex flex-col justify-between"
+                            >
+                                <div>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-[10px] font-bold text-indigo-600 uppercase bg-indigo-50 px-2 py-1 rounded border border-indigo-100">{d.project}</span>
+                                        <span className="text-[10px] font-bold px-2 py-1 rounded border bg-red-50 text-red-600 border-red-100">
+                                            {d.daysStuck} días
+                                        </span>
+                                    </div>
+                                    <h4 className="text-xs font-bold text-slate-800 line-clamp-2 group-hover:text-indigo-600 leading-tight">{d.title}</h4>
+                                </div>
+                                <div className="flex items-center justify-between mt-4">
+                                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                                        <Clock size={10} />
+                                        <span>Última actividad: {new Date(d.updatedAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${STATE_CONFIG[d.state].color}`}>
+                                        {STATE_CONFIG[d.state].label.split('(')[0]}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* FOOTER DE PAGINACIÓN (REFERENCIA IMAGEN) */}
+                {totalStuck > 0 && (
+                    <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4 mt-auto">
+                        <div className="text-[11px] text-slate-500 font-medium">
+                            Mostrando <b>{Math.min(totalStuck, (stuckPage - 1) * STUCK_ITEMS_PER_PAGE + 1)}</b> a <b>{Math.min(totalStuck, stuckPage * STUCK_ITEMS_PER_PAGE)}</b> de <b>{totalStuck}</b> registros críticos
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => setStuckPage(prev => Math.max(1, prev - 1))} 
+                                disabled={stuckPage === 1} 
+                                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
+                            >
+                                <ChevronLeft size={16} className="text-slate-600" />
+                            </button>
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: totalStuckPages }, (_, i) => i + 1).map(pageNum => (
+                                    <button 
+                                        key={pageNum} 
+                                        onClick={() => setStuckPage(pageNum)} 
+                                        className={`w-8 h-8 rounded-lg text-xs font-bold border transition-all ${
+                                            stuckPage === pageNum 
+                                                ? 'bg-indigo-600 text-white border-indigo-600' 
+                                                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400'
+                                        }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                ))}
+                            </div>
+                            <button 
+                                onClick={() => setStuckPage(prev => Math.min(totalStuckPages, prev + 1))} 
+                                disabled={stuckPage === totalStuckPages} 
+                                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors shadow-sm"
+                            >
+                                <ChevronRight size={16} className="text-slate-600" />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
