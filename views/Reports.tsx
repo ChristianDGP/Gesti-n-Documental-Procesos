@@ -505,7 +505,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 onClick={() => goToDashboard(executiveMetrics.stuckDocs.map(d => d.id))}
                                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md font-bold text-xs uppercase tracking-wider"
                             >
-                                <ExternalLink size={14} /> Ver Consolidado en Dashboard
+                                <ExternalLink size={14} /> Ver Consolidado Crítico en Dashboard
                             </button>
                         )}
                     </div>
