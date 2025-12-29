@@ -494,22 +494,22 @@ const Reports: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            {/* MONITOR DE CONTINUIDAD OPERACIONAL CON PAGINACIÓN EN EL FOOTER */}
+            {/* MONITOR DE CONTINUIDAD CON PAGINACIÓN EN EL FOOTER */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                 <div className="p-6 pb-2">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                         <div>
                             <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
-                                <ShieldAlert size={16} className="text-red-500" /> Monitor de Continuidad Operacional
+                                <ShieldAlert size={16} className="text-red-500" /> Monitor de Continuidad
                             </h3>
-                            <p className="text-xs text-slate-500 mt-1">Documentos con más de 30 días sin cambios de etapa. Priorice la revisión de estos ítems.</p>
+                            <p className="text-xs text-slate-500 mt-1">Documentos con más de 30 días sin cambios de estado. Priorice la revisión de estos ítems.</p>
                         </div>
                         {totalStuck > 0 && (
                             <button 
                                 onClick={() => goToDashboard(executiveMetrics.stuckDocs.map(d => d.id))}
                                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md font-bold text-xs uppercase tracking-wider"
                             >
-                                <ExternalLink size={14} /> Ver Consolidado Crítico en Dashboard
+                                <ExternalLink size={14} /> Ver Consolidado en Dashboard
                             </button>
                         )}
                     </div>
@@ -520,7 +520,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                         {totalStuck === 0 ? (
                             <div className="col-span-full py-12 text-center text-slate-400">
                                 <CheckCircle size={32} className="mx-auto mb-2 text-green-200" />
-                                <p className="text-xs">No se detectan riesgos críticos de continuidad.</p>
+                                <p className="text-xs">No se detectan riesgos de continuidad.</p>
                             </div>
                         ) : displayedStuck.map((d: StuckDoc) => (
                             <div 
