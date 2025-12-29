@@ -19,6 +19,10 @@ interface ReportDoc extends Document {
     isVirtual?: boolean;
 }
 
+interface StuckDoc extends ReportDoc {
+    daysStuck: number;
+}
+
 const STATE_COLOR_MAP: Record<string, string> = {
     'No Iniciado': '#94a3b8',
     'En Proceso': '#3b82f6',
@@ -179,7 +183,7 @@ const Reports: React.FC<Props> = ({ user }) => {
     }, [filteredDocs]);
 
     const executiveMetrics = useMemo(() => {
-        if (!filteredDocs.length) return { stuckDocs: [] };
+        if (!filteredDocs.length) return { stuckDocs: [] as StuckDoc[] };
 
         const now = new Date().getTime();
         const historyByDoc: Record<string, DocHistory[]> = {};
@@ -188,7 +192,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             historyByDoc[h.documentId].push(h);
         });
 
-        const stuckDocsList: any[] = [];
+        const stuckDocsList: StuckDoc[] = [];
 
         filteredDocs.forEach(d => {
             if (d.state === DocState.APPROVED || d.state === DocState.NOT_STARTED) return;
@@ -518,7 +522,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 <CheckCircle size={32} className="mx-auto mb-2 text-green-200" />
                                 <p className="text-xs">No se detectan riesgos críticos de continuidad.</p>
                             </div>
-                        ) : displayedStuck.map(d => (
+                        ) : displayedStuck.map((d: StuckDoc) => (
                             <div 
                                 key={d.id} 
                                 onClick={() => navigate(`/doc/${d.id}`)}
@@ -536,10 +540,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 <div className="flex items-center justify-between mt-4">
                                     <div className="flex items-center gap-1 text-[10px] text-slate-500">
                                         <Clock size={10} />
-                                        <span>Última actividad: {new Date(d.updatedAt).toLocaleDateString()}</span>
+                                        <span>última actividad: {new Date(d.updatedAt).toLocaleDateString()}</span>
                                     </div>
-                                    <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${STATE_CONFIG[d.state].color}`}>
-                                        {STATE_CONFIG[d.state].label.split('(')[0]}
+                                    <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${STATE_CONFIG[d.state as DocState].color}`}>
+                                        {STATE_CONFIG[d.state as DocState].label.split('(')[0]}
                                     </div>
                                 </div>
                             </div>
