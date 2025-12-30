@@ -1,3 +1,4 @@
+
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -148,7 +149,6 @@ export const UserService = {
       return userData;
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "users", id)); },
-  // Fixed migrateLegacyReferences: removed redundant line that caused 'qSnapshot' not found error.
   migrateLegacyReferences: async (oldId: string, newId: string) => {
       const qMatrix = query(collection(db, "process_matrix"), where("assignees", "array-contains", oldId));
       const snapMatrixDocs = await getDocs(qMatrix);
@@ -173,7 +173,6 @@ export const HistoryService = {
     return querySnapshot.docs.map(doc => doc.data() as DocHistory);
   },
   log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string) => {
-    // CORRECCIÓN ID ÚNICO: Se usa una combinación de timestamp y un prefijo para evitar sustitución visual en React
     const entryId = `hist-${docId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newEntry: DocHistory = { 
         id: entryId, 
@@ -213,10 +212,9 @@ export const DocumentService = {
     };
     const docRef = await addDoc(collection(db, "documents"), newDocData);
     
-    // CORRECCIÓN: Se elimina el prefijo 'v' redundante que causaba el texto "vv0.1"
     await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Iniciado Versión ${version}`, version);
     
-    // Notificar al coordinador sobre la creación de un nuevo documento
+    // Notificar al coordinador sobre la creación en español
     const allUsers = await UserService.getAll();
     const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
     coordinators.forEach(coord => {
@@ -242,7 +240,7 @@ export const DocumentService = {
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
       
-      // Mapa de traducción de acciones técnicas a español para el historial
+      // Traducción estricta a español para el historial y UI
       const actionLabels: Record<string, string> = {
           'APPROVE': 'Aprobación',
           'REJECT': 'Rechazo',
@@ -265,10 +263,8 @@ export const DocumentService = {
       await updateDoc(docRef, { state: newState, version: newVersion, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
-      // --- Lógica de Notificaciones Dinámicas ---
       const allUsers = await UserService.getAll();
       
-      // Caso 1: Aprobación o Rechazo (Coordinador -> Analistas)
       if (action === 'APPROVE' || action === 'REJECT') {
           const notificationType = action === 'APPROVE' ? 'APPROVAL' : 'REJECTION';
           const title = action === 'APPROVE' ? 'Documento Aprobado' : 'Documento Rechazado';
@@ -284,7 +280,6 @@ export const DocumentService = {
               NotificationService.create(currentDoc.authorId, docId, notificationType, title, msg, user.name);
           }
       } 
-      // Caso 2: Nuevo Comentario (Autor y Asignados)
       else if (action === 'COMMENT') {
           const msg = `Nueva observación en "${currentDoc.title}": ${comment.substring(0, 50)}...`;
           const targets = new Set([...(currentDoc.assignees || []), currentDoc.authorId]);
@@ -294,7 +289,6 @@ export const DocumentService = {
               }
           });
       } 
-      // Caso 3: Carga de nueva versión (Analista -> Coordinadores)
       else if (customVersion) {
           const reviewStates = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW];
           if (reviewStates.includes(newState)) {

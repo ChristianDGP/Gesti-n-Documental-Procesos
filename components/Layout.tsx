@@ -19,8 +19,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white shadow-inner' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
   useEffect(() => {
-    // Suscripción a Notificaciones (Bandeja de Entrada)
-    // Se escucha la colección en tiempo real para actualizar el badge instantáneamente
+    // Suscripción a Notificaciones (Bandeja de Entrada) en tiempo real
     const unsubscribeInbox = NotificationService.subscribeToUnreadCount(user.id, (count) => {
         setInboxCount(count);
     });
@@ -36,13 +35,18 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       onClick={() => setIsSidebarOpen(false)}
       className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group ${isActive(to)}`}
     >
-      <Icon size={20} className={isActive(to) === 'bg-slate-800 text-white shadow-inner' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-white'} />
+      <div className="relative">
+        <Icon 
+            size={20} 
+            className={isActive(to) === 'bg-slate-800 text-white shadow-inner' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-white'} 
+        />
+        {badge !== undefined && badge > 0 && (
+            <span className="absolute -top-2 -right-2 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-lg ring-2 ring-slate-900 animate-pulse px-1">
+                {badge > 99 ? '99+' : badge}
+            </span>
+        )}
+      </div>
       <span className="font-medium flex-1">{label}</span>
-      {badge !== undefined && badge > 0 && (
-          <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg ring-2 ring-slate-900 animate-pulse">
-              {badge}
-          </span>
-      )}
     </Link>
   );
 
