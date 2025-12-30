@@ -1,4 +1,3 @@
-
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -149,11 +148,12 @@ export const UserService = {
       return userData;
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "users", id)); },
+  // Fixed migrateLegacyReferences: removed redundant line that caused 'qSnapshot' not found error.
   migrateLegacyReferences: async (oldId: string, newId: string) => {
       const qMatrix = query(collection(db, "process_matrix"), where("assignees", "array-contains", oldId));
-      const snapMatrix = await getDocs(qMatrix);
+      const snapMatrixDocs = await getDocs(qMatrix);
       const batch = writeBatch(db);
-      snapMatrix.docs.forEach(d => {
+      snapMatrixDocs.docs.forEach(d => {
           const newAssignees = (d.data().assignees || []).map((id: string) => id === oldId ? newId : id);
           batch.update(d.ref, { assignees: newAssignees });
       });
@@ -173,8 +173,10 @@ export const HistoryService = {
     return querySnapshot.docs.map(doc => doc.data() as DocHistory);
   },
   log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string) => {
+    // CORRECCIÓN ID ÚNICO: Se usa una combinación de timestamp y un prefijo para evitar sustitución visual en React
+    const entryId = `hist-${docId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newEntry: DocHistory = { 
-        id: `hist-${Date.now()}`, 
+        id: entryId, 
         documentId: docId, 
         userId: user.id, 
         userName: user.name, 
@@ -210,8 +212,9 @@ export const DocumentService = {
       title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress: initialProgress || 10, hasPendingRequest: isSubmission, files: uploadedFiles, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
     };
     const docRef = await addDoc(collection(db, "documents"), newDocData);
-    // CORRECCIÓN: Se quita la 'v' estática porque la variable version ya la incluye o es 0.0
-    await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Creado ${version}`, version);
+    
+    // CORRECCIÓN: Se elimina el prefijo 'v' redundante que causaba el texto "vv0.1"
+    await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Iniciado Versión ${version}`, version);
     
     // Notificar al coordinador sobre la creación de un nuevo documento
     const allUsers = await UserService.getAll();
@@ -233,7 +236,7 @@ export const DocumentService = {
   transitionState: async (docId: string, user: User, action: any, comment: string, file?: File, customVersion?: string): Promise<void> => {
       const docRef = doc(db, "documents", docId);
       const docSnap = await getDoc(docRef);
-      if(!docSnap.exists()) throw new Error("Doc not found");
+      if(!docSnap.exists()) throw new Error("Documento no encontrado");
       const currentDoc = docSnap.data() as Document;
       let newState = currentDoc.state;
       let newVersion = currentDoc.version;

@@ -276,7 +276,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const getDocLink = () => `${window.location.origin}/#/doc/${doc?.id}`;
 
-  // 1. ANALISTA -> COORDINADOR (Comunicación Interna: Con LINK)
   const handleAnalystNotificationToCoordinator = () => {
     if (!doc) return;
     if (!coordinatorEmail) {
@@ -299,7 +298,6 @@ ${user.name}`;
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
-  // 2. COORDINADOR -> EXTERNO (Comunicación Externa: SIN LINK)
   const handleNotifyExternal = () => {
       if (!doc) return;
       const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} - ${doc.microprocess || ''} - ${doc.version}`);
@@ -319,7 +317,6 @@ ${user.name}`;
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&cc=${cc}&su=${subject}&body=${body}`, '_blank');
   };
 
-  // 3. COORDINADOR -> ANALISTA (Comunicación Interna: Con LINK)
   const handleNotifyAnalyst = () => {
       if (!doc || assigneeEmails.length === 0) return;
       
@@ -434,14 +431,17 @@ ${user.name}`;
             )}
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-fit max-h-[600px] overflow-y-auto">
-            <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Historial</h3>
+            <h3 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">Historial Completo</h3>
             <div className="space-y-6 pl-4 border-l-2 border-slate-100 relative">
                 {history.length === 0 ? <p className="text-xs text-slate-400 italic">Sin historial registrado.</p> : history.map(h => (
                     <div key={h.id} className="relative">
                         <div className={`absolute -left-[21px] top-1 h-3 w-3 rounded-full border-2 border-white ${h.action === 'Observación' ? 'bg-indigo-400' : 'bg-slate-300'}`}></div>
                         <div className="text-xs text-slate-400 mb-0.5">{new Date(h.timestamp).toLocaleString()}</div>
                         <p className="text-sm font-medium text-slate-800">{h.action} <span className="font-normal text-slate-500">por {h.userName}</span></p>
-                        {h.comment && <div className="mt-1 p-2 bg-slate-50 rounded text-xs text-slate-600 italic border border-slate-100">"{h.comment}"</div>}
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-mono">Versión: {h.version}</span>
+                        </div>
+                        {h.comment && <div className="mt-1.5 p-2 bg-slate-50 rounded text-xs text-slate-600 italic border border-slate-100">"{h.comment}"</div>}
                     </div>
                 ))}
             </div>
