@@ -188,7 +188,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                 
                 if (lastEntry) {
                     stateAtClosure = lastEntry.newState;
-                    versionAtClosure = d.version; 
+                    // PRIORIDAD: Usar versión capturada en el historial, fallback a la actual si no existía versión estructurada
+                    versionAtClosure = lastEntry.version || d.version; 
                 }
             }
 

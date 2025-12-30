@@ -44,7 +44,6 @@ export const generateMatrixId = (project: string, micro: string): string => {
     return `MTX_${p}_${m}`;
 };
 
-// --- FIX: Added helper to delete a collection in batches to avoid Firestore write limits ---
 const deleteCollectionInBatches = async (collectionName: string) => {
     const q = query(collection(db, collectionName));
     const snapshot = await getDocs(q);
@@ -62,7 +61,6 @@ const deleteCollectionInBatches = async (collectionName: string) => {
     if (count > 0) await batch.commit();
 };
 
-// --- FIX: Added helper to find user IDs from a CSV string based on name, email or nickname ---
 const findUserIdsFromCSV = (allUsers: User[], rawString: string): string[] => {
     if (!rawString) return [];
     const searchTerms = rawString.split(/[;,]/).map(s => s.trim().toLowerCase());
@@ -172,8 +170,19 @@ export const HistoryService = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => doc.data() as DocHistory);
   },
-  log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string) => {
-    const newEntry: DocHistory = { id: `hist-${Date.now()}`, documentId: docId, userId: user.id, userName: user.name, action, previousState: prev, newState: next, comment, timestamp: new Date().toISOString() };
+  log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string) => {
+    const newEntry: DocHistory = { 
+        id: `hist-${Date.now()}`, 
+        documentId: docId, 
+        userId: user.id, 
+        userName: user.name, 
+        action, 
+        previousState: prev, 
+        newState: next, 
+        version: version || '-',
+        comment, 
+        timestamp: new Date().toISOString() 
+    };
     await addDoc(collection(db, "history"), newEntry);
   }
 };
@@ -194,11 +203,12 @@ export const DocumentService = {
     const isSubmission = state === DocState.INTERNAL_REVIEW || state === DocState.SENT_TO_REFERENT || state === DocState.SENT_TO_CONTROL;
     let uploadedFiles: DocFile[] = [];
     const mergedAssignees = Array.from(new Set([...(hierarchy?.assignees || []), author.id]));
+    const version = initialVersion || '0.0';
     const newDocData: Omit<Document, 'id'> = {
-      title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version: initialVersion || '0.0', progress: initialProgress || 10, hasPendingRequest: isSubmission, files: uploadedFiles, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
+      title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress: initialProgress || 10, hasPendingRequest: isSubmission, files: uploadedFiles, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
     };
     const docRef = await addDoc(collection(db, "documents"), newDocData);
-    await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Creado v${initialVersion}`);
+    await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Creado v${version}`, version);
     return { id: docRef.id, ...newDocData } as Document;
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
@@ -218,7 +228,7 @@ export const DocumentService = {
       else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
       else if (action === 'REQUEST_APPROVAL') hasPending = true;
       await updateDoc(docRef, { state: newState, version: newVersion, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
-      await HistoryService.log(docId, user, action, currentDoc.state, newState, comment);
+      await HistoryService.log(docId, user, action, currentDoc.state, newState, comment, newVersion);
   }
 };
 
@@ -261,7 +271,6 @@ export const HierarchyService = {
       const ref = doc(db, "process_matrix", docId);
       await updateDoc(ref, { assignees });
   },
-  // Nuevo método para vincular referentes masivamente desde el mantenedor de referentes
   updateReferentLinks: async (referentId: string, selectedDocIds: string[]) => {
       const q = query(collection(db, "process_matrix"));
       const snapshot = await getDocs(q);

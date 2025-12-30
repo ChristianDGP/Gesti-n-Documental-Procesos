@@ -59,6 +59,7 @@ export interface DocHistory {
   action: string;
   previousState: DocState;
   newState: DocState;
+  version?: string; // Nuevo campo para snapshot histórico
   comment: string;
   timestamp: string;
 }
@@ -102,7 +103,7 @@ export interface ProcessNode {
   name: string;
   docId: string;
   assignees: string[];
-  referentIds?: string[]; // New field
+  referentIds?: string[];
   requiredTypes: DocType[];
   active?: boolean;
 }
@@ -123,7 +124,6 @@ export interface UserHierarchy {
   };
 }
 
-// Added missing interface for filename parser results
 export interface ParsedFilenameResult {
   valido: boolean;
   errores: string[];
