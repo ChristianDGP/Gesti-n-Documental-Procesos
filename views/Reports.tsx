@@ -626,12 +626,11 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
 
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse min-w-[1600px]">
+                                <table className="w-full text-left border-collapse min-w-[1500px]">
                                     <thead className="text-[10px] text-slate-400 uppercase font-bold bg-slate-50/50">
                                         <tr>
                                             <th className="px-4 py-3 border-b border-slate-100">PROYECTO</th>
-                                            <th className="px-4 py-3 border-b border-slate-100">MACROPROCESO</th>
-                                            <th className="px-4 py-3 border-b border-slate-100">PROCESO</th>
+                                            <th className="px-4 py-3 border-b border-slate-100">JERARQUÍA (MACRO / PROCESO)</th>
                                             <th className="px-4 py-3 border-b border-slate-100 sticky left-0 bg-slate-50 z-10 w-64 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">MICROPROCESO</th>
                                             <th className="px-4 py-3 border-b border-slate-100 text-center bg-blue-50/30" colSpan={2}>AS IS</th>
                                             <th className="px-4 py-3 border-b border-slate-100 text-center bg-red-50/30" colSpan={2}>FCE</th>
@@ -639,7 +638,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             <th className="px-4 py-3 border-b border-slate-100 text-center bg-green-50/30" colSpan={2}>TO BE</th>
                                         </tr>
                                         <tr className="bg-slate-50/30 text-[8px] text-slate-400">
-                                            <th colSpan={4} className="border-b border-slate-100 sticky left-0 bg-slate-50/30 z-10"></th>
+                                            <th colSpan={3} className="border-b border-slate-100 sticky left-0 bg-slate-50/30 z-10"></th>
                                             <th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th>
                                             <th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th>
                                             <th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th>
@@ -652,12 +651,16 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {displayedClosure.length === 0 ? (
-                                            <tr><td colSpan={12} className="p-12 text-center text-slate-400 font-medium">Sin datos registrados para los filtros seleccionados.</td></tr>
+                                            <tr><td colSpan={11} className="p-12 text-center text-slate-400 font-medium">Sin datos registrados para los filtros seleccionados.</td></tr>
                                         ) : displayedClosure.map((item, idx) => (
                                             <tr key={`${item.project}-${item.micro}-${idx}`} className="hover:bg-slate-50/50 transition-colors text-[10px]">
                                                 <td className="px-4 py-4 border-b border-slate-50 font-bold text-slate-700">{item.project}</td>
-                                                <td className="px-4 py-4 border-b border-slate-50 text-slate-500 italic truncate max-w-[200px]" title={item.macro}>{item.macro}</td>
-                                                <td className="px-4 py-4 border-b border-slate-50 text-slate-600 truncate max-w-[200px]" title={item.process}>{item.process}</td>
+                                                <td className="px-4 py-4 border-b border-slate-50">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-700 truncate max-w-[200px]" title={item.macro}>{item.macro}</span>
+                                                        <span className="text-slate-500 text-[9px] truncate max-w-[200px]" title={item.process}>{item.process}</span>
+                                                    </div>
+                                                </td>
                                                 <td className="px-4 py-4 border-b border-slate-50 sticky left-0 bg-white z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
                                                     <span className="font-bold text-indigo-700">{item.micro}</span>
                                                 </td>
