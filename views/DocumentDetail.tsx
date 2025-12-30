@@ -51,9 +51,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         } else {
              if (passedDoc.assignees && passedDoc.assignees.length > 0) {
                  UserService.getAll().then(users => {
-                     const names = passedDoc.assignees.map((aid: string) => users.find(u => u.id === aid)?.name).filter((n: string) => n) as string[];
+                     const names = passedDoc.assignees.map((aid: string) => users.find(u => u.id === aid)?.name).filter((n: string | undefined) => n) as string[];
                      setAssigneeNames(names);
-                     const emails = passedDoc.assignees.map((aid: string) => users.find(u => u.id === aid)?.email).filter((e: string) => e) as string[];
+                     const emails = passedDoc.assignees.map((aid: string) => users.find(u => u.id === aid)?.email).filter((e: string | undefined) => e) as string[];
                      setAssigneeEmails(emails);
                  });
              }
@@ -218,10 +218,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       if (!doc) return;
       if (action === 'COMMENT') {
           if (!comment.trim()) { alert('Por favor escribe una observación antes de guardar.'); return; }
-          executeTransition('COMMENT', null, null);
+          executeTransition('COMMENT', comment);
           return;
       }
-      if (action === 'ADVANCE') { executeTransition('ADVANCE', null, null); return; }
+      if (action === 'ADVANCE') { executeTransition('ADVANCE', ''); return; }
       if (action === 'APPROVE' || action === 'REJECT') {
           if (action === 'REJECT' && !comment) { alert('Por favor agrega un comentario/observación antes de rechazar.'); return; }
           setPendingAction(action);
@@ -247,15 +247,22 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       const actionText = pendingAction === 'APPROVE' ? 'APROBAR' : 'RECHAZAR';
       if (window.confirm(`¿Confirma ${actionText} la solicitud cargando el archivo ${detectedVersion}?`)) {
           setShowResponseModal(false);
-          await executeTransition(pendingAction, responseFile, detectedVersion);
+          await executeTransition(pendingAction, comment, responseFile, detectedVersion);
       }
   };
 
-  const executeTransition = async (action: any, comment: string, file?: File, customVersion?: string) => {
+  const executeTransition = async (action: any, transitionComment: string, file?: File, customVersion?: string) => {
       if (!doc) return;
       setActionLoading(true);
       try {
-        await DocumentService.transitionState(doc.id, user, action, comment || (action === 'REQUEST_APPROVAL' ? `Solicitud enviada tras validar archivo.` : `Gestión realizada.`), file || undefined, customVersion || undefined);
+        await DocumentService.transitionState(
+            doc.id, 
+            user, 
+            action, 
+            transitionComment || (action === 'REQUEST_APPROVAL' ? `Solicitud enviada tras validar archivo.` : `Gestión realizada.`), 
+            file || undefined, 
+            customVersion || undefined
+        );
         setComment('');
         await loadData(doc.id);
       } catch (err: any) {
