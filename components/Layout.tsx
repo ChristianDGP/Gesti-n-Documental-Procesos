@@ -16,25 +16,30 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [inboxCount, setInboxCount] = useState(0);
   const location = useLocation();
 
-  const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
+  const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white shadow-inner' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
   useEffect(() => {
-    const unsubscribe = NotificationService.subscribeToUnreadCount(user.id, (count) => {
+    // Suscripción a Notificaciones (Bandeja de Entrada)
+    // Se escucha la colección en tiempo real para actualizar el badge instantáneamente
+    const unsubscribeInbox = NotificationService.subscribeToUnreadCount(user.id, (count) => {
         setInboxCount(count);
     });
-    return () => unsubscribe();
+
+    return () => {
+        unsubscribeInbox();
+    };
   }, [user.id]); 
 
   const NavItem = ({ to, icon: Icon, label, badge }: { to: string, icon: any, label: string, badge?: number }) => (
     <Link
       to={to}
       onClick={() => setIsSidebarOpen(false)}
-      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive(to)}`}
+      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group ${isActive(to)}`}
     >
-      <Icon size={20} />
+      <Icon size={20} className={isActive(to) === 'bg-slate-800 text-white shadow-inner' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-white'} />
       <span className="font-medium flex-1">{label}</span>
       {badge !== undefined && badge > 0 && (
-          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-auto">
+          <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg ring-2 ring-slate-900 animate-pulse">
               {badge}
           </span>
       )}
@@ -50,21 +55,21 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {isSidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/60 z-20 md:hidden backdrop-blur-sm transition-opacity" onClick={() => setIsSidebarOpen(false)} />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-slate-900 text-white transform transition-transform duration-200 ease-in-out md:translate-x-0 md:static md:flex-shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:flex-shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-full flex flex-col">
-          <div className="p-6 border-b border-slate-800 flex justify-between items-center flex-shrink-0">
+          <div className="p-6 border-b border-slate-800 flex justify-between items-center flex-shrink-0 bg-slate-950/30">
             <div>
-                <h1 className="text-xl font-bold tracking-tight">SGD</h1>
-                <p className="text-xs text-slate-400">Gestión Documental</p>
+                <h1 className="text-xl font-bold tracking-tight text-white">SGD</h1>
+                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Gestión Documental</p>
             </div>
-            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400">
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
                 <X size={24} />
             </button>
           </div>
-          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-            <div className="pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Gestión</div>
+          <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+            <div className="pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Gestión Principal</div>
             <NavItem to="/" icon={BarChart2} label="Dashboard" />
             <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
             <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
@@ -72,7 +77,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             
             {(canAccessReports || canAccessReferents || isAdminOrCoord) && (
               <>
-                <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Administración</div>
+                <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Administración</div>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 
                 {isAdminOrCoord && (
@@ -92,11 +97,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 )}
               </>
             )}
-            <div className="pt-4 pb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Cuenta</div>
+            <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Configuración</div>
             <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
           </nav>
-          <div className="p-4 border-t border-slate-800 flex-shrink-0">
-            <button onClick={onLogout} className="w-full flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 p-2 rounded-md transition-colors text-sm">
+          <div className="p-4 border-t border-slate-800 flex-shrink-0 bg-slate-950/20">
+            <button onClick={onLogout} className="w-full flex items-center justify-center space-x-2 bg-slate-800 hover:bg-red-900/40 hover:text-red-200 p-2.5 rounded-lg transition-all text-sm font-semibold border border-transparent hover:border-red-800/50">
                 <LogOut size={16} />
                 <span>Cerrar Sesión</span>
             </button>
@@ -104,12 +109,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         </div>
       </aside>
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between md:hidden flex-shrink-0">
-            <button onClick={() => setIsSidebarOpen(true)} className="text-slate-600"><Menu size={24} /></button>
-            <span className="font-semibold text-slate-800">SGD Mobile</span>
+        <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between md:hidden flex-shrink-0 shadow-sm">
+            <button onClick={() => setIsSidebarOpen(true)} className="text-slate-600 hover:bg-slate-50 p-1 rounded-md"><Menu size={24} /></button>
+            <div className="flex flex-col items-center">
+              <span className="font-bold text-slate-900 text-sm">SGD Mobile</span>
+              <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">Bandeja {inboxCount > 0 ? `(${inboxCount})` : ''}</span>
+            </div>
             <div className="w-6" />
         </header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/50">{children}</main>
       </div>
     </div>
   );

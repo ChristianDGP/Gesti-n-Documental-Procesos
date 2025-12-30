@@ -98,6 +98,7 @@ export const ReferentService = {
 
 export const NotificationService = {
     create: async (userId: string, docId: string, type: Notification['type'], title: string, message: string, actorName: string) => {
+        if (!userId) return;
         try {
             const notif: Omit<Notification, 'id'> = {
                 userId, documentId: docId, type, title, message, isRead: false,
@@ -109,7 +110,8 @@ export const NotificationService = {
     getByUser: async (userId: string): Promise<Notification[]> => {
         const q = query(collection(db, "notifications"), where("userId", "==", userId));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+        return data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     },
     subscribeToUnreadCount: (userId: string, callback: (count: number) => void) => {
         const q = query(collection(db, "notifications"), where("userId", "==", userId), where("isRead", "==", false));
@@ -209,6 +211,21 @@ export const DocumentService = {
     };
     const docRef = await addDoc(collection(db, "documents"), newDocData);
     await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Creado v${version}`, version);
+    
+    // Notificar al coordinador sobre la creación de un nuevo documento
+    const allUsers = await UserService.getAll();
+    const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
+    coordinators.forEach(coord => {
+        NotificationService.create(
+            coord.id,
+            docRef.id,
+            'ASSIGNMENT',
+            'Nueva Solicitud de Documento',
+            `El analista ${author.name} ha iniciado: ${title}`,
+            author.name
+        );
+    });
+
     return { id: docRef.id, ...newDocData } as Document;
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
@@ -220,15 +237,68 @@ export const DocumentService = {
       let newState = currentDoc.state;
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
+      
       if (customVersion) {
         newVersion = customVersion;
         newState = determineStateFromVersion(customVersion).state;
       }
+      
       if (action === 'APPROVE') hasPending = false;
       else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
       else if (action === 'REQUEST_APPROVAL') hasPending = true;
+      
       await updateDoc(docRef, { state: newState, version: newVersion, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
       await HistoryService.log(docId, user, action, currentDoc.state, newState, comment, newVersion);
+
+      // --- Lógica de Notificaciones Dinámicas ---
+      const allUsers = await UserService.getAll();
+      
+      // Caso 1: Aprobación o Rechazo (Coordinador -> Analistas)
+      if (action === 'APPROVE' || action === 'REJECT') {
+          const notificationType = action === 'APPROVE' ? 'APPROVAL' : 'REJECTION';
+          const title = action === 'APPROVE' ? 'Documento Aprobado' : 'Documento Rechazado';
+          const msg = `El documento "${currentDoc.title}" ha sido ${action === 'APPROVE' ? 'aprobado' : 'rechazado'}.`;
+          
+          currentDoc.assignees.forEach(aid => {
+              if (aid !== user.id) {
+                NotificationService.create(aid, docId, notificationType, title, msg, user.name);
+              }
+          });
+          
+          // Notificar también al autor original si no está en assignees
+          if (!currentDoc.assignees.includes(currentDoc.authorId) && currentDoc.authorId !== user.id) {
+              NotificationService.create(currentDoc.authorId, docId, notificationType, title, msg, user.name);
+          }
+      } 
+      // Caso 2: Nuevo Comentario (Autor y Asignados)
+      else if (action === 'COMMENT') {
+          const msg = `Nuevo comentario en "${currentDoc.title}": ${comment.substring(0, 50)}...`;
+          const targets = new Set([...(currentDoc.assignees || []), currentDoc.authorId]);
+          targets.forEach(aid => {
+              if (aid !== user.id) {
+                NotificationService.create(aid, docId, 'COMMENT', 'Nuevo Comentario', msg, user.name);
+              }
+          });
+      } 
+      // Caso 3: Carga de nueva versión (Analista -> Coordinadores)
+      else if (customVersion) {
+          const reviewStates = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW];
+          if (reviewStates.includes(newState)) {
+              const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
+              coordinators.forEach(coord => {
+                  if (coord.id !== user.id) {
+                    NotificationService.create(
+                        coord.id,
+                        docId,
+                        'ASSIGNMENT',
+                        'Revisión Solicitada',
+                        `Nueva versión cargada para revisar: ${currentDoc.title} (${newVersion})`,
+                        user.name
+                    );
+                  }
+              });
+          }
+      }
   }
 };
 
