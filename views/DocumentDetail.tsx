@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader } from '../services/firebaseBackend';
@@ -95,12 +96,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                }
            }
            
-           // Resolve Assignees if missing or legacy
            if ((resolvedAssigneeIds.length === 0 || isLegacy) && node?.assignees) {
                resolvedAssigneeIds = node.assignees;
            }
 
-           // Resolve Referents (Always from Matrix for accuracy)
            if (node?.referentIds && node.referentIds.length > 0) {
                resolvedReferentEmails = allReferents
                    .filter(r => node.referentIds.includes(r.id))
@@ -252,7 +251,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
-  const executeTransition = async (action: any, file: File | null, customVersion: string | null) => {
+  const executeTransition = async (action: any, comment: string, file?: File, customVersion?: string) => {
       if (!doc) return;
       setActionLoading(true);
       try {
@@ -266,9 +265,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
-  // --- NOTIFICATION HANDLERS ---
+  // --- NOTIFICATION HANDLERS WITH DIRECT LINKS (INTERNAL ONLY) ---
 
-  // 1. ANALISTA -> COORDINADOR (Comunicación Interna: Con PROYECTO)
+  const getDocLink = () => `${window.location.origin}/#/doc/${doc?.id}`;
+
+  // 1. ANALISTA -> COORDINADOR (Comunicación Interna: Con LINK)
   const handleAnalystNotificationToCoordinator = () => {
     if (!doc) return;
     if (!coordinatorEmail) {
@@ -279,6 +280,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     const bodyRaw = `Estimada/o,
 Para vuestra aprobación, adjunto el Informe "${doc.project} - ${doc.macroprocess || ''} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}",
 
+Puede revisar los detalles y gestionar la aprobación en el siguiente enlace:
+${getDocLink()}
+
 Atento a los comentarios
 Saludos
 
@@ -288,7 +292,7 @@ ${user.name}`;
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
-  // 2. COORDINADOR -> EXTERNO (Comunicación Externa: SIN PROYECTO)
+  // 2. COORDINADOR -> EXTERNO (Comunicación Externa: SIN LINK)
   const handleNotifyExternal = () => {
       if (!doc) return;
       const subject = encodeURIComponent(`Solicitud de Aprobación ${doc.docType || ''} - ${doc.microprocess || ''} - ${doc.version}`);
@@ -308,7 +312,7 @@ ${user.name}`;
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&cc=${cc}&su=${subject}&body=${body}`, '_blank');
   };
 
-  // 3. COORDINADOR -> ANALISTA (Comunicación Interna: Con PROYECTO)
+  // 3. COORDINADOR -> ANALISTA (Comunicación Interna: Con LINK)
   const handleNotifyAnalyst = () => {
       if (!doc || assigneeEmails.length === 0) return;
       
@@ -325,6 +329,9 @@ Adjunto el Informe:
 ${doc.project} - ${doc.macroprocess || ''} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}
 
 Estado: ${estadoLabel}
+
+Vínculo directo para revisión:
+${getDocLink()}
 
 Atento a los comentarios
 Saludos
