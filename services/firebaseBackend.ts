@@ -210,7 +210,8 @@ export const DocumentService = {
       title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress: initialProgress || 10, hasPendingRequest: isSubmission, files: uploadedFiles, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
     };
     const docRef = await addDoc(collection(db, "documents"), newDocData);
-    await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Creado v${version}`, version);
+    // CORRECCIÓN: Se quita la 'v' estática porque la variable version ya la incluye o es 0.0
+    await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Creado ${version}`, version);
     
     // Notificar al coordinador sobre la creación de un nuevo documento
     const allUsers = await UserService.getAll();
@@ -238,6 +239,17 @@ export const DocumentService = {
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
       
+      // Mapa de traducción de acciones técnicas a español para el historial
+      const actionLabels: Record<string, string> = {
+          'APPROVE': 'Aprobación',
+          'REJECT': 'Rechazo',
+          'COMMENT': 'Observación',
+          'REQUEST_APPROVAL': 'Solicitud de Revisión',
+          'ADVANCE': 'Avance de Flujo'
+      };
+
+      const displayAction = actionLabels[action] || action;
+
       if (customVersion) {
         newVersion = customVersion;
         newState = determineStateFromVersion(customVersion).state;
@@ -248,7 +260,7 @@ export const DocumentService = {
       else if (action === 'REQUEST_APPROVAL') hasPending = true;
       
       await updateDoc(docRef, { state: newState, version: newVersion, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
-      await HistoryService.log(docId, user, action, currentDoc.state, newState, comment, newVersion);
+      await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
       // --- Lógica de Notificaciones Dinámicas ---
       const allUsers = await UserService.getAll();
@@ -257,7 +269,7 @@ export const DocumentService = {
       if (action === 'APPROVE' || action === 'REJECT') {
           const notificationType = action === 'APPROVE' ? 'APPROVAL' : 'REJECTION';
           const title = action === 'APPROVE' ? 'Documento Aprobado' : 'Documento Rechazado';
-          const msg = `El documento "${currentDoc.title}" ha sido ${action === 'APPROVE' ? 'aprobado' : 'rechazado'}.`;
+          const msg = `El documento "${currentDoc.title}" ha sido ${action === 'APPROVE' ? 'aprobado' : 'rechazado'} (Versión ${newVersion}).`;
           
           currentDoc.assignees.forEach(aid => {
               if (aid !== user.id) {
@@ -265,18 +277,17 @@ export const DocumentService = {
               }
           });
           
-          // Notificar también al autor original si no está en assignees
           if (!currentDoc.assignees.includes(currentDoc.authorId) && currentDoc.authorId !== user.id) {
               NotificationService.create(currentDoc.authorId, docId, notificationType, title, msg, user.name);
           }
       } 
       // Caso 2: Nuevo Comentario (Autor y Asignados)
       else if (action === 'COMMENT') {
-          const msg = `Nuevo comentario en "${currentDoc.title}": ${comment.substring(0, 50)}...`;
+          const msg = `Nueva observación en "${currentDoc.title}": ${comment.substring(0, 50)}...`;
           const targets = new Set([...(currentDoc.assignees || []), currentDoc.authorId]);
           targets.forEach(aid => {
               if (aid !== user.id) {
-                NotificationService.create(aid, docId, 'COMMENT', 'Nuevo Comentario', msg, user.name);
+                NotificationService.create(aid, docId, 'COMMENT', 'Nueva Observación', msg, user.name);
               }
           });
       } 
@@ -285,6 +296,7 @@ export const DocumentService = {
           const reviewStates = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW];
           if (reviewStates.includes(newState)) {
               const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
+              const estadoNombre = STATE_CONFIG[newState]?.label.split('(')[0].trim();
               coordinators.forEach(coord => {
                   if (coord.id !== user.id) {
                     NotificationService.create(
@@ -292,7 +304,7 @@ export const DocumentService = {
                         docId,
                         'ASSIGNMENT',
                         'Revisión Solicitada',
-                        `Nueva versión cargada para revisar: ${currentDoc.title} (${newVersion})`,
+                        `Nueva versión en ${estadoNombre}: ${currentDoc.title} (${newVersion})`,
                         user.name
                     );
                   }
