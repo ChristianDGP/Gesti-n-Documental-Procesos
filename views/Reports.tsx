@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
@@ -183,14 +184,23 @@ const Reports: React.FC<Props> = ({ user }) => {
             
             if (!d.isVirtual) {
                 const docHistory = historyByDoc[d.id] || [];
+                // Intentar obtener la última transición de estado ocurrida antes del fin del mes seleccionado
                 const lastEntry = docHistory
                     .filter(h => h.timestamp <= lastDayOfMonth)
                     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
                 
                 if (lastEntry) {
                     stateAtClosure = lastEntry.newState;
-                    // PRIORIDAD: Usar versión capturada en el historial, fallback a la actual si no existía versión estructurada
                     versionAtClosure = lastEntry.version || d.version; 
+                } else {
+                    // FALLBACK: Si no hay historial para este documento ANTES de la fecha de cierre, 
+                    // pero el documento existe y su fecha de actualización es anterior o igual al fin del mes,
+                    // significa que su estado actual es el que le corresponde a ese periodo (ej: carga inicial).
+                    const docTimestamp = d.updatedAt ? new Date(d.updatedAt).toISOString() : '';
+                    if (docTimestamp && docTimestamp <= lastDayOfMonth) {
+                        stateAtClosure = d.state;
+                        versionAtClosure = d.version;
+                    }
                 }
             }
 
