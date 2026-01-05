@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
@@ -59,7 +58,9 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     const [closureMonth, setClosureMonth] = useState(() => {
         const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const startLimit = new Date(2025, 11, 1);
+        const selected = d > startLimit ? d : startLimit;
+        return `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, '0')}`;
     });
     const [closurePage, setClosurePage] = useState(1);
     const [stuckPage, setStuckPage] = useState(1);
@@ -375,13 +376,25 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     const generateMonthOptions = () => {
         const options = [];
+        const startDate = new Date(2025, 11, 1); // Diciembre 2025
         const now = new Date();
-        for (let i = 0; i < 12; i++) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        
+        let current = new Date(now.getFullYear(), now.getMonth(), 1);
+        const limit = startDate;
+        
+        while (current >= limit) {
+            const val = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+            const label = current.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            options.push(<option key={val} value={val}>{label}</option>);
+            current.setMonth(current.getMonth() - 1);
+        }
+        
+        if (options.length === 0) {
+            const val = "2025-12";
+            const label = startDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
             options.push(<option key={val} value={val}>{label}</option>);
         }
+
         return options;
     };
 
@@ -391,7 +404,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                         <LayoutDashboard className="text-indigo-600" /> 
-                        Panel Estratégico de Control
+                        Panel de Control
                     </h1>
                     <p className="text-slate-500">Métricas institucionales y estados de cumplimiento.</p>
                 </div>
