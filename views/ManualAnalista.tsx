@@ -38,7 +38,7 @@ const ManualAnalista: React.FC = () => {
         {/* Portada del Manual */}
         <div className="bg-slate-900 p-12 text-white text-center">
           <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-            <Book size={40} />
+            < Book size={40} />
           </div>
           <h1 className="text-3xl font-bold mb-2">Manual de Usuario - Analista</h1>
           <p className="text-indigo-300 font-medium uppercase tracking-widest text-sm">Sistema de Gestión Documental (SGD)</p>
@@ -53,11 +53,10 @@ const ManualAnalista: React.FC = () => {
           <section>
             <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2 border-b pb-2">
               <Info className="text-indigo-600" size={24} />
-              1. Introducción al Sistema
+              1. Introducción
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              El SGD es la plataforma centralizada para la gestión, revisión y aprobación de documentos institucionales. 
-              Como <strong>Analista</strong>, su función principal es la elaboración de informes, el seguimiento de sus versiones y la respuesta a las observaciones de la coordinación.
+              El SGD es la plataforma centralizada para la gestión y aprobación de documentos. Como Analista, su función es la elaboración de informes en el repositorio dispuesto para este fin. El seguimiento de sus versiones y la respuesta a las observaciones del coordinador se realiza en esta plataforma.
             </p>
           </section>
 
@@ -71,9 +70,9 @@ const ManualAnalista: React.FC = () => {
               <StateInfo label="Iniciado (0.0)" desc="Documento recién creado, aún sin contenido técnico avanzado." />
               <StateInfo label="En Proceso (0.n)" desc="Fase de elaboración. El analista sube avances periódicos." />
               <StateInfo label="Revisión Interna (v0.n)" desc="Enviado al Coordinador para validación previa." />
-              <StateInfo label="Referente (v1.n.i)" desc="Enviado a expertos técnicos externos para su visto bueno." />
-              <StateInfo label="Control Gestión (v1.n.iAR)" desc="Fase final de revisión normativa y de procesos." />
-              <StateInfo label="Aprobado (v1.nACG)" desc="Documento finalizado y archivado formalmente." />
+              <StateInfo label="Referente (v1.n.i)" desc="Enviado a referentes para su visto bueno." />
+              <StateInfo label="Control Gestión (v1.n.iAR)" desc="Enviado a Control de gestión para su visto bueno." />
+              <StateInfo label="Aprobado (v1.nACG)" desc="Documento Terminado y archivado formalmente en repositorio de documentos aprobados." />
             </div>
           </section>
 
