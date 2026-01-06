@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen } from 'lucide-react';
 import { User, UserRole, DocState, Document } from '../types';
 import { NotificationService } from '../services/firebaseBackend';
 
@@ -19,11 +19,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white shadow-inner' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
   useEffect(() => {
-    // Suscripción a Notificaciones (Bandeja de Entrada) en tiempo real
     const unsubscribeInbox = NotificationService.subscribeToUnreadCount(user.id, (count) => {
         setInboxCount(count);
     });
-
     return () => {
         unsubscribeInbox();
     };
@@ -51,8 +49,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   );
 
   const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
-  
-  // Permisos condicionales para Analista
   const canAccessReports = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReports);
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
 
@@ -83,16 +79,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
               <>
                 <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Administración</div>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
-                
                 {isAdminOrCoord && (
                     <>
                         <NavItem to="/admin/structure" icon={Network} label="Estructura" />
                         <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
                     </>
                 )}
-                
                 {canAccessReferents && <NavItem to="/admin/referents" icon={UserCheck} label="Referentes" />}
-                
                 {user.role === UserRole.ADMIN && (
                     <>
                         <NavItem to="/admin/database" icon={Database} label="Base de Datos" />
@@ -101,7 +94,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 )}
               </>
             )}
-            <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Configuración</div>
+            <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Ayuda y Soporte</div>
+            <NavItem to="/manual" icon={BookOpen} label="Manual de Usuario" />
             <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
           </nav>
           <div className="p-4 border-t border-slate-800 flex-shrink-0 bg-slate-950/20">

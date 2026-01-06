@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
@@ -8,7 +7,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, ClipboardList, TableProperties, FileSpreadsheet
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, ClipboardList, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut
 } from 'lucide-react';
 
 interface Props {
@@ -41,6 +40,8 @@ const TYPE_COLORS: Record<string, string> = {
 const STUCK_ITEMS_PER_PAGE = 9;
 const CLOSURE_ITEMS_PER_PAGE = 15;
 
+type ChartScale = 'ANNUAL' | 'MONTHLY' | 'WEEKLY';
+
 const Reports: React.FC<Props> = ({ user }) => {
     const navigate = useNavigate();
     const isAnalyst = user.role === UserRole.ANALYST;
@@ -52,6 +53,7 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [loading, setLoading] = useState(true);
     
     const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE'>('REPORTS');
+    const [chartScale, setChartScale] = useState<ChartScale>('MONTHLY');
 
     const [filterProject, setFilterProject] = useState('');
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
@@ -184,7 +186,6 @@ const Reports: React.FC<Props> = ({ user }) => {
             
             if (!d.isVirtual) {
                 const docHistory = historyByDoc[d.id] || [];
-                // Intentar obtener la última transición de estado ocurrida antes del fin del mes seleccionado
                 const lastEntry = docHistory
                     .filter(h => h.timestamp <= lastDayOfMonth)
                     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
@@ -193,9 +194,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                     stateAtClosure = lastEntry.newState;
                     versionAtClosure = lastEntry.version || d.version; 
                 } else {
-                    // FALLBACK: Si no hay historial para este documento ANTES de la fecha de cierre, 
-                    // pero el documento existe y su fecha de actualización es anterior o igual al fin del mes,
-                    // significa que su estado actual es el que le corresponde a ese periodo (ej: carga inicial).
                     const docTimestamp = d.updatedAt ? new Date(d.updatedAt).toISOString() : '';
                     if (docTimestamp && docTimestamp <= lastDayOfMonth) {
                         stateAtClosure = d.state;
@@ -307,21 +305,77 @@ const Reports: React.FC<Props> = ({ user }) => {
         const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const now = new Date();
         const periods: any[] = [];
-        for (let i = 11; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const label = `${monthsNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
-            const yearMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            periods.push({ key: yearMonthKey, label: label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 });
+
+        if (chartScale === 'ANNUAL') {
+            // Últimos 5 años
+            for (let i = 4; i >= 0; i--) {
+                const year = now.getFullYear() - i;
+                periods.push({ key: year.toString(), label: year.toString(), 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 });
+            }
+        } else if (chartScale === 'MONTHLY') {
+            // Últimos 12 meses
+            for (let i = 11; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const label = `${monthsNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
+                const yearMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                periods.push({ key: yearMonthKey, label: label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 });
+            }
+        } else if (chartScale === 'WEEKLY') {
+            // Últimas 8 semanas
+            for (let i = 7; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - (i * 7));
+                const weekNum = Math.ceil(d.getDate() / 7);
+                const label = `S${weekNum}-${monthsNames[d.getMonth()]}`;
+                
+                const firstDayOfYear = new Date(d.getFullYear(), 0, 1);
+                const pastDaysOfYear = (d.getTime() - firstDayOfYear.getTime()) / 86400000;
+                const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+                const key = `${d.getFullYear()}-W${weekOfYear}`;
+                periods.push({ key, label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 });
+            }
         }
+
         filteredDocs.filter(d => d.state === DocState.APPROVED).forEach(d => {
             const date = new Date(d.updatedAt);
             if (isNaN(date.getTime())) return;
-            const docKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+            let docKey = '';
+            if (chartScale === 'ANNUAL') {
+                docKey = date.getFullYear().toString();
+            } else if (chartScale === 'MONTHLY') {
+                docKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            } else if (chartScale === 'WEEKLY') {
+                const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+                const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
+                const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+                docKey = `${date.getFullYear()}-W${weekOfYear}`;
+            }
+
             const period = periods.find(p => p.key === docKey);
             if (period && d.docType) period[d.docType]++;
         });
         return periods;
-    }, [filteredDocs]);
+    }, [filteredDocs, chartScale]);
+
+    const handleZoomIn = () => {
+        if (chartScale === 'ANNUAL') setChartScale('MONTHLY');
+        else if (chartScale === 'MONTHLY') setChartScale('WEEKLY');
+    };
+
+    const handleZoomOut = () => {
+        if (chartScale === 'WEEKLY') setChartScale('MONTHLY');
+        else if (chartScale === 'MONTHLY') setChartScale('ANNUAL');
+    };
+
+    const getScaleLabel = () => {
+        switch(chartScale) {
+            case 'ANNUAL': return 'Anual';
+            case 'MONTHLY': return 'Mensual';
+            case 'WEEKLY': return 'Semanal';
+            default: return 'Mensual';
+        }
+    };
 
     const goToDashboard = (ids: string[]) => navigate('/', { state: { filterIds: ids, fromReport: true } });
 
@@ -341,7 +395,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             const getInfo = (type: string) => {
                 const data = item.docs[type];
                 if (!data) return { v: '-', s: 'No req.' };
-                return { v: data.version, s: STATE_CONFIG[data.state]?.label.split('(')[0].trim() || '-' };
+                return { v: data.version, s: STATE_CONFIG[data.state as DocState]?.label.split('(')[0].trim() || '-' };
             };
 
             const asis = getInfo('AS IS');
@@ -386,7 +440,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     const generateMonthOptions = () => {
         const options = [];
-        const startDate = new Date(2025, 11, 1); // Diciembre 2025
+        const startDate = new Date(2025, 11, 1);
         const now = new Date();
         
         let current = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -541,8 +595,33 @@ const Reports: React.FC<Props> = ({ user }) => {
                         </div>
 
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                            <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><TrendingUp size={16} /> Evolución Mensual</h3>
-                            <p className="text-xs text-slate-500 mb-6">Velocidad de cierre: Cantidad de documentos terminados mensualmente por tipo.</p>
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><TrendingUp size={16} /> Evolución de Cierres</h3>
+                                    <p className="text-xs text-slate-500">Velocidad de entrega acumulada por periodo. Escala: <b>{getScaleLabel()}</b></p>
+                                </div>
+                                <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    <button 
+                                        onClick={handleZoomOut} 
+                                        disabled={chartScale === 'ANNUAL'}
+                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all"
+                                        title="Zoom Out (Menos detalle)"
+                                    >
+                                        <ZoomOut size={18} />
+                                    </button>
+                                    <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">
+                                        {getScaleLabel()}
+                                    </div>
+                                    <button 
+                                        onClick={handleZoomIn} 
+                                        disabled={chartScale === 'WEEKLY'}
+                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all"
+                                        title="Zoom In (Más detalle)"
+                                    >
+                                        <ZoomIn size={18} />
+                                    </button>
+                                </div>
+                            </div>
                             <div className="h-[350px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={evolutionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>

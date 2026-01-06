@@ -15,6 +15,7 @@ import Reports from './views/Reports';
 import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
 import Profile from './views/Profile';
+import ManualAnalista from './views/ManualAnalista';
 import { UserRole } from './types'; 
 import { logoutUser } from './services/firebaseAuthService'; 
 import { useAuthStatus } from './hooks/useAuthStatus'; 
@@ -54,6 +55,7 @@ const App: React.FC = () => {
                                     <Route path="/new" element={<CreateDocument user={user} />} />
                                     <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
                                     <Route path="/profile" element={<Profile user={user} onUpdate={() => window.location.reload()} />} /> 
+                                    <Route path="/manual" element={<ManualAnalista />} />
                                     
                                     {/* Rutas con acceso condicional para Analistas */}
                                     <Route 
