@@ -409,6 +409,17 @@ const Reports: React.FC<Props> = ({ user }) => {
         else if (cfdRange === 6) setCfdRange(12);
     };
 
+    // LÓGICA DE ZOOM PARA EVOLUCIÓN DE CIERRES
+    const handleEvolutionZoomIn = () => {
+        if (chartScale === 'ANNUAL') setChartScale('MONTHLY');
+        else if (chartScale === 'MONTHLY') setChartScale('WEEKLY');
+    };
+
+    const handleEvolutionZoomOut = () => {
+        if (chartScale === 'WEEKLY') setChartScale('MONTHLY');
+        else if (chartScale === 'MONTHLY') setChartScale('ANNUAL');
+    };
+
     if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando métricas ejecutivas...</div>;
 
     const totalStuck = executiveMetrics.stuckDocs.length;
@@ -423,6 +434,15 @@ const Reports: React.FC<Props> = ({ user }) => {
         while (current >= limit) { const val = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`; const label = current.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); options.push(<option key={val} value={val}>{label}</option>); current.setMonth(current.getMonth() - 1); }
         if (options.length === 0) { const val = "2025-12"; const label = startDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); options.push(<option key={val} value={val}>{label}</option>); }
         return options;
+    };
+
+    const getScaleLabel = (scale: string) => {
+        switch (scale) {
+            case 'ANNUAL': return 'Anual';
+            case 'MONTHLY': return 'Mensual';
+            case 'WEEKLY': return 'Semanal';
+            default: return 'Mensual';
+        }
     };
 
     return (
@@ -587,9 +607,23 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <p className="text-xs text-slate-500">Velocidad de entrega acumulada por periodo. Escala: <b>{getScaleLabel(chartScale)}</b></p>
                                 </div>
                                 <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                    <button onClick={() => setChartScale(chartScale === 'ANNUAL' ? 'MONTHLY' : chartScale === 'MONTHLY' ? 'WEEKLY' : 'WEEKLY')} disabled={chartScale === 'ANNUAL'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom Out (Menos detalle)"><ZoomOut size={18} /></button>
+                                    <button 
+                                        onClick={handleEvolutionZoomOut} 
+                                        disabled={chartScale === 'ANNUAL'} 
+                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" 
+                                        title="Zoom Out (Menos detalle / Anual)"
+                                    >
+                                        <ZoomOut size={18} />
+                                    </button>
                                     <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">{getScaleLabel(chartScale)}</div>
-                                    <button onClick={() => setChartScale(chartScale === 'WEEKLY' ? 'MONTHLY' : chartScale === 'MONTHLY' ? 'ANNUAL' : 'ANNUAL')} disabled={chartScale === 'WEEKLY'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom In (Más detalle)"><ZoomIn size={18} /></button>
+                                    <button 
+                                        onClick={handleEvolutionZoomIn} 
+                                        disabled={chartScale === 'WEEKLY'} 
+                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" 
+                                        title="Zoom In (Más detalle / Semanal)"
+                                    >
+                                        <ZoomIn size={18} />
+                                    </button>
                                 </div>
                             </div>
                             <div className="h-[350px] w-full">
@@ -782,16 +816,6 @@ const AgileBucket = ({ title, value, icon: Icon, color, onClick }: any) => {
             <span className="text-xl font-extrabold">{value}</span>
         </div>
     );
-};
-
-// Helper function to map scale to a readable label
-const getScaleLabel = (scale: string) => {
-    switch (scale) {
-        case 'ANNUAL': return 'Anual';
-        case 'MONTHLY': return 'Mensual';
-        case 'WEEKLY': return 'Semanal';
-        default: return 'Mensual';
-    }
 };
 
 export default Reports;
