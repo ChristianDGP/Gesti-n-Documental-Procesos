@@ -243,10 +243,12 @@ const Reports: React.FC<Props> = ({ user }) => {
         return stats;
     }, [filteredDocs]);
 
-    // CFD CON ZOOM DINÁMICO
+    // CFD CON CONTEO CORREGIDO PARA ALINEARSE CON KPIs
     const cfdData = useMemo(() => {
         const data: any[] = [];
         const now = new Date();
+        const currentMonthIdx = now.getMonth();
+        const currentYearIdx = now.getFullYear();
         
         const historyByDoc: Record<string, DocHistory[]> = {};
         history.forEach(h => {
@@ -254,41 +256,63 @@ const Reports: React.FC<Props> = ({ user }) => {
             historyByDoc[h.documentId].push(h);
         });
 
-        // Iterar según el rango dinámico (3, 6 o 12 meses)
         for (let i = cfdRange - 1; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const monthLabel = d.toLocaleString('es-ES', { month: 'short' });
-            const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+            const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const monthLabel = targetDate.toLocaleString('es-ES', { month: 'short' });
+            
+            // Determinar si es el periodo actual para forzar coincidencia con KPIs
+            const isCurrentPeriod = targetDate.getMonth() === currentMonthIdx && targetDate.getFullYear() === currentYearIdx;
+            
+            const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
             const endOfMonthISO = endOfMonth.toISOString();
             
             let backlog = 0, dev = 0, review = 0, validation = 0, done = 0;
             
             filteredDocs.forEach(doc => {
-                if (doc.isVirtual) {
-                    backlog++;
+                let stateToCount: DocState = DocState.NOT_STARTED;
+
+                if (isCurrentPeriod) {
+                    // SI ES EL MES ACTUAL: Usar el estado real para que coincida 1:1 con las fichas superiores
+                    stateToCount = doc.state;
+                } else if (doc.isVirtual) {
+                    // Documentos no iniciados aún en la matriz
+                    stateToCount = DocState.NOT_STARTED;
                 } else {
+                    // SI ES UN MES PASADO: Reconstruir desde historial
                     const docHistory = (historyByDoc[doc.id] || []).filter(h => h.timestamp <= endOfMonthISO);
                     
                     if (docHistory.length > 0) {
                         const latestEntry = docHistory.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
-                        const state = latestEntry.newState;
-                        if (state === DocState.APPROVED) done++;
-                        else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(state)) validation++;
-                        else if (state === DocState.INTERNAL_REVIEW) review++;
-                        else if (state === DocState.INITIATED || state === DocState.IN_PROCESS) dev++;
-                        else backlog++;
+                        stateToCount = latestEntry.newState;
                     } else {
+                        // Fallback: Si no hay historial pero el documento se creó ANTES del fin de este mes analizado
                         const createdDate = new Date(doc.createdAt || doc.updatedAt);
-                        if (createdDate > endOfMonth) {
-                            backlog++;
+                        if (createdDate <= endOfMonth) {
+                            // Asumimos que estaba en su estado actual si no hay registros de cambio
+                            stateToCount = doc.state;
                         } else {
-                            if (doc.state === DocState.NOT_STARTED) backlog++;
-                            else dev++;
+                            // Si se creó después del mes analizado, era Backlog (No existía aún en el flujo real)
+                            stateToCount = DocState.NOT_STARTED;
                         }
                     }
                 }
+
+                // Clasificación estricta (igual que en agileFlowStats)
+                if (stateToCount === DocState.APPROVED) done++;
+                else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(stateToCount)) validation++;
+                else if (stateToCount === DocState.INTERNAL_REVIEW) review++;
+                else if (stateToCount === DocState.INITIATED || stateToCount === DocState.IN_PROCESS) dev++;
+                else backlog++;
             });
-            data.push({ month: monthLabel, 'Backlog': backlog, 'Desarrollo': dev, 'Rev. Interna': review, 'Validación': validation, 'Finalizado': done });
+
+            data.push({ 
+                month: monthLabel, 
+                'Backlog': backlog, 
+                'Desarrollo': dev, 
+                'Rev. Interna': review, 
+                'Validación': validation, 
+                'Finalizado': done 
+            });
         }
         return data;
     }, [filteredDocs, history, cfdRange]);
