@@ -7,7 +7,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree
 } from 'lucide-react';
 
 interface Props {
@@ -38,7 +38,6 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 const STUCK_ITEMS_PER_PAGE = 6;
-const CLOSURE_ITEMS_PER_PAGE = 15;
 
 type ChartScale = 'ANNUAL' | 'MONTHLY' | 'WEEKLY';
 
@@ -54,10 +53,13 @@ const Reports: React.FC<Props> = ({ user }) => {
     
     const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE'>('REPORTS');
     const [chartScale, setChartScale] = useState<ChartScale>('MONTHLY');
+    const [cfdRange, setCfdRange] = useState<3 | 6 | 12>(6);
 
     const [filterProject, setFilterProject] = useState('');
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
     const [activeType, setActiveType] = useState<string | null>(null);
+
+    const [microDrillDown, setMicroDrillDown] = useState<{ title: string, color: string, items: {name: string, project: string, ids: string[]}[] } | null>(null);
 
     const [closureMonth, setClosureMonth] = useState(() => {
         const d = new Date();
@@ -158,51 +160,52 @@ const Reports: React.FC<Props> = ({ user }) => {
         return docs;
     }, [unifiedData, filterProject, filterAnalyst]);
 
-    // NUEVA LÓGICA: KPIs DE MICROPROCESOS
+    // LÓGICA DE AGREGACIÓN DE MICROPROCESOS (Unidad de Negocio)
     const microStats = useMemo(() => {
-        const groups: Record<string, { states: DocState[], ids: string[] }> = {};
+        const groups: Record<string, { project: string, name: string, states: DocState[], ids: string[] }> = {};
         
         filteredDocs.forEach(d => {
             const key = `${d.project}|${d.microprocess}`;
-            if (!groups[key]) groups[key] = { states: [], ids: [] };
+            if (!groups[key]) groups[key] = { project: d.project!, name: d.microprocess!, states: [], ids: [] };
             groups[key].states.push(d.state);
             groups[key].ids.push(d.id);
         });
 
         const stats = {
-            total: { count: 0, ids: [] as string[] },
-            notStarted: { count: 0, ids: [] as string[] },
-            inProcess: { count: 0, ids: [] as string[] },
-            referent: { count: 0, ids: [] as string[] },
-            control: { count: 0, ids: [] as string[] },
-            finished: { count: 0, ids: [] as string[] }
+            total: [] as {name: string, project: string, ids: string[]}[],
+            notStarted: [] as {name: string, project: string, ids: string[]}[],
+            inProcess: [] as {name: string, project: string, ids: string[]}[],
+            referent: [] as {name: string, project: string, ids: string[]}[],
+            control: [] as {name: string, project: string, ids: string[]}[],
+            finished: [] as {name: string, project: string, ids: string[]}[]
         };
 
         Object.values(groups).forEach(group => {
-            stats.total.count++;
-            stats.total.ids.push(...group.ids);
+            const microItem = { name: group.name, project: group.project, ids: group.ids };
+            stats.total.push(microItem);
 
-            if (group.states.every(s => s === DocState.APPROVED)) {
-                stats.finished.count++;
-                stats.finished.ids.push(...group.ids);
-            } else if (group.states.some(s => [DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(s))) {
-                stats.control.count++;
-                stats.control.ids.push(...group.ids);
-            } else if (group.states.some(s => [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(s))) {
-                stats.referent.count++;
-                stats.referent.ids.push(...group.ids);
-            } else if (group.states.some(s => [DocState.INITIATED, DocState.IN_PROCESS, DocState.INTERNAL_REVIEW].includes(s))) {
-                stats.inProcess.count++;
-                stats.inProcess.ids.push(...group.ids);
+            // REGLA CRÍTICA: Un microproceso está TERMINADO solo si el 100% de sus documentos requeridos son APPROVED.
+            const allApproved = group.states.length > 0 && group.states.every(s => s === DocState.APPROVED);
+            
+            const hasControl = group.states.some(s => [DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(s));
+            const hasReferent = group.states.some(s => [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(s));
+            const hasProgress = group.states.some(s => s !== DocState.NOT_STARTED);
+
+            if (allApproved) {
+                stats.finished.push(microItem);
+            } else if (hasControl) {
+                stats.control.push(microItem);
+            } else if (hasReferent) {
+                stats.referent.push(microItem);
+            } else if (hasProgress) {
+                stats.inProcess.push(microItem);
             } else {
-                stats.notStarted.count++;
-                stats.notStarted.ids.push(...group.ids);
+                stats.notStarted.push(microItem);
             }
         });
         return stats;
     }, [filteredDocs]);
 
-    // KPIs DE DOCUMENTOS
     const kpis = useMemo(() => {
         const now = new Date().getTime();
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
@@ -240,29 +243,55 @@ const Reports: React.FC<Props> = ({ user }) => {
         return stats;
     }, [filteredDocs]);
 
+    // CFD CON ZOOM DINÁMICO
     const cfdData = useMemo(() => {
         const data: any[] = [];
         const now = new Date();
-        for (let i = 5; i >= 0; i--) {
+        
+        const historyByDoc: Record<string, DocHistory[]> = {};
+        history.forEach(h => {
+            if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = [];
+            historyByDoc[h.documentId].push(h);
+        });
+
+        // Iterar según el rango dinámico (3, 6 o 12 meses)
+        for (let i = cfdRange - 1; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const monthLabel = d.toLocaleString('es-ES', { month: 'short' });
-            const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59).toISOString();
+            const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+            const endOfMonthISO = endOfMonth.toISOString();
+            
             let backlog = 0, dev = 0, review = 0, validation = 0, done = 0;
+            
             filteredDocs.forEach(doc => {
-                if (doc.isVirtual) { backlog++; } else {
-                    const docHist = history.filter(h => h.documentId === doc.id && h.timestamp <= lastDay).sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
-                    const state = docHist ? docHist.newState : DocState.NOT_STARTED;
-                    if (state === DocState.APPROVED) done++;
-                    else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(state)) validation++;
-                    else if (state === DocState.INTERNAL_REVIEW) review++;
-                    else if (state === DocState.INITIATED || state === DocState.IN_PROCESS) dev++;
-                    else backlog++;
+                if (doc.isVirtual) {
+                    backlog++;
+                } else {
+                    const docHistory = (historyByDoc[doc.id] || []).filter(h => h.timestamp <= endOfMonthISO);
+                    
+                    if (docHistory.length > 0) {
+                        const latestEntry = docHistory.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+                        const state = latestEntry.newState;
+                        if (state === DocState.APPROVED) done++;
+                        else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(state)) validation++;
+                        else if (state === DocState.INTERNAL_REVIEW) review++;
+                        else if (state === DocState.INITIATED || state === DocState.IN_PROCESS) dev++;
+                        else backlog++;
+                    } else {
+                        const createdDate = new Date(doc.createdAt || doc.updatedAt);
+                        if (createdDate > endOfMonth) {
+                            backlog++;
+                        } else {
+                            if (doc.state === DocState.NOT_STARTED) backlog++;
+                            else dev++;
+                        }
+                    }
                 }
             });
             data.push({ month: monthLabel, 'Backlog': backlog, 'Desarrollo': dev, 'Rev. Interna': review, 'Validación': validation, 'Finalizado': done });
         }
         return data;
-    }, [filteredDocs, history]);
+    }, [filteredDocs, history, cfdRange]);
 
     const closureBoardData = useMemo(() => {
         if (!closureMonth || !unifiedData.length) return [];
@@ -353,10 +382,6 @@ const Reports: React.FC<Props> = ({ user }) => {
         return periods;
     }, [filteredDocs, chartScale]);
 
-    const handleZoomIn = () => { if (chartScale === 'ANNUAL') setChartScale('MONTHLY'); else if (chartScale === 'MONTHLY') setChartScale('WEEKLY'); };
-    const handleZoomOut = () => { if (chartScale === 'WEEKLY') setChartScale('MONTHLY'); else if (chartScale === 'MONTHLY') setChartScale('ANNUAL'); };
-    const getScaleLabel = () => { switch(chartScale) { case 'ANNUAL': return 'Anual'; case 'MONTHLY': return 'Mensual'; case 'WEEKLY': return 'Semanal'; default: return 'Mensual'; } };
-
     const goToDashboard = (ids: string[]) => navigate('/', { state: { filterIds: ids, fromReport: true } });
 
     const handleExportClosureExcel = () => {
@@ -374,14 +399,24 @@ const Reports: React.FC<Props> = ({ user }) => {
         link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
+    const handleCfdZoomIn = () => {
+        if (cfdRange === 12) setCfdRange(6);
+        else if (cfdRange === 6) setCfdRange(3);
+    };
+
+    const handleCfdZoomOut = () => {
+        if (cfdRange === 3) setCfdRange(6);
+        else if (cfdRange === 6) setCfdRange(12);
+    };
+
     if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando métricas ejecutivas...</div>;
 
     const totalStuck = executiveMetrics.stuckDocs.length;
-    const totalStuckPages = Math.ceil(totalStuck / STUCK_ITEMS_PER_PAGE);
-    const displayedStuck = executiveMetrics.stuckDocs.slice((stuckPage - 1) * STUCK_ITEMS_PER_PAGE, stuckPage * STUCK_ITEMS_PER_PAGE);
+    const totalStuckPages = Math.ceil(totalStuck / 6);
+    const displayedStuck = executiveMetrics.stuckDocs.slice((stuckPage - 1) * 6, stuckPage * 6);
     const totalClosureItems = closureBoardData.length;
-    const totalClosurePages = Math.ceil(totalClosureItems / CLOSURE_ITEMS_PER_PAGE);
-    const displayedClosure = closureBoardData.slice((closurePage - 1) * CLOSURE_ITEMS_PER_PAGE, closurePage * CLOSURE_ITEMS_PER_PAGE);
+    const totalClosurePages = Math.ceil(totalClosureItems / 15);
+    const displayedClosure = closureBoardData.slice((closurePage - 1) * 15, closurePage * 15);
 
     const generateMonthOptions = () => {
         const options = []; const startDate = new Date(2025, 11, 1); const now = new Date(); let current = new Date(now.getFullYear(), now.getMonth(), 1); const limit = startDate;
@@ -421,34 +456,67 @@ const Reports: React.FC<Props> = ({ user }) => {
             <div className="animate-fadeIn">
                 {activeTab === 'REPORTS' && (
                     <section className="space-y-8">
-                        {/* FILA 1: KPIs DE MICROPROCESOS (AGREGACIÓN) */}
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 px-1 text-slate-400">
                                 <Layers size={14} />
-                                <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Microprocesos (Unidades de Negocio)</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Microprocesos (Jerarquía Agregada)</span>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                                <KPICard title="MicroProc. Requeridos" value={microStats.total.count} icon={Layers} color="slate" sub="Universo Total" onClick={() => goToDashboard(microStats.total.ids)} canClick={microStats.total.count > 0} />
-                                <KPICard title="No Iniciado" value={microStats.notStarted.count} icon={Clock} color="slate" sub="Sin documentos" onClick={() => goToDashboard(microStats.notStarted.ids)} canClick={microStats.notStarted.count > 0} />
-                                <KPICard title="En Proceso" value={microStats.inProcess.count} icon={Activity} color="indigo" sub="En elaboración" onClick={() => goToDashboard(microStats.inProcess.ids)} canClick={microStats.inProcess.count > 0} />
-                                <KPICard title="Referente" value={microStats.referent.count} icon={Users} color="amber" sub="En validación ext." onClick={() => goToDashboard(microStats.referent.ids)} canClick={microStats.referent.count > 0} />
-                                <KPICard title="Control Gestión" value={microStats.control.count} icon={ShieldCheck} color="amber" sub="En revisión final" onClick={() => goToDashboard(microStats.control.ids)} canClick={microStats.control.count > 0} />
-                                <KPICard title="Terminados" value={microStats.finished.count} icon={CheckCircle} color="green" sub="100% completados" onClick={() => goToDashboard(microStats.finished.ids)} canClick={microStats.finished.count > 0} />
+                                <KPICard title="MicroProc. Requeridos" value={microStats.total.length} icon={Layers} color="slate" sub="Universo Total" onClick={() => setMicroDrillDown({title: "Microprocesos Requeridos", color: "slate", items: microStats.total})} canClick={microStats.total.length > 0} />
+                                <KPICard title="No Iniciado" value={microStats.notStarted.length} icon={Clock} color="slate" sub="0% avance docs." onClick={() => setMicroDrillDown({title: "Microprocesos No Iniciados", color: "slate", items: microStats.notStarted})} canClick={microStats.notStarted.length > 0} />
+                                <KPICard title="En Proceso" value={microStats.inProcess.length} icon={Activity} color="indigo" sub="Docs. en elaboración" onClick={() => setMicroDrillDown({title: "Microprocesos En Proceso", color: "indigo", items: microStats.inProcess})} canClick={microStats.inProcess.length > 0} />
+                                <KPICard title="Referente" value={microStats.referent.length} icon={Users} color="amber" sub="En validación experta" onClick={() => setMicroDrillDown({title: "Microprocesos en Referente", color: "amber", items: microStats.referent})} canClick={microStats.referent.length > 0} />
+                                <KPICard title="Control Gestión" value={microStats.control.length} icon={ShieldCheck} color="amber" sub="En revisión final CG" onClick={() => setMicroDrillDown({title: "Microprocesos en Control de Gestión", color: "amber", items: microStats.control})} canClick={microStats.control.length > 0} />
+                                <KPICard title="Terminados" value={microStats.finished.length} icon={CheckCircle} color="green" sub="100% docs. aprobados" onClick={() => setMicroDrillDown({title: "Microprocesos Terminados", color: "green", items: microStats.finished})} canClick={microStats.finished.length > 0} />
                             </div>
                         </div>
 
-                        {/* FILA 2: KPIs DE DOCUMENTOS (DETALLE) */}
+                        {microDrillDown && (
+                            <div className="bg-white rounded-xl shadow-md border border-slate-200 animate-slideUp overflow-hidden">
+                                <div className={`p-4 border-b border-slate-100 flex justify-between items-center ${microDrillDown.color === 'green' ? 'bg-green-50' : microDrillDown.color === 'indigo' ? 'bg-indigo-50' : microDrillDown.color === 'amber' ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                                    <div className="flex items-center gap-3">
+                                        <Layers size={18} className={microDrillDown.color === 'green' ? 'text-green-600' : microDrillDown.color === 'indigo' ? 'text-indigo-600' : microDrillDown.color === 'amber' ? 'text-amber-600' : 'text-slate-600'} />
+                                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">{microDrillDown.title} ({microDrillDown.items.length})</h3>
+                                    </div>
+                                    <button onClick={() => setMicroDrillDown(null)} className="p-1 hover:bg-white rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="p-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {microDrillDown.items.map((item, idx) => (
+                                            <div key={idx} onClick={() => goToDashboard(item.ids)} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-white transition-all cursor-pointer group">
+                                                <div className="p-2 bg-white rounded-lg shadow-sm group-hover:bg-indigo-50 transition-colors">
+                                                    <FolderTree size={16} className="text-indigo-500" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-xs font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{item.name}</p>
+                                                    <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">{item.project}</p>
+                                                </div>
+                                                <ArrowRight size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-6 flex justify-end">
+                                        <button onClick={() => goToDashboard(microDrillDown.items.flatMap(i => i.ids))} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold shadow-sm">
+                                            <ExternalLink size={14} /> Gestionar todos en Dashboard
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 px-1 text-slate-400">
                                 <FileText size={14} />
-                                <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Documentos (Carga Operativa)</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Documentos (Detalle Individual)</span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                <KPICard title="Docs. Totales" value={kpis.total} icon={FileText} color="indigo" sub="Inventario Total" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
-                                <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
-                                <KPICard title="Alertas Referente" value={kpis.overdueReferentIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.n / v1.n.i" onClick={() => goToDashboard(kpis.overdueReferentIds)} canClick={kpis.overdueReferentIds.length > 0} />
-                                <KPICard title="Alerta Control Gestión" value={kpis.overdueControlIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.nAR" onClick={() => goToDashboard(kpis.overdueControlIds)} canClick={kpis.overdueControlIds.length > 0} />
-                                <KPICard title="Docs. Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Aprobados Final" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
+                                <KPICard title="Docs. Totales" value={kpis.total} icon={FileText} color="indigo" sub="Inventario Operativo" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
+                                <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en v0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
+                                <KPICard title="Alertas Referente" value={kpis.overdueReferentIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en v1.n / v1.n.i" onClick={() => goToDashboard(kpis.overdueReferentIds)} canClick={kpis.overdueReferentIds.length > 0} />
+                                <KPICard title="Alerta Control Gestión" value={kpis.overdueControlIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en v1.nAR" onClick={() => goToDashboard(kpis.overdueControlIds)} canClick={kpis.overdueControlIds.length > 0} />
+                                <KPICard title="Docs. Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Cierre Administrativo" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
                             </div>
                         </div>
 
@@ -516,12 +584,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                 <div>
                                     <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><TrendingUp size={16} /> Evolución de Cierres</h3>
-                                    <p className="text-xs text-slate-500">Velocidad de entrega acumulada por periodo. Escala: <b>{getScaleLabel()}</b></p>
+                                    <p className="text-xs text-slate-500">Velocidad de entrega acumulada por periodo. Escala: <b>{getScaleLabel(chartScale)}</b></p>
                                 </div>
                                 <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                    <button onClick={handleZoomOut} disabled={chartScale === 'ANNUAL'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom Out (Menos detalle)"><ZoomOut size={18} /></button>
-                                    <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">{getScaleLabel()}</div>
-                                    <button onClick={handleZoomIn} disabled={chartScale === 'WEEKLY'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom In (Más detalle)"><ZoomIn size={18} /></button>
+                                    <button onClick={() => setChartScale(chartScale === 'ANNUAL' ? 'MONTHLY' : chartScale === 'MONTHLY' ? 'WEEKLY' : 'WEEKLY')} disabled={chartScale === 'ANNUAL'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom Out (Menos detalle)"><ZoomOut size={18} /></button>
+                                    <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">{getScaleLabel(chartScale)}</div>
+                                    <button onClick={() => setChartScale(chartScale === 'WEEKLY' ? 'MONTHLY' : chartScale === 'MONTHLY' ? 'ANNUAL' : 'ANNUAL')} disabled={chartScale === 'WEEKLY'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom In (Más detalle)"><ZoomIn size={18} /></button>
                                 </div>
                             </div>
                             <div className="h-[350px] w-full">
@@ -529,7 +597,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <AreaChart data={evolutionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                         <defs>
                                             {Object.entries(TYPE_COLORS).map(([type, color]) => (
-                                                <linearGradient key={type} id={`grad-${type.replace(' ', '')}`} x1="0" y1="0" x2="0" y2="1">
+                                                <linearGradient key={type} id={`grad-${type.replace(' ', '')}`} x1="0" x2="0" y2="1">
                                                     <stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/>
                                                 </linearGradient>
                                             ))}
@@ -559,7 +627,17 @@ const Reports: React.FC<Props> = ({ user }) => {
                             <AgileBucket title="Finalizado" value={agileFlowStats.done.count} icon={CheckCircle} color="green" onClick={() => goToDashboard(agileFlowStats.done.ids)} />
                         </div>
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                            <h3 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-indigo-600" /> Diagrama de Flujo Acumulado (CFD) - Tendencia 6 Meses</h3>
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><TrendingUp size={18} className="text-indigo-600" /> Diagrama de Flujo Acumulado (CFD)</h3>
+                                    <p className="text-xs text-slate-500">Tendencia histórica de estados. Rango: <b>{cfdRange} meses</b></p>
+                                </div>
+                                <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                    <button onClick={handleCfdZoomOut} disabled={cfdRange === 12} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom Out (Más tiempo)"><ZoomOut size={18} /></button>
+                                    <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">{cfdRange} Meses</div>
+                                    <button onClick={handleCfdZoomIn} disabled={cfdRange === 3} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom In (Más detalle)"><ZoomIn size={18} /></button>
+                                </div>
+                            </div>
                             <div className="h-[280px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={cfdData}>
@@ -585,7 +663,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                             <div className="p-6 pb-2">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                     <div>
-                                        <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><ShieldAlert size={16} className="text-red-500" /> Alertas de Continuidad (>30 días)</h3>
+                                        <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><ShieldAlert size={16} className="text-red-500" /> Alertas de Continuidad (&gt;30 días)</h3>
                                         <p className="text-xs text-slate-500 mt-1">Identificación de documentos con flujo detenido que requieren gestión prioritaria.</p>
                                     </div>
                                     {totalStuck > 0 && (
@@ -614,9 +692,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     ))}
                                 </div>
                             </div>
-                            {totalStuck > STUCK_ITEMS_PER_PAGE && (
+                            {totalStuck > 6 && (
                                 <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    <div className="text-[11px] text-slate-500">Mostrando {Math.min(totalStuck, (stuckPage - 1) * STUCK_ITEMS_PER_PAGE + 1)} - {Math.min(totalStuck, stuckPage * STUCK_ITEMS_PER_PAGE)} de {totalStuck} alertas</div>
+                                    <div className="text-[11px] text-slate-500">Mostrando {Math.min(totalStuck, (stuckPage - 1) * 6 + 1)} - {Math.min(totalStuck, stuckPage * 6)} de {totalStuck} alertas</div>
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => setStuckPage(p => Math.max(1, p - 1))} disabled={stuckPage === 1} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronLeft size={16} /></button>
                                         <button onClick={() => setStuckPage(p => Math.min(totalStuckPages, p + 1))} disabled={stuckPage === totalStuckPages} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronRight size={16} /></button>
@@ -659,9 +737,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     </tbody>
                                 </table>
                             </div>
-                            {totalClosureItems > CLOSURE_ITEMS_PER_PAGE && (
+                            {totalClosureItems > 15 && (
                                 <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                                    <div className="text-[11px] text-slate-500">Mostrando {Math.min(totalClosureItems, (closurePage - 1) * CLOSURE_ITEMS_PER_PAGE + 1)} - {Math.min(totalClosureItems, closurePage * CLOSURE_ITEMS_PER_PAGE)} de {totalClosureItems}</div>
+                                    <div className="text-[11px] text-slate-500">Mostrando {Math.min(totalClosureItems, (closurePage - 1) * 15 + 1)} - {Math.min(totalClosureItems, closurePage * 15)} de {totalClosureItems}</div>
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => setClosurePage(p => Math.max(1, p - 1))} disabled={closurePage === 1} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"><ChevronLeft size={16} /></button>
                                         <div className="flex gap-1">{Array.from({ length: Math.min(5, totalClosurePages) }, (_, i) => { let p = i + 1; if (totalClosurePages > 5 && closurePage > 3) p = closurePage - 2 + i; if (p > totalClosurePages) p = totalClosurePages - (4 - i); if (p < 1) p = i + 1; return (<button key={p} onClick={() => setClosurePage(p)} className={`w-7 h-7 rounded text-[10px] font-bold border transition-all ${closurePage === p ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>{p}</button>); })}</div>
@@ -704,6 +782,16 @@ const AgileBucket = ({ title, value, icon: Icon, color, onClick }: any) => {
             <span className="text-xl font-extrabold">{value}</span>
         </div>
     );
+};
+
+// Helper function to map scale to a readable label
+const getScaleLabel = (scale: string) => {
+    switch (scale) {
+        case 'ANNUAL': return 'Anual';
+        case 'MONTHLY': return 'Mensual';
+        case 'WEEKLY': return 'Semanal';
+        default: return 'Mensual';
+    }
 };
 
 export default Reports;
