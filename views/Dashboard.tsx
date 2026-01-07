@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
@@ -8,7 +7,7 @@ import {
     Plus, Clock, CheckCircle, Filter, X, Activity, 
     BookOpen, Users, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, Loader2,
     User as UserIcon, Database, Archive, Search,
-    ChevronLeft, ChevronRight, FileSpreadsheet
+    ChevronLeft, ChevronRight, FileSpreadsheet, ListTodo, Layers
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -192,7 +191,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const contextDocs = useMemo(() => {
       let filtered = mergedDocs;
-
       if (externalFilterIds && externalFilterIds.length > 0) {
           filtered = filtered.filter(d => externalFilterIds.includes(d.id));
       } else {
@@ -202,22 +200,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           if (filterDocType) filtered = filtered.filter(d => d.docType === filterDocType);
           if (filterState) filtered = filtered.filter(d => d.state === filterState);
           if (filterAnalyst) filtered = filtered.filter(d => d.assignees && d.assignees.includes(filterAnalyst));
-          
           if (filterSearch) {
               const term = filterSearch.toLowerCase();
-              filtered = filtered.filter(d => 
-                  (d.microprocess || '').toLowerCase().includes(term) || 
-                  (d.title || '').toLowerCase().includes(term)
-              );
+              filtered = filtered.filter(d => (d.microprocess || '').toLowerCase().includes(term) || (d.title || '').toLowerCase().includes(term));
           }
       }
-
       return filtered;
   }, [mergedDocs, filterProject, filterMacro, filterProcess, filterDocType, filterState, filterAnalyst, filterSearch, externalFilterIds]);
 
-  const stats = useMemo(() => {
+  const docStats = useMemo(() => {
       const requiredDocs = contextDocs.filter(d => d.isRequired);
-
       return {
         total: requiredDocs.length,
         notStarted: requiredDocs.filter(d => d.state === DocState.NOT_STARTED).length,
@@ -230,17 +222,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const chartData = useMemo(() => {
     return [
-      { name: 'No Iniciado', value: stats.notStarted, color: '#94a3b8' },
-      { name: 'En Proceso', value: stats.inProcess, color: '#3b82f6' },
-      { name: 'Referente', value: stats.referent, color: '#a855f7' },
-      { name: 'Control', value: stats.control, color: '#f97316' },
-      { name: 'Terminados', value: stats.finished, color: '#22c55e' }
+      { name: 'No Iniciado', value: docStats.notStarted, color: '#94a3b8' },
+      { name: 'En Proceso', value: docStats.inProcess, color: '#3b82f6' },
+      { name: 'Referente', value: docStats.referent, color: '#a855f7' },
+      { name: 'Control', value: docStats.control, color: '#f97316' },
+      { name: 'Terminados', value: docStats.finished, color: '#22c55e' }
     ].filter(d => d.value > 0);
-  }, [stats]);
+  }, [docStats]);
 
   const tableDocs = useMemo(() => {
       let filtered = contextDocs;
-
       if (quickFilter !== 'ALL') {
           switch (quickFilter) {
               case 'NOT_STARTED': filtered = filtered.filter(d => d.state === DocState.NOT_STARTED); break;
@@ -255,25 +246,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const sortedDocs = useMemo(() => {
       return [...tableDocs].sort((a, b) => {
-          if (a.isRequired !== b.isRequired) {
-              return a.isRequired ? -1 : 1;
-          }
-
+          if (a.isRequired !== b.isRequired) return a.isRequired ? -1 : 1;
           const modifier = sortConfig.direction === 'asc' ? 1 : -1;
-          
           switch (sortConfig.key) {
-              case 'updatedAt': 
-                  const timeA = new Date(a.updatedAt).getTime();
-                  const timeB = new Date(b.updatedAt).getTime();
-                  return (timeA - timeB) * modifier;
-              
+              case 'updatedAt': return (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) * modifier;
               case 'project': 
                   if ((a.project || '') !== (b.project || '')) return (a.project || '').localeCompare(b.project || '') * modifier;
                   if ((a.macroprocess || '') !== (b.macroprocess || '')) return (a.macroprocess || '').localeCompare(b.macroprocess || '') * modifier;
                   if ((a.process || '') !== (b.process || '')) return (a.process || '').localeCompare(b.process || '') * modifier;
                   if ((a.microprocess || '') !== (b.microprocess || '')) return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
                   return (getDocTypeOrder(a.docType) - getDocTypeOrder(b.docType)) * modifier;
-
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
               case 'state': return (a.progress - b.progress) * modifier;
               default: return 0;
@@ -291,74 +273,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const handleExportExcel = () => {
       if (sortedDocs.length === 0) return;
       const getUserNames = (ids: string[]) => ids.map(id => allUsers.find(u => u.id === id)?.name || id).join('; ');
-      
       const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'DOCUMENTO', 'VERSION', 'ESTADO', 'FECHA', 'ANALISTA'];
-      const rows = sortedDocs.map(d => {
-          let fechaStr = 'Sin actividad';
-          if (d.state !== DocState.NOT_STARTED && d.updatedAt) {
-              const date = new Date(d.updatedAt);
-              const day = String(date.getDate()).padStart(2, '0');
-              const month = String(date.getMonth() + 1).padStart(2, '0');
-              const year = date.getFullYear();
-              fechaStr = `${day}-${month}-${year}`;
-          }
-
-          return [
-              d.project || '-',
-              d.macroprocess || '-',
-              d.process || '-',
-              d.microprocess || '-',
-              d.docType || '-',
-              d.version || '-',
-              STATE_CONFIG[d.state]?.label.split('(')[0] || '-',
-              fechaStr,
-              getUserNames(d.assignees || [])
-          ];
-      });
-
+      const rows = sortedDocs.map(d => [
+          d.project || '-', d.macroprocess || '-', d.process || '-', d.microprocess || '-', d.docType || '-', d.version || '-',
+          STATE_CONFIG[d.state]?.label.split('(')[0] || '-',
+          (d.state !== DocState.NOT_STARTED && d.updatedAt) ? new Date(d.updatedAt).toLocaleDateString() : 'Sin actividad',
+          getUserNames(d.assignees || [])
+      ]);
       const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
       const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `SGD_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const link = document.createElement('a'); link.setAttribute('href', url); link.setAttribute('download', `SGD_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  const handleSort = (key: SortKey) => {
-      setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
-  };
-
-  const handleQuickFilter = (type: QuickFilterType) => {
-    setQuickFilter(type);
-    setCurrentPage(1);
-  };
-
-  const clearFilters = () => {
-      setFilterProject(''); setFilterMacro(''); setFilterProcess(''); setFilterSearch(''); 
-      setFilterDocType(''); setFilterState(''); setFilterAnalyst(''); setQuickFilter('ALL');
-      setExternalFilterIds(null); navigate(location.pathname, { replace: true, state: {} });
-  };
+  const handleSort = (key: SortKey) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
+  const handleQuickFilter = (type: QuickFilterType) => { setQuickFilter(type); setCurrentPage(1); };
+  const clearFilters = () => { setFilterProject(''); setFilterMacro(''); setFilterProcess(''); setFilterSearch(''); setFilterDocType(''); setFilterState(''); setFilterAnalyst(''); setQuickFilter('ALL'); setExternalFilterIds(null); navigate(location.pathname, { replace: true, state: {} }); };
 
   const SortIcon = ({ column }: { column: SortKey }) => (
       sortConfig.key === column ? (sortConfig.direction === 'asc' ? <ArrowUp size={12} className="text-indigo-600"/> : <ArrowDown size={12} className="text-indigo-600"/>) : <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100"/>
   );
 
   const availableProjects = useMemo(() => Array.from(new Set(mergedDocs.map(d => d.project).filter(Boolean))).sort(), [mergedDocs]);
-  const availableMacros = useMemo(() => {
-      const docs = filterProject ? mergedDocs.filter(d => d.project === filterProject) : mergedDocs;
-      return Array.from(new Set(docs.map(d => d.macroprocess).filter(Boolean))).sort();
-  }, [mergedDocs, filterProject]);
-  const availableProcesses = useMemo(() => {
-      let docs = mergedDocs;
-      if (filterProject) docs = docs.filter(d => d.project === filterProject);
-      if (filterMacro) docs = docs.filter(d => d.macroprocess === filterMacro);
-      return Array.from(new Set(docs.map(d => d.process).filter(Boolean))).sort();
-  }, [mergedDocs, filterProject, filterMacro]);
-
+  const availableMacros = useMemo(() => Array.from(new Set((filterProject ? mergedDocs.filter(d => d.project === filterProject) : mergedDocs).map(d => d.macroprocess).filter(Boolean))).sort(), [mergedDocs, filterProject]);
+  const availableProcesses = useMemo(() => Array.from(new Set((mergedDocs.filter(d => (!filterProject || d.project === filterProject) && (!filterMacro || d.macroprocess === filterMacro))).map(d => d.process).filter(Boolean))).sort(), [mergedDocs, filterProject, filterMacro]);
   const getUserName = (id: string) => allUsers.find(user => user.id === id)?.name || 'Sin Asignar';
 
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Actualizando dashboard...</div>;
@@ -378,10 +317,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       );
   }
 
-  const hasActiveFilters = filterProject || filterMacro || filterProcess || filterSearch || filterDocType || filterState || filterAnalyst || externalFilterIds;
-
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-8 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div><h1 className="text-2xl font-bold text-slate-900">Dashboard</h1><p className="text-slate-500">Vista general de avance institucional</p></div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -392,13 +329,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Doc. Requeridos" value={stats.total} icon={BookOpen} color="bg-slate-50 text-slate-600" onClick={() => handleQuickFilter('ALL')} isActive={quickFilter === 'ALL'}/>
-        <StatCard title="No Iniciado" value={stats.notStarted} icon={Clock} color="bg-white text-slate-600" onClick={() => handleQuickFilter('NOT_STARTED')} isActive={quickFilter === 'NOT_STARTED'}/>
-        <StatCard title="En Proceso" value={stats.inProcess} icon={Activity} color="bg-blue-50 text-blue-600" onClick={() => handleQuickFilter('IN_PROCESS')} isActive={quickFilter === 'IN_PROCESS'}/>
-        <StatCard title="Referente" value={stats.referent} icon={Users} color="bg-purple-50 text-purple-600" onClick={() => handleQuickFilter('REFERENT')} isActive={quickFilter === 'REFERENT'}/>
-        <StatCard title="Control Gestión" value={stats.control} icon={ShieldCheck} color="bg-orange-50 text-orange-600" onClick={() => handleQuickFilter('CONTROL')} isActive={quickFilter === 'CONTROL'}/>
-        <StatCard title="Terminados" value={stats.finished} icon={CheckCircle} color="bg-green-50 text-green-600" onClick={() => handleQuickFilter('FINISHED')} isActive={quickFilter === 'FINISHED'}/>
+      {/* KPI DOCUMENTOS */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 px-1 text-slate-400">
+            <BookOpen size={14} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Documentos (Filtrable)</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatCard title="Doc. Requeridos" value={docStats.total} icon={BookOpen} color="bg-slate-50 text-slate-600" onClick={() => handleQuickFilter('ALL')} isActive={quickFilter === 'ALL'}/>
+            <StatCard title="No Iniciado" value={docStats.notStarted} icon={Clock} color="bg-white text-slate-600" onClick={() => handleQuickFilter('NOT_STARTED')} isActive={quickFilter === 'NOT_STARTED'}/>
+            <StatCard title="En Proceso" value={docStats.inProcess} icon={Activity} color="bg-blue-50 text-blue-600" onClick={() => handleQuickFilter('IN_PROCESS')} isActive={quickFilter === 'IN_PROCESS'}/>
+            <StatCard title="Referente" value={docStats.referent} icon={Users} color="bg-purple-50 text-purple-600" onClick={() => handleQuickFilter('REFERENT')} isActive={quickFilter === 'REFERENT'}/>
+            <StatCard title="Control Gestión" value={docStats.control} icon={ShieldCheck} color="bg-orange-50 text-orange-600" onClick={() => handleQuickFilter('CONTROL')} isActive={quickFilter === 'CONTROL'}/>
+            <StatCard title="Terminados" value={docStats.finished} icon={CheckCircle} color="bg-green-50 text-green-600" onClick={() => handleQuickFilter('FINISHED')} isActive={quickFilter === 'FINISHED'}/>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -406,7 +350,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <div className="p-4 border-b border-slate-100 bg-white">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm"><Filter size={16} /> Filtros de Visualización</div>
-                    {hasActiveFilters && <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium"><X size={14} /> Limpiar filtros</button>}
+                    {(filterProject || filterMacro || filterProcess || filterSearch || filterDocType || filterState || filterAnalyst || externalFilterIds) && <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium"><X size={14} /> Limpiar filtros</button>}
                 </div>
                 {externalFilterIds ? (
                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg mb-2 flex justify-between items-center animate-fadeIn">
@@ -415,7 +359,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                      </div>
                 ) : (
                     <div className="flex flex-wrap gap-2">
-                        {/* ORDEN SOLICITADO: PROYECTO, MACROPROCESO, PROCESO, BUSCAR, DOC, ESTADO, ANALISTA */}
                         <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-28">
                             <option value="">PROYECTO</option>
                             {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
@@ -434,10 +377,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         </div>
                         <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
                             <option value="">DOC</option>
-                            <option value="AS IS">AS IS</option>
-                            <option value="FCE">FCE</option>
-                            <option value="PM">PM</option>
-                            <option value="TO BE">TO BE</option>
+                            <option value="AS IS">AS IS</option><option value="FCE">FCE</option><option value="PM">PM</option><option value="TO BE">TO BE</option>
                         </select>
                         <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
                             <option value="">ESTADO</option>
@@ -455,7 +395,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <table className="w-full text-[11px] text-left">
                     <thead className="text-[10px] text-slate-400 uppercase font-bold bg-white border-b border-slate-100">
                         <tr>
-                            {/* CABECERAS SOLICITADAS: PROYECTO, JERARQUÍA (MACRO / PROCESO), MICROPROCESO, DOCUMENTO, ESTADO ACTUAL, ÚLTIMA ACTIVIDAD */}
                             <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('project')}>PROYECTO <SortIcon column="project"/></th>
                             <th className="px-4 py-3">JERARQUÍA (MACRO / PROCESO)</th>
                             <th className="px-4 py-3 cursor-pointer group" onClick={() => handleSort('microprocess')}>MICROPROCESO <SortIcon column="microprocess"/></th>
@@ -486,7 +425,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                 </td>
                                 <td className="px-4 py-3 align-top">
                                     <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1 border ${!doc.isRequired ? 'bg-gray-200 text-gray-500 border-gray-300' : STATE_CONFIG[doc.state].color}`}>{STATE_CONFIG[doc.state].label.split('(')[0]}</div>
-                                    {/* CORRECCIÓN: Se eliminó la 'v' duplicada. La variable {doc.version} ya trae el prefijo si corresponde */}
                                     <div className="text-[10px] font-mono text-slate-500">{doc.version} ({doc.progress}%)</div>
                                 </td>
                                 <td className="px-4 py-3 align-top text-right">
@@ -542,11 +480,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <div className="bg-indigo-50 rounded-xl shadow-sm border border-indigo-100 p-4">
                 <h3 className="font-bold text-indigo-900 text-xs uppercase mb-3">Resumen de Cumplimiento</h3>
                 <ul className="space-y-2 text-[11px]">
-                    <li className="flex justify-between text-slate-600"><span>No Iniciados:</span> <b>{stats.notStarted}</b></li>
-                    <li className="flex justify-between text-blue-600"><span>En Proceso:</span> <b>{stats.inProcess}</b></li>
-                    <li className="flex justify-between text-purple-600"><span>Referente:</span> <b>{stats.referent}</b></li>
-                    <li className="flex justify-between text-orange-600"><span>Control Gestión:</span> <b>{stats.control}</b></li>
-                    <li className="border-t border-indigo-200 pt-1 flex justify-between text-green-600 font-bold"><span>Terminados:</span> <span>{stats.finished}</span></li>
+                    <li className="flex justify-between text-slate-600"><span>No Iniciados:</span> <b>{docStats.notStarted}</b></li>
+                    <li className="flex justify-between text-blue-600"><span>En Proceso:</span> <b>{docStats.inProcess}</b></li>
+                    <li className="flex justify-between text-purple-600"><span>Referente:</span> <b>{docStats.referent}</b></li>
+                    <li className="flex justify-between text-orange-600"><span>Control Gestión:</span> <b>{docStats.control}</b></li>
+                    <li className="border-t border-indigo-200 pt-1 flex justify-between text-green-600 font-bold"><span>Terminados:</span> <span>{docStats.finished}</span></li>
                 </ul>
                 <div className="mt-4 pt-3 border-t border-indigo-200 text-[9px] text-slate-500 flex items-center gap-2"><Archive size={12} /><span>Registros en <b>GRIS</b> son históricos externos.</span></div>
             </div>
@@ -556,8 +494,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   );
 };
 
-const StatCard = ({ title, value, icon: Icon, color, isActive, onClick }: any) => (
-    <div onClick={onClick} className={`p-3 rounded-xl shadow-sm border cursor-pointer flex items-center space-x-3 transition-all ${isActive ? 'ring-2 ring-indigo-300 scale-105' : 'hover:border-indigo-300'} ${color} border-transparent`}>
+const StatCard = ({ title, value, icon: Icon, color, isActive, onClick, isClickable = true }: any) => (
+    <div 
+        onClick={isClickable ? onClick : undefined} 
+        className={`p-3 rounded-xl shadow-sm border flex items-center space-x-3 transition-all 
+            ${isClickable ? 'cursor-pointer hover:border-indigo-300' : 'cursor-default'} 
+            ${isActive ? 'ring-2 ring-indigo-300 scale-105' : ''} 
+            ${color} border-transparent`}
+    >
         <div className="p-1.5 bg-white/50 rounded-lg shrink-0"><Icon size={18}/></div>
         <div className="min-w-0">
             <p className="text-[9px] uppercase font-bold opacity-70 truncate">{title}</p>

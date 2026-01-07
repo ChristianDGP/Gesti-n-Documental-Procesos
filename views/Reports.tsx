@@ -7,7 +7,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, ClipboardList, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck
 } from 'lucide-react';
 
 interface Props {
@@ -37,7 +37,7 @@ const TYPE_COLORS: Record<string, string> = {
     'TO BE': '#22c55e'
 };
 
-const STUCK_ITEMS_PER_PAGE = 9;
+const STUCK_ITEMS_PER_PAGE = 6;
 const CLOSURE_ITEMS_PER_PAGE = 15;
 
 type ChartScale = 'ANNUAL' | 'MONTHLY' | 'WEEKLY';
@@ -158,66 +158,51 @@ const Reports: React.FC<Props> = ({ user }) => {
         return docs;
     }, [unifiedData, filterProject, filterAnalyst]);
 
-    const closureBoardData = useMemo(() => {
-        if (!closureMonth || !unifiedData.length) return [];
+    // NUEVA LÓGICA: KPIs DE MICROPROCESOS
+    const microStats = useMemo(() => {
+        const groups: Record<string, { states: DocState[], ids: string[] }> = {};
         
-        const [year, month] = closureMonth.split('-').map(Number);
-        const lastDayOfMonth = new Date(year, month, 0, 23, 59, 59).toISOString();
-        
-        const historyByDoc: Record<string, DocHistory[]> = {};
-        history.forEach(h => {
-            if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = [];
-            historyByDoc[h.documentId].push(h);
+        filteredDocs.forEach(d => {
+            const key = `${d.project}|${d.microprocess}`;
+            if (!groups[key]) groups[key] = { states: [], ids: [] };
+            groups[key].states.push(d.state);
+            groups[key].ids.push(d.id);
         });
 
-        const microMap: Record<string, { project: string, macro: string, process: string, micro: string, docs: Record<string, { state: DocState, version: string }> }> = {};
+        const stats = {
+            total: { count: 0, ids: [] as string[] },
+            notStarted: { count: 0, ids: [] as string[] },
+            inProcess: { count: 0, ids: [] as string[] },
+            referent: { count: 0, ids: [] as string[] },
+            control: { count: 0, ids: [] as string[] },
+            finished: { count: 0, ids: [] as string[] }
+        };
 
-        unifiedData.forEach(d => {
-            if (filterProject && d.project !== filterProject) return;
-            if (filterAnalyst && !d.assignees?.includes(filterAnalyst)) return;
+        Object.values(groups).forEach(group => {
+            stats.total.count++;
+            stats.total.ids.push(...group.ids);
 
-            const microKey = `${d.project}|${d.macroprocess}|${d.process}|${d.microprocess}`;
-            if (!microMap[microKey]) {
-                microMap[microKey] = { project: d.project!, macro: d.macroprocess!, process: d.process!, micro: d.microprocess!, docs: {} };
-            }
-
-            let stateAtClosure = DocState.NOT_STARTED;
-            let versionAtClosure = '-';
-            
-            if (!d.isVirtual) {
-                const docHistory = historyByDoc[d.id] || [];
-                const lastEntry = docHistory
-                    .filter(h => h.timestamp <= lastDayOfMonth)
-                    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
-                
-                if (lastEntry) {
-                    stateAtClosure = lastEntry.newState;
-                    versionAtClosure = lastEntry.version || d.version; 
-                } else {
-                    const docTimestamp = d.updatedAt ? new Date(d.updatedAt).toISOString() : '';
-                    if (docTimestamp && docTimestamp <= lastDayOfMonth) {
-                        stateAtClosure = d.state;
-                        versionAtClosure = d.version;
-                    }
-                }
-            }
-
-            if (d.docType) {
-                microMap[microKey].docs[d.docType] = { state: stateAtClosure, version: versionAtClosure };
+            if (group.states.every(s => s === DocState.APPROVED)) {
+                stats.finished.count++;
+                stats.finished.ids.push(...group.ids);
+            } else if (group.states.some(s => [DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(s))) {
+                stats.control.count++;
+                stats.control.ids.push(...group.ids);
+            } else if (group.states.some(s => [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(s))) {
+                stats.referent.count++;
+                stats.referent.ids.push(...group.ids);
+            } else if (group.states.some(s => [DocState.INITIATED, DocState.IN_PROCESS, DocState.INTERNAL_REVIEW].includes(s))) {
+                stats.inProcess.count++;
+                stats.inProcess.ids.push(...group.ids);
+            } else {
+                stats.notStarted.count++;
+                stats.notStarted.ids.push(...group.ids);
             }
         });
+        return stats;
+    }, [filteredDocs]);
 
-        return Object.values(microMap).sort((a, b) => {
-            const pComp = a.project.localeCompare(b.project);
-            if (pComp !== 0) return pComp;
-            const mComp = a.macro.localeCompare(b.macro);
-            if (mComp !== 0) return mComp;
-            const prComp = a.process.localeCompare(b.process);
-            if (prComp !== 0) return prComp;
-            return a.micro.localeCompare(b.micro);
-        });
-    }, [closureMonth, unifiedData, history, filterProject, filterAnalyst]);
-
+    // KPIs DE DOCUMENTOS
     const kpis = useMemo(() => {
         const now = new Date().getTime();
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
@@ -237,27 +222,86 @@ const Reports: React.FC<Props> = ({ user }) => {
         };
     }, [filteredDocs]);
 
+    const agileFlowStats = useMemo(() => {
+        const stats = {
+            backlog: { count: 0, ids: [] as string[] },
+            development: { count: 0, ids: [] as string[] },
+            internalReview: { count: 0, ids: [] as string[] },
+            validation: { count: 0, ids: [] as string[] },
+            done: { count: 0, ids: [] as string[] }
+        };
+        filteredDocs.forEach(d => {
+            if (d.state === DocState.NOT_STARTED) { stats.backlog.count++; stats.backlog.ids.push(d.id); }
+            else if (d.state === DocState.INITIATED || d.state === DocState.IN_PROCESS) { stats.development.count++; stats.development.ids.push(d.id); }
+            else if (d.state === DocState.INTERNAL_REVIEW) { stats.internalReview.count++; stats.internalReview.ids.push(d.id); }
+            else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(d.state)) { stats.validation.count++; stats.validation.ids.push(d.id); }
+            else if (d.state === DocState.APPROVED) { stats.done.count++; stats.done.ids.push(d.id); }
+        });
+        return stats;
+    }, [filteredDocs]);
+
+    const cfdData = useMemo(() => {
+        const data: any[] = [];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const monthLabel = d.toLocaleString('es-ES', { month: 'short' });
+            const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59).toISOString();
+            let backlog = 0, dev = 0, review = 0, validation = 0, done = 0;
+            filteredDocs.forEach(doc => {
+                if (doc.isVirtual) { backlog++; } else {
+                    const docHist = history.filter(h => h.documentId === doc.id && h.timestamp <= lastDay).sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+                    const state = docHist ? docHist.newState : DocState.NOT_STARTED;
+                    if (state === DocState.APPROVED) done++;
+                    else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(state)) validation++;
+                    else if (state === DocState.INTERNAL_REVIEW) review++;
+                    else if (state === DocState.INITIATED || state === DocState.IN_PROCESS) dev++;
+                    else backlog++;
+                }
+            });
+            data.push({ month: monthLabel, 'Backlog': backlog, 'Desarrollo': dev, 'Rev. Interna': review, 'Validación': validation, 'Finalizado': done });
+        }
+        return data;
+    }, [filteredDocs, history]);
+
+    const closureBoardData = useMemo(() => {
+        if (!closureMonth || !unifiedData.length) return [];
+        const [year, month] = closureMonth.split('-').map(Number);
+        const lastDayOfMonth = new Date(year, month, 0, 23, 59, 59).toISOString();
+        const historyByDoc: Record<string, DocHistory[]> = {};
+        history.forEach(h => { if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = []; historyByDoc[h.documentId].push(h); });
+        const microMap: Record<string, { project: string, macro: string, process: string, micro: string, docs: Record<string, { state: DocState, version: string }> }> = {};
+        unifiedData.forEach(d => {
+            if (filterProject && d.project !== filterProject) return;
+            if (filterAnalyst && !d.assignees?.includes(filterAnalyst)) return;
+            const microKey = `${d.project}|${d.macroprocess}|${d.process}|${d.microprocess}`;
+            if (!microMap[microKey]) microMap[microKey] = { project: d.project!, macro: d.macroprocess!, process: d.process!, micro: d.microprocess!, docs: {} };
+            let stateAtClosure = DocState.NOT_STARTED; let versionAtClosure = '-';
+            if (!d.isVirtual) {
+                const docHistory = historyByDoc[d.id] || [];
+                const lastEntry = docHistory.filter(h => h.timestamp <= lastDayOfMonth).sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+                if (lastEntry) { stateAtClosure = lastEntry.newState; versionAtClosure = lastEntry.version || d.version; } 
+                else { const docTimestamp = d.updatedAt ? new Date(d.updatedAt).toISOString() : ''; if (docTimestamp && docTimestamp <= lastDayOfMonth) { stateAtClosure = d.state; versionAtClosure = d.version; } }
+            }
+            if (d.docType) microMap[microKey].docs[d.docType] = { state: stateAtClosure, version: versionAtClosure };
+        });
+        return Object.values(microMap).sort((a, b) => a.project.localeCompare(b.project) || a.macro.localeCompare(b.macro) || a.process.localeCompare(b.process) || a.micro.localeCompare(b.micro));
+    }, [closureMonth, unifiedData, history, filterProject, filterAnalyst]);
+
     const executiveMetrics = useMemo(() => {
         if (!filteredDocs.length) return { stuckDocs: [] as StuckDoc[] };
         const now = new Date().getTime();
         const historyByDoc: Record<string, DocHistory[]> = {};
-        history.forEach(h => {
-            if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = [];
-            historyByDoc[h.documentId].push(h);
-        });
-
+        history.forEach(h => { if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = []; historyByDoc[h.documentId].push(h); });
         const stuckDocsList: StuckDoc[] = [];
         filteredDocs.forEach(d => {
             if (d.state === DocState.APPROVED || d.state === DocState.NOT_STARTED) return;
             const docHistory = historyByDoc[d.id] || [];
-            const lastTransition = docHistory
-                .filter(h => h.newState === d.state)
-                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+            const lastTransition = docHistory.filter(h => h.newState === d.state).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
             const stateEntryDate = lastTransition ? new Date(lastTransition.timestamp).getTime() : new Date(d.createdAt).getTime();
             const daysInState = Math.max(0, Math.floor((now - stateEntryDate) / (1000 * 60 * 60 * 24)));
             if (daysInState > 30) stuckDocsList.push({ ...d, daysStuck: daysInState });
         });
-
         return { stuckDocs: stuckDocsList.sort((a, b) => b.daysStuck - a.daysStuck) };
     }, [history, filteredDocs]);
 
@@ -270,9 +314,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) { stats.control.value++; stats.control.ids.push(d.id); }
             else { stats.inProcess.value++; stats.inProcess.ids.push(d.id); }
         });
-        return [
-          { name: 'No Iniciado', ...stats.notStarted }, { name: 'En Proceso', ...stats.inProcess }, { name: 'Referente', ...stats.referent }, { name: 'Control', ...stats.control }, { name: 'Terminados', ...stats.finished }
-        ];
+        return [ { name: 'No Iniciado', ...stats.notStarted }, { name: 'En Proceso', ...stats.inProcess }, { name: 'Referente', ...stats.referent }, { name: 'Control', ...stats.control }, { name: 'Terminados', ...stats.finished } ];
     }, [filteredDocs]);
 
     const analystData = useMemo(() => {
@@ -280,15 +322,10 @@ const Reports: React.FC<Props> = ({ user }) => {
         filteredDocs.forEach(d => {
             d.assignees?.forEach(uid => {
                 if (!stats[uid]) stats[uid] = { assigned: 0, approved: 0, inProgress: 0 };
-                stats[uid].assigned++;
-                if (d.state === DocState.APPROVED) stats[uid].approved++;
-                else if (d.state !== DocState.NOT_STARTED) stats[uid].inProgress++;
+                stats[uid].assigned++; if (d.state === DocState.APPROVED) stats[uid].approved++; else if (d.state !== DocState.NOT_STARTED) stats[uid].inProgress++;
             });
         });
-        return Object.keys(stats).map(uid => {
-            const u = users.find(user => user.id === uid);
-            return { name: u ? (u.nickname || u.name.split(' ')[0]) : 'Desc.', Requeridos: stats[uid].assigned, EnProceso: stats[uid].inProgress, Terminados: stats[uid].approved };
-        }).sort((a, b) => b.Requeridos - a.Requeridos).slice(0, 10);
+        return Object.keys(stats).map(uid => { const u = users.find(user => user.id === uid); return { name: u ? (u.nickname || u.name.split(' ')[0]) : 'Desc.', Requeridos: stats[uid].assigned, EnProceso: stats[uid].inProgress, Terminados: stats[uid].approved }; }).sort((a, b) => b.Requeridos - a.Requeridos).slice(0, 10);
     }, [filteredDocs, users]);
 
     const typeComplianceData = useMemo(() => {
@@ -305,127 +342,36 @@ const Reports: React.FC<Props> = ({ user }) => {
         const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const now = new Date();
         const periods: any[] = [];
-
-        if (chartScale === 'ANNUAL') {
-            // Últimos 5 años
-            for (let i = 4; i >= 0; i--) {
-                const year = now.getFullYear() - i;
-                periods.push({ key: year.toString(), label: year.toString(), 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 });
-            }
-        } else if (chartScale === 'MONTHLY') {
-            // Últimos 12 meses
-            for (let i = 11; i >= 0; i--) {
-                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                const label = `${monthsNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
-                const yearMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                periods.push({ key: yearMonthKey, label: label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 });
-            }
-        } else if (chartScale === 'WEEKLY') {
-            // Últimas 8 semanas
-            for (let i = 7; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - (i * 7));
-                const weekNum = Math.ceil(d.getDate() / 7);
-                const label = `S${weekNum}-${monthsNames[d.getMonth()]}`;
-                
-                const firstDayOfYear = new Date(d.getFullYear(), 0, 1);
-                const pastDaysOfYear = (d.getTime() - firstDayOfYear.getTime()) / 86400000;
-                const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-                const key = `${d.getFullYear()}-W${weekOfYear}`;
-                periods.push({ key, label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 });
-            }
-        }
-
+        if (chartScale === 'ANNUAL') { for (let i = 4; i >= 0; i--) { const year = now.getFullYear() - i; periods.push({ key: year.toString(), label: year.toString(), 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 }); } } 
+        else if (chartScale === 'MONTHLY') { for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); const label = `${monthsNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`; const yearMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; periods.push({ key: yearMonthKey, label: label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 }); } } 
+        else if (chartScale === 'WEEKLY') { for (let i = 7; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - (i * 7)); const weekNum = Math.ceil(d.getDate() / 7); const label = `S${weekNum}-${monthsNames[d.getMonth()]}`; const firstDayOfYear = new Date(d.getFullYear(), 0, 1); const pastDaysOfYear = (d.getTime() - firstDayOfYear.getTime()) / 86400000; const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7); const key = `${d.getFullYear()}-W${weekOfYear}`; periods.push({ key, label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 }); } }
         filteredDocs.filter(d => d.state === DocState.APPROVED).forEach(d => {
-            const date = new Date(d.updatedAt);
-            if (isNaN(date.getTime())) return;
-
-            let docKey = '';
-            if (chartScale === 'ANNUAL') {
-                docKey = date.getFullYear().toString();
-            } else if (chartScale === 'MONTHLY') {
-                docKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            } else if (chartScale === 'WEEKLY') {
-                const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-                const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
-                const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-                docKey = `${date.getFullYear()}-W${weekOfYear}`;
-            }
-
-            const period = periods.find(p => p.key === docKey);
-            if (period && d.docType) period[d.docType]++;
+            const date = new Date(d.updatedAt); if (isNaN(date.getTime())) return;
+            let docKey = ''; if (chartScale === 'ANNUAL') { docKey = date.getFullYear().toString(); } else if (chartScale === 'MONTHLY') { docKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; } else if (chartScale === 'WEEKLY') { const firstDayOfYear = new Date(date.getFullYear(), 0, 1); const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000; const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7); docKey = `${date.getFullYear()}-W${weekOfYear}`; }
+            const period = periods.find(p => p.key === docKey); if (period && d.docType) period[d.docType]++;
         });
         return periods;
     }, [filteredDocs, chartScale]);
 
-    const handleZoomIn = () => {
-        if (chartScale === 'ANNUAL') setChartScale('MONTHLY');
-        else if (chartScale === 'MONTHLY') setChartScale('WEEKLY');
-    };
-
-    const handleZoomOut = () => {
-        if (chartScale === 'WEEKLY') setChartScale('MONTHLY');
-        else if (chartScale === 'MONTHLY') setChartScale('ANNUAL');
-    };
-
-    const getScaleLabel = () => {
-        switch(chartScale) {
-            case 'ANNUAL': return 'Anual';
-            case 'MONTHLY': return 'Mensual';
-            case 'WEEKLY': return 'Semanal';
-            default: return 'Mensual';
-        }
-    };
+    const handleZoomIn = () => { if (chartScale === 'ANNUAL') setChartScale('MONTHLY'); else if (chartScale === 'MONTHLY') setChartScale('WEEKLY'); };
+    const handleZoomOut = () => { if (chartScale === 'WEEKLY') setChartScale('MONTHLY'); else if (chartScale === 'MONTHLY') setChartScale('ANNUAL'); };
+    const getScaleLabel = () => { switch(chartScale) { case 'ANNUAL': return 'Anual'; case 'MONTHLY': return 'Mensual'; case 'WEEKLY': return 'Semanal'; default: return 'Mensual'; } };
 
     const goToDashboard = (ids: string[]) => navigate('/', { state: { filterIds: ids, fromReport: true } });
 
     const handleExportClosureExcel = () => {
         if (closureBoardData.length === 0) return;
-        
-        const headers = [
-            'PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 
-            'Versión AS IS', 'Estado AS IS', 
-            'Versión FCE', 'Estado FCE', 
-            'Versión PM', 'Estado PM', 
-            'Versión TO BE', 'Estado TO BE', 
-            'PERIODO'
-        ];
-        
+        const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'Versión AS IS', 'Estado AS IS', 'Versión FCE', 'Estado FCE', 'Versión PM', 'Estado PM', 'Versión TO BE', 'Estado TO BE', 'PERIODO'];
         const rows = closureBoardData.map(item => {
-            const getInfo = (type: string) => {
-                const data = item.docs[type];
-                if (!data) return { v: '-', s: 'No req.' };
-                return { v: data.version, s: STATE_CONFIG[data.state as DocState]?.label.split('(')[0].trim() || '-' };
-            };
-
-            const asis = getInfo('AS IS');
-            const fce = getInfo('FCE');
-            const pm = getInfo('PM');
-            const tobe = getInfo('TO BE');
-
-            return [
-                item.project,
-                item.macro,
-                item.process,
-                item.micro,
-                asis.v, asis.s,
-                fce.v, fce.s,
-                pm.v, pm.s,
-                tobe.v, tobe.s,
-                closureMonth
-            ];
+            const getInfo = (type: string) => { const data = item.docs[type]; if (!data) return { v: '-', s: 'No req.' }; return { v: data.version, s: STATE_CONFIG[data.state as DocState]?.label.split('(')[0].trim() || '-' }; };
+            const asis = getInfo('AS IS'); const fce = getInfo('FCE'); const pm = getInfo('PM'); const tobe = getInfo('TO BE');
+            return [item.project, item.macro, item.process, item.micro, asis.v, asis.s, fce.v, fce.s, pm.v, pm.s, tobe.v, tobe.s, closureMonth];
         });
-
         const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
         const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `SGD_Cierre_Mensual_${closureMonth}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const link = document.createElement('a'); link.setAttribute('href', url); link.setAttribute('download', `SGD_Cierre_Mensual_${closureMonth}.csv`);
+        link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
     if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando métricas ejecutivas...</div>;
@@ -433,32 +379,14 @@ const Reports: React.FC<Props> = ({ user }) => {
     const totalStuck = executiveMetrics.stuckDocs.length;
     const totalStuckPages = Math.ceil(totalStuck / STUCK_ITEMS_PER_PAGE);
     const displayedStuck = executiveMetrics.stuckDocs.slice((stuckPage - 1) * STUCK_ITEMS_PER_PAGE, stuckPage * STUCK_ITEMS_PER_PAGE);
-
     const totalClosureItems = closureBoardData.length;
     const totalClosurePages = Math.ceil(totalClosureItems / CLOSURE_ITEMS_PER_PAGE);
     const displayedClosure = closureBoardData.slice((closurePage - 1) * CLOSURE_ITEMS_PER_PAGE, closurePage * CLOSURE_ITEMS_PER_PAGE);
 
     const generateMonthOptions = () => {
-        const options = [];
-        const startDate = new Date(2025, 11, 1);
-        const now = new Date();
-        
-        let current = new Date(now.getFullYear(), now.getMonth(), 1);
-        const limit = startDate;
-        
-        while (current >= limit) {
-            const val = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
-            const label = current.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-            options.push(<option key={val} value={val}>{label}</option>);
-            current.setMonth(current.getMonth() - 1);
-        }
-        
-        if (options.length === 0) {
-            const val = "2025-12";
-            const label = startDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-            options.push(<option key={val} value={val}>{label}</option>);
-        }
-
+        const options = []; const startDate = new Date(2025, 11, 1); const now = new Date(); let current = new Date(now.getFullYear(), now.getMonth(), 1); const limit = startDate;
+        while (current >= limit) { const val = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`; const label = current.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); options.push(<option key={val} value={val}>{label}</option>); current.setMonth(current.getMonth() - 1); }
+        if (options.length === 0) { const val = "2025-12"; const label = startDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); options.push(<option key={val} value={val}>{label}</option>); }
         return options;
     };
 
@@ -466,10 +394,7 @@ const Reports: React.FC<Props> = ({ user }) => {
         <div className="space-y-6 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                        <LayoutDashboard className="text-indigo-600" /> 
-                        Panel de Control
-                    </h1>
+                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><LayoutDashboard className="text-indigo-600" /> Panel de Control</h1>
                     <p className="text-slate-500">Métricas institucionales y estados de cumplimiento.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
@@ -488,50 +413,43 @@ const Reports: React.FC<Props> = ({ user }) => {
             </div>
 
             <div className="flex flex-col sm:flex-row bg-slate-100 p-1 rounded-xl w-fit gap-1">
-                <button
-                    onClick={() => setActiveTab('REPORTS')}
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                        activeTab === 'REPORTS'
-                        ? 'bg-white text-indigo-600 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                >
-                    <BarChart2 size={18} />
-                    1. Reportes de Gestión
-                </button>
-                <button
-                    onClick={() => setActiveTab('SUMMARY')}
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                        activeTab === 'SUMMARY'
-                        ? 'bg-white text-indigo-600 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                >
-                    <ShieldAlert size={18} />
-                    2. Monitor de Continuidad
-                </button>
-                <button
-                    onClick={() => setActiveTab('CLOSURE')}
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                        activeTab === 'CLOSURE'
-                        ? 'bg-white text-indigo-600 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                >
-                    <TableProperties size={18} />
-                    3. Cierre Mensual
-                </button>
+                <button onClick={() => setActiveTab('REPORTS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'REPORTS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart2 size={18} /> 1. Reportes de Gestión</button>
+                <button onClick={() => setActiveTab('SUMMARY')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'SUMMARY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><ShieldAlert size={18} /> 2. Monitor de Continuidad</button>
+                <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> 3. Cierre Mensual</button>
             </div>
 
             <div className="animate-fadeIn">
                 {activeTab === 'REPORTS' && (
-                    <section className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                            <KPICard title="Requeridos" value={kpis.total} icon={FileText} color="indigo" sub={isAnalyst ? "Mi Carga Total" : "Inventario Requeridos"} onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
-                            <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
-                            <KPICard title="Alertas Referente" value={kpis.overdueReferentIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.n / v1.n.i" onClick={() => goToDashboard(kpis.overdueReferentIds)} canClick={kpis.overdueReferentIds.length > 0} />
-                            <KPICard title="Alerta Control de Gestión" value={kpis.overdueControlIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.nAR / v1.n.iAR" onClick={() => goToDashboard(kpis.overdueControlIds)} canClick={kpis.overdueControlIds.length > 0} />
-                            <KPICard title="Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Meta Cumplida" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
+                    <section className="space-y-8">
+                        {/* FILA 1: KPIs DE MICROPROCESOS (AGREGACIÓN) */}
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2 px-1 text-slate-400">
+                                <Layers size={14} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Microprocesos (Unidades de Negocio)</span>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                <KPICard title="MicroProc. Requeridos" value={microStats.total.count} icon={Layers} color="slate" sub="Universo Total" onClick={() => goToDashboard(microStats.total.ids)} canClick={microStats.total.count > 0} />
+                                <KPICard title="No Iniciado" value={microStats.notStarted.count} icon={Clock} color="slate" sub="Sin documentos" onClick={() => goToDashboard(microStats.notStarted.ids)} canClick={microStats.notStarted.count > 0} />
+                                <KPICard title="En Proceso" value={microStats.inProcess.count} icon={Activity} color="indigo" sub="En elaboración" onClick={() => goToDashboard(microStats.inProcess.ids)} canClick={microStats.inProcess.count > 0} />
+                                <KPICard title="Referente" value={microStats.referent.count} icon={Users} color="amber" sub="En validación ext." onClick={() => goToDashboard(microStats.referent.ids)} canClick={microStats.referent.count > 0} />
+                                <KPICard title="Control Gestión" value={microStats.control.count} icon={ShieldCheck} color="amber" sub="En revisión final" onClick={() => goToDashboard(microStats.control.ids)} canClick={microStats.control.count > 0} />
+                                <KPICard title="Terminados" value={microStats.finished.count} icon={CheckCircle} color="green" sub="100% completados" onClick={() => goToDashboard(microStats.finished.ids)} canClick={microStats.finished.count > 0} />
+                            </div>
+                        </div>
+
+                        {/* FILA 2: KPIs DE DOCUMENTOS (DETALLE) */}
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2 px-1 text-slate-400">
+                                <FileText size={14} />
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Documentos (Carga Operativa)</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                <KPICard title="Docs. Totales" value={kpis.total} icon={FileText} color="indigo" sub="Inventario Total" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
+                                <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
+                                <KPICard title="Alertas Referente" value={kpis.overdueReferentIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.n / v1.n.i" onClick={() => goToDashboard(kpis.overdueReferentIds)} canClick={kpis.overdueReferentIds.length > 0} />
+                                <KPICard title="Alerta Control Gestión" value={kpis.overdueControlIds.length} icon={AlertTriangle} color="amber" sub="> 30 días en v1.nAR" onClick={() => goToDashboard(kpis.overdueControlIds)} canClick={kpis.overdueControlIds.length > 0} />
+                                <KPICard title="Docs. Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Aprobados Final" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
+                            </div>
                         </div>
 
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -601,25 +519,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <p className="text-xs text-slate-500">Velocidad de entrega acumulada por periodo. Escala: <b>{getScaleLabel()}</b></p>
                                 </div>
                                 <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                    <button 
-                                        onClick={handleZoomOut} 
-                                        disabled={chartScale === 'ANNUAL'}
-                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all"
-                                        title="Zoom Out (Menos detalle)"
-                                    >
-                                        <ZoomOut size={18} />
-                                    </button>
-                                    <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">
-                                        {getScaleLabel()}
-                                    </div>
-                                    <button 
-                                        onClick={handleZoomIn} 
-                                        disabled={chartScale === 'WEEKLY'}
-                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all"
-                                        title="Zoom In (Más detalle)"
-                                    >
-                                        <ZoomIn size={18} />
-                                    </button>
+                                    <button onClick={handleZoomOut} disabled={chartScale === 'ANNUAL'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom Out (Menos detalle)"><ZoomOut size={18} /></button>
+                                    <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">{getScaleLabel()}</div>
+                                    <button onClick={handleZoomIn} disabled={chartScale === 'WEEKLY'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom In (Más detalle)"><ZoomIn size={18} /></button>
                                 </div>
                             </div>
                             <div className="h-[350px] w-full">
@@ -649,32 +551,58 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                 {activeTab === 'SUMMARY' && (
                     <section className="space-y-6">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            <AgileBucket title="Backlog" value={agileFlowStats.backlog.count} icon={Layers} color="slate" onClick={() => goToDashboard(agileFlowStats.backlog.ids)} />
+                            <AgileBucket title="En Desarrollo" value={agileFlowStats.development.count} icon={PlayCircle} color="blue" onClick={() => goToDashboard(agileFlowStats.development.ids)} />
+                            <AgileBucket title="Rev. Interna" value={agileFlowStats.internalReview.count} icon={FileText} color="amber" onClick={() => goToDashboard(agileFlowStats.internalReview.ids)} />
+                            <AgileBucket title="Validación" value={agileFlowStats.validation.count} icon={FastForward} color="purple" onClick={() => goToDashboard(agileFlowStats.validation.ids)} />
+                            <AgileBucket title="Finalizado" value={agileFlowStats.done.count} icon={CheckCircle} color="green" onClick={() => goToDashboard(agileFlowStats.done.ids)} />
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                            <h3 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-indigo-600" /> Diagrama de Flujo Acumulado (CFD) - Tendencia 6 Meses</h3>
+                            <div className="h-[280px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={cfdData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="month" tick={{fontSize: 10}} />
+                                        <YAxis tick={{fontSize: 10}} />
+                                        <Tooltip />
+                                        <Legend verticalAlign="top" align="right" iconType="circle" />
+                                        <Area type="monotone" dataKey="Backlog" stackId="1" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Desarrollo" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Rev. Interna" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Validación" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Finalizado" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-4">
+                                <Info size={16} className="text-slate-400 mt-0.5" />
+                                <p className="text-[10px] text-slate-500 leading-relaxed italic"><b>Interpretación CFD:</b> La base (gris) muestra el volumen total pendiente por iniciar. Las capas superiores muestran el avance del trabajo. Un ensanchamiento excesivo de las capas medias indica cuellos de botella en el flujo.</p>
+                            </div>
+                        </div>
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                             <div className="p-6 pb-2">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                     <div>
-                                        <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><ShieldAlert size={16} className="text-red-500" /> Monitor de Continuidad</h3>
-                                        <p className="text-xs text-slate-500 mt-1">Documentos con más de 30 días sin cambios de estado.</p>
+                                        <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2"><ShieldAlert size={16} className="text-red-500" /> Alertas de Continuidad (>30 días)</h3>
+                                        <p className="text-xs text-slate-500 mt-1">Identificación de documentos con flujo detenido que requieren gestión prioritaria.</p>
                                     </div>
                                     {totalStuck > 0 && (
                                         <button onClick={() => goToDashboard(executiveMetrics.stuckDocs.map(d => d.id))} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all shadow-md font-bold text-xs uppercase tracking-wider">
-                                            <ExternalLink size={14} /> Ver en Dashboard
+                                            <ExternalLink size={14} /> Gestionar en Dashboard
                                         </button>
                                     )}
                                 </div>
                             </div>
                             <div className="flex-1 px-6 pb-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {totalStuck === 0 ? (
-                                        <div className="col-span-full py-12 text-center text-slate-400">
-                                            <CheckCircle size={32} className="mx-auto mb-2 text-green-200" /><p className="text-xs">Sin riesgos de continuidad.</p>
-                                        </div>
-                                    ) : displayedStuck.map((d: StuckDoc) => (
+                                    {totalStuck === 0 ? ( <div className="col-span-full py-12 text-center text-slate-400"><CheckCircle size={32} className="mx-auto mb-2 text-green-200" /><p className="text-xs">Sin riesgos de continuidad detectados.</p></div> ) : displayedStuck.map((d: StuckDoc) => (
                                         <div key={d.id} onClick={() => navigate(`/doc/${d.id}`)} className="p-4 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer group shadow-sm flex flex-col justify-between">
                                             <div>
                                                 <div className="flex justify-between items-start mb-2">
                                                     <span className="text-[10px] font-bold text-indigo-600 uppercase bg-indigo-50 px-2 py-1 rounded border border-indigo-100">{d.project}</span>
-                                                    <span className="text-[10px] font-bold px-2 py-1 rounded border bg-red-50 text-red-600 border-red-100">{d.daysStuck} días</span>
+                                                    <span className="text-[10px] font-bold px-2 py-1 rounded border bg-red-50 text-red-600 border-red-100 animate-pulse">{d.daysStuck} días</span>
                                                 </div>
                                                 <h4 className="text-xs font-bold text-slate-800 line-clamp-2 group-hover:text-indigo-600 leading-tight">{d.title}</h4>
                                             </div>
@@ -688,7 +616,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                             {totalStuck > STUCK_ITEMS_PER_PAGE && (
                                 <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    <div className="text-[11px] text-slate-500">Mostrando {Math.min(totalStuck, (stuckPage - 1) * STUCK_ITEMS_PER_PAGE + 1)} - {Math.min(totalStuck, stuckPage * STUCK_ITEMS_PER_PAGE)} de {totalStuck}</div>
+                                    <div className="text-[11px] text-slate-500">Mostrando {Math.min(totalStuck, (stuckPage - 1) * STUCK_ITEMS_PER_PAGE + 1)} - {Math.min(totalStuck, stuckPage * STUCK_ITEMS_PER_PAGE)} de {totalStuck} alertas</div>
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => setStuckPage(p => Math.max(1, p - 1))} disabled={stuckPage === 1} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronLeft size={16} /></button>
                                         <button onClick={() => setStuckPage(p => Math.min(totalStuckPages, p + 1))} disabled={stuckPage === totalStuckPages} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronRight size={16} /></button>
@@ -705,113 +633,38 @@ const Reports: React.FC<Props> = ({ user }) => {
                             <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><CalendarDays size={24} /></div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">Tablero de Cierre Mensual</h3>
-                                        <p className="text-xs text-slate-500 mt-0.5">Estado jerárquico de la matriz al cierre de mes.</p>
-                                    </div>
+                                    <div><h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">Tablero de Cierre Mensual</h3><p className="text-xs text-slate-500 mt-0.5">Estado jerárquico de la matriz al cierre de mes.</p></div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button 
-                                        onClick={handleExportClosureExcel}
-                                        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-all shadow-sm text-xs font-bold"
-                                    >
-                                        <FileSpreadsheet size={14} className="text-green-600" />
-                                        Exportar Cierre
-                                    </button>
+                                    <button onClick={handleExportClosureExcel} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-all shadow-sm text-xs font-bold"><FileSpreadsheet size={14} className="text-green-600" /> Exportar Cierre</button>
                                     <div className="h-6 w-px bg-slate-200 mx-1"></div>
-                                    <div className="flex items-center gap-2">
-                                        <label className="text-xs font-bold text-slate-400 uppercase">Periodo:</label>
-                                        <select value={closureMonth} onChange={(e) => { setClosureMonth(e.target.value); setClosurePage(1); }} className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 p-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                                            {generateMonthOptions()}
-                                        </select>
-                                    </div>
+                                    <div className="flex items-center gap-2"><label className="text-xs font-bold text-slate-400 uppercase">Periodo:</label><select value={closureMonth} onChange={(e) => { setClosureMonth(e.target.value); setClosurePage(1); }} className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 p-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">{generateMonthOptions()}</select></div>
                                 </div>
                             </div>
-
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse min-w-[1500px]">
                                     <thead className="text-[10px] text-slate-400 uppercase font-bold bg-slate-50/50">
-                                        <tr>
-                                            <th className="px-4 py-3 border-b border-slate-100">PROYECTO</th>
-                                            <th className="px-4 py-3 border-b border-slate-100">JERARQUÍA (MACRO / PROCESO)</th>
-                                            <th className="px-4 py-3 border-b border-slate-100 sticky left-0 bg-slate-50 z-10 w-64 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">MICROPROCESO</th>
-                                            <th className="px-4 py-3 border-b border-slate-100 text-center bg-blue-50/30" colSpan={2}>AS IS</th>
-                                            <th className="px-4 py-3 border-b border-slate-100 text-center bg-red-50/30" colSpan={2}>FCE</th>
-                                            <th className="px-4 py-3 border-b border-slate-100 text-center bg-yellow-50/30" colSpan={2}>PM</th>
-                                            <th className="px-4 py-3 border-b border-slate-100 text-center bg-green-50/30" colSpan={2}>TO BE</th>
-                                        </tr>
-                                        <tr className="bg-slate-50/30 text-[8px] text-slate-400">
-                                            <th colSpan={3} className="border-b border-slate-100 sticky left-0 bg-slate-50/30 z-10"></th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th>
-                                            <th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th>
-                                        </tr>
+                                        <tr><th className="px-4 py-3 border-b border-slate-100">PROYECTO</th><th className="px-4 py-3 border-b border-slate-100">JERARQUÍA (MACRO / PROCESO)</th><th className="px-4 py-3 border-b border-slate-100 sticky left-0 bg-slate-50 z-10 w-64 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">MICROPROCESO</th><th className="px-4 py-3 border-b border-slate-100 text-center bg-blue-50/30" colSpan={2}>AS IS</th><th className="px-4 py-3 border-b border-slate-100 text-center bg-red-50/30" colSpan={2}>FCE</th><th className="px-4 py-3 border-b border-slate-100 text-center bg-yellow-50/30" colSpan={2}>PM</th><th className="px-4 py-3 border-b border-slate-100 text-center bg-green-50/30" colSpan={2}>TO BE</th></tr>
+                                        <tr className="bg-slate-50/30 text-[8px] text-slate-400"><th colSpan={3} className="border-b border-slate-100 sticky left-0 bg-slate-50/30 z-10"></th><th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th><th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th><th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th><th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th><th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th><th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th><th className="px-2 py-1 border-b border-slate-100 text-center border-l border-slate-100">Versión</th><th className="px-2 py-1 border-b border-slate-100 text-center">Estado</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {displayedClosure.length === 0 ? (
-                                            <tr><td colSpan={11} className="p-12 text-center text-slate-400 font-medium">Sin datos registrados para los filtros seleccionados.</td></tr>
-                                        ) : displayedClosure.map((item, idx) => (
+                                        {displayedClosure.length === 0 ? ( <tr><td colSpan={11} className="p-12 text-center text-slate-400 font-medium">Sin datos registrados para los filtros seleccionados.</td></tr> ) : displayedClosure.map((item, idx) => (
                                             <tr key={`${item.project}-${item.micro}-${idx}`} className="hover:bg-slate-50/50 transition-colors text-[10px]">
                                                 <td className="px-4 py-4 border-b border-slate-50 font-bold text-slate-700">{item.project}</td>
-                                                <td className="px-4 py-4 border-b border-slate-50">
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-slate-700 truncate max-w-[200px]" title={item.macro}>{item.macro}</span>
-                                                        <span className="text-slate-500 text-[9px] truncate max-w-[200px]" title={item.process}>{item.process}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-4 border-b border-slate-50 sticky left-0 bg-white z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                    <span className="font-bold text-indigo-700">{item.micro}</span>
-                                                </td>
-                                                {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => {
-                                                    const data = item.docs[type];
-                                                    if (!data) return (
-                                                        <React.Fragment key={type}>
-                                                            <td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic border-l border-slate-50">-</td>
-                                                            <td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic">No req.</td>
-                                                        </React.Fragment>
-                                                    );
-                                                    
-                                                    const cfg = STATE_CONFIG[data.state as DocState];
-                                                    return (
-                                                        <React.Fragment key={type}>
-                                                            <td className="px-2 py-4 border-b border-slate-50 text-center font-mono font-bold text-slate-600 border-l border-slate-50">
-                                                                {data.version}
-                                                            </td>
-                                                            <td className="px-2 py-4 border-b border-slate-50 text-center">
-                                                                <div className={`inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold uppercase border shadow-sm ${cfg.color}`}>
-                                                                    {cfg.label.split('(')[0].trim()}
-                                                                </div>
-                                                            </td>
-                                                        </React.Fragment>
-                                                    );
-                                                })}
+                                                <td className="px-4 py-4 border-b border-slate-50"><div className="flex flex-col"><span className="font-bold text-slate-700 truncate max-w-[200px]" title={item.macro}>{item.macro}</span><span className="text-slate-500 text-[9px] truncate max-w-[200px]" title={item.process}>{item.process}</span></div></td>
+                                                <td className="px-4 py-4 border-b border-slate-50 sticky left-0 bg-white z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]"><span className="font-bold text-indigo-700">{item.micro}</span></td>
+                                                {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => { const data = item.docs[type]; if (!data) return ( <React.Fragment key={type}><td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic border-l border-slate-50">-</td><td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic">No req.</td></React.Fragment> ); const cfg = STATE_CONFIG[data.state as DocState]; return ( <React.Fragment key={type}><td className="px-2 py-4 border-b border-slate-50 text-center font-mono font-bold text-slate-600 border-l border-slate-50">{data.version}</td><td className="px-2 py-4 border-b border-slate-50 text-center"><div className={`inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold uppercase border shadow-sm ${cfg.color}`}>{cfg.label.split('(')[0].trim()}</div></td></React.Fragment> ); })}
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
-
                             {totalClosureItems > CLOSURE_ITEMS_PER_PAGE && (
                                 <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
                                     <div className="text-[11px] text-slate-500">Mostrando {Math.min(totalClosureItems, (closurePage - 1) * CLOSURE_ITEMS_PER_PAGE + 1)} - {Math.min(totalClosureItems, closurePage * CLOSURE_ITEMS_PER_PAGE)} de {totalClosureItems}</div>
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => setClosurePage(p => Math.max(1, p - 1))} disabled={closurePage === 1} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"><ChevronLeft size={16} /></button>
-                                        <div className="flex gap-1">
-                                            {Array.from({ length: Math.min(5, totalClosurePages) }, (_, i) => {
-                                                let p = i + 1;
-                                                if (totalClosurePages > 5 && closurePage > 3) p = closurePage - 2 + i;
-                                                if (p > totalClosurePages) p = totalClosurePages - (4 - i);
-                                                if (p < 1) p = i + 1;
-                                                return (
-                                                    <button key={p} onClick={() => setClosurePage(p)} className={`w-7 h-7 rounded text-[10px] font-bold border transition-all ${closurePage === p ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>{p}</button>
-                                                );
-                                            })}
-                                        </div>
+                                        <div className="flex gap-1">{Array.from({ length: Math.min(5, totalClosurePages) }, (_, i) => { let p = i + 1; if (totalClosurePages > 5 && closurePage > 3) p = closurePage - 2 + i; if (p > totalClosurePages) p = totalClosurePages - (4 - i); if (p < 1) p = i + 1; return (<button key={p} onClick={() => setClosurePage(p)} className={`w-7 h-7 rounded text-[10px] font-bold border transition-all ${closurePage === p ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>{p}</button>); })}</div>
                                         <button onClick={() => setClosurePage(p => Math.min(totalClosurePages, p + 1))} disabled={closurePage === totalClosurePages} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"><ChevronRight size={16} /></button>
                                     </div>
                                 </div>
@@ -830,8 +683,25 @@ const KPICard = ({ title, value, icon: Icon, color, sub, onClick, canClick }: an
     };
     return (
         <div onClick={canClick ? onClick : undefined} className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${colorClasses[color] || colorClasses.indigo} ${canClick ? 'cursor-pointer hover:shadow-md transition-all active:scale-95' : ''}`}>
-            <div className="flex justify-between items-start mb-2"><span className="text-xs font-bold uppercase tracking-wider opacity-70">{title}</span><Icon size={18} /></div>
-            <div><span className="text-2xl font-bold">{value}</span><div className="flex justify-between items-center mt-1"><p className="text-[10px] opacity-80 font-medium">{sub}</p>{canClick && <ArrowRight size={12} className="opacity-60" />}</div></div>
+            <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-bold uppercase tracking-wider opacity-70">{title}</span><Icon size={16} /></div>
+            <div><span className="text-xl font-bold">{value}</span><div className="flex justify-between items-center mt-1"><p className="text-[9px] opacity-80 font-medium">{sub}</p>{canClick && <ArrowRight size={10} className="opacity-60" />}</div></div>
+        </div>
+    );
+};
+
+const AgileBucket = ({ title, value, icon: Icon, color, onClick }: any) => {
+    const colorMap: Record<string, string> = {
+        slate: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
+        blue: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+        amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+        purple: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+        green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+    };
+    return (
+        <div onClick={onClick} className={`p-3 rounded-xl border cursor-pointer transition-all active:scale-95 flex flex-col items-center text-center shadow-sm ${colorMap[color]}`}>
+            <div className="p-2 rounded-full bg-white/50 mb-2"><Icon size={18} /></div>
+            <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{title}</span>
+            <span className="text-xl font-extrabold">{value}</span>
         </div>
     );
 };
