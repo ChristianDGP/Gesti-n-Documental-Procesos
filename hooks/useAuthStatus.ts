@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebaseConfig';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -29,7 +28,6 @@ export const useAuthStatus = () => {
                     if (userSnap.exists()) {
                         const userData = userSnap.data() as User;
                         
-                        // VERIFICACIÓN DE ESTADO ACTIVO
                         if (userData.active === false) {
                             console.warn("Intento de acceso de cuenta inactiva:", email);
                             await signOut(auth);

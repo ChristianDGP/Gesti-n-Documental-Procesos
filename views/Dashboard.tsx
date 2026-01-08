@@ -257,7 +257,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   if ((a.microprocess || '') !== (b.microprocess || '')) return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
                   return (getDocTypeOrder(a.docType) - getDocTypeOrder(b.docType)) * modifier;
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
-              case 'state': return (a.progress - b.progress) * modifier;
+              case 'state': 
+                  // Sincronizar ordenamiento con la configuración oficial de progreso
+                  return (STATE_CONFIG[a.state].progress - STATE_CONFIG[b.state].progress) * modifier;
               default: return 0;
           }
       });
@@ -383,7 +385,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             <option value="">ESTADO</option>
                             {Object.entries(STATE_CONFIG).map(([key, cfg]) => <option key={key} value={key}>{cfg.label.split('(')[0]}</option>)}
                         </select>
-                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-32">
+                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-[11px] p-2 border border-slate-300 rounded-md bg-slate-50 text-slate-600 outline-none w-32">
                             <option value="">ANALISTA</option>
                             {allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                         </select>
@@ -425,7 +427,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                 </td>
                                 <td className="px-4 py-3 align-top">
                                     <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1 border ${!doc.isRequired ? 'bg-gray-200 text-gray-500 border-gray-300' : STATE_CONFIG[doc.state].color}`}>{STATE_CONFIG[doc.state].label.split('(')[0]}</div>
-                                    <div className="text-[10px] font-mono text-slate-500">{doc.version} ({doc.progress}%)</div>
+                                    <div className="text-[10px] font-mono text-slate-500">
+                                        {/* SINCRONIZACIÓN CRÍTICA: Mostrar progreso de la configuración oficial del estado */}
+                                        {doc.version} ({STATE_CONFIG[doc.state].progress}%)
+                                    </div>
                                 </td>
                                 <td className="px-4 py-3 align-top text-right">
                                     {doc.state !== DocState.NOT_STARTED ? (

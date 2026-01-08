@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader } from '../services/firebaseBackend';
@@ -358,6 +357,10 @@ ${user.name}`;
   );
 
   const config = STATE_CONFIG[doc.state];
+  
+  // SINCRONIZACIÓN VISUAL: Priorizamos el progreso de STATE_CONFIG para consistencia en la UI
+  const displayProgress = config.progress;
+
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
@@ -397,7 +400,7 @@ ${user.name}`;
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border-t border-slate-100 pt-4">
             <div><p className="text-slate-500">Analistas</p>{assigneeNames.length > 0 ? assigneeNames.map((name, i) => <p key={i} className="font-medium text-slate-800">{name}</p>) : <p className="font-medium text-slate-800">{doc.authorName}</p>}</div>
             <div><p className="text-slate-500">Versión Actual</p><p className="font-mono text-slate-800 font-bold">{doc.version}</p></div>
-            <div><p className="text-slate-500">Progreso</p><div className="flex items-center gap-2"><div className="flex-1 bg-slate-200 rounded-full h-2 w-20"><div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${doc.progress}%` }}></div></div><span className="font-medium">{doc.progress}%</span></div></div>
+            <div><p className="text-slate-500">Progreso</p><div className="flex items-center gap-2"><div className="flex-1 bg-slate-200 rounded-full h-2 w-20"><div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${displayProgress}%` }}></div></div><span className="font-medium">{displayProgress}%</span></div></div>
             <div><p className="text-slate-500">Actualizado</p><p className="text-slate-800">{new Date(doc.updatedAt).toLocaleDateString()}</p></div>
         </div>
       </div>

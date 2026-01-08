@@ -59,7 +59,7 @@ export interface DocHistory {
   action: string;
   previousState: DocState;
   newState: DocState;
-  version?: string; // Nuevo campo para snapshot histórico
+  version?: string;
   comment: string;
   timestamp: string;
 }

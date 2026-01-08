@@ -1,24 +1,18 @@
 // src/components/ListaDocumentos.tsx
 import React, { useEffect, useState } from 'react';
-import { db } from '../firebaseConfig'; // Importa desde el nuevo .ts
+import { db } from '../services/firebaseConfig'; 
 import { collection, getDocs } from 'firebase/firestore';
 
-// ==========================================================
-// CORRECCIÓN TS2345: Definición de la interfaz del documento
-// ==========================================================
 interface Documento {
     id: string;
     nombre: string;
     estado: string;
     version: number;
-    // Agrega cualquier otro campo que hayas creado en Firestore
 }
 
 function ListaDocumentos() {
-  // Tipado del estado con la interfaz Documento[]
   const [documentos, setDocumentos] = useState<Documento[]>([]); 
   const [cargando, setCargando] = useState(true);
-  // Tipado del estado de error
   const [error, setError] = useState<string | null>(null); 
 
   useEffect(() => {
@@ -27,7 +21,6 @@ function ListaDocumentos() {
         const documentosCollection = collection(db, 'documentos');
         const snapshot = await getDocs(documentosCollection);
         
-        // Mapeamos y tipamos el resultado explícitamente
         const documentosList: Documento[] = snapshot.docs.map(doc => {
             const data = doc.data();
             return { 
@@ -35,7 +28,6 @@ function ListaDocumentos() {
                 nombre: data.nombre || 'N/A',
                 estado: data.estado || 'N/A',
                 version: data.version || 0,
-                // Mapea el resto de tus campos aquí
             } as Documento;
         });
         
@@ -43,7 +35,6 @@ function ListaDocumentos() {
         
       } catch (err) {
         console.error("Error al conectar con Firestore:", err);
-        // El error es tipado como string
         setError("Error de conexión. Revisa las claves y reglas de Firebase."); 
       } finally {
         setCargando(false);
@@ -68,7 +59,6 @@ function ListaDocumentos() {
         <p>No hay documentos cargados en la colección 'documentos' de Firestore.</p>
       ) : (
         <ul>
-          {/* Los elementos ahora están tipados como Documento, resolviendo TS2339 */}
           {documentos.map(doc => (
             <li key={doc.id}>
               <strong>{doc.nombre}</strong> (Estado: {doc.estado}, Versión: {doc.version})

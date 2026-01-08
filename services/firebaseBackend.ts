@@ -1,4 +1,3 @@
-
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -18,18 +17,34 @@ import {
   STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP, REQUIRED_DOCS_MATRIX 
 } from "../constants";
 
-// --- Helpers ---
 const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
-    const v = (version || '').trim();
+    const v = (version || '').trim().toUpperCase();
     if (!v || v === '-' || v === '0') return { state: DocState.NOT_STARTED, progress: 0 };
-    if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
+    
+    // Regla de Oro: ACG es siempre 100% de progreso y estado Aprobado
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
-    if (/^v1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
-    if (/^v1\.\d+AR$/.test(v)) return { state: DocState.SENT_TO_CONTROL, progress: 90 };
-    if (/^v1\.\d+\.\d+$/.test(v)) return { state: DocState.REFERENT_REVIEW, progress: 80 };
-    if (/^v1\.\d+$/.test(v)) return { state: DocState.SENT_TO_REFERENT, progress: 80 };
-    if (v.startsWith('v0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
-    if (/^\d+\./.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
+    
+    // Control de Gestión: 90%
+    if (v.endsWith('AR')) {
+        if (/^V1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
+        return { state: DocState.SENT_TO_CONTROL, progress: 90 };
+    }
+    
+    // Referentes: 80%
+    if (v.startsWith('V1.')) {
+        if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
+        return { state: DocState.SENT_TO_REFERENT, progress: 80 };
+    }
+    
+    // Revisión Interna: 60%
+    if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+    
+    // Iniciado: 10%
+    if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
+    
+    // En Proceso: 30%
+    if (/^0\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
+    
     return { state: DocState.IN_PROCESS, progress: 30 };
 };
 
@@ -207,14 +222,17 @@ export const DocumentService = {
     let uploadedFiles: DocFile[] = [];
     const mergedAssignees = Array.from(new Set([...(hierarchy?.assignees || []), author.id]));
     const version = initialVersion || '0.0';
+    
+    const info = determineStateFromVersion(version);
+    const progress = initialProgress !== undefined ? initialProgress : info.progress;
+
     const newDocData: Omit<Document, 'id'> = {
-      title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress: initialProgress || 10, hasPendingRequest: isSubmission, files: uploadedFiles, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
+      title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress, hasPendingRequest: isSubmission, files: uploadedFiles, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
     };
     const docRef = await addDoc(collection(db, "documents"), newDocData);
     
     await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Iniciado Versión ${version}`, version);
     
-    // Notificar al coordinador sobre la creación en español
     const allUsers = await UserService.getAll();
     const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
     coordinators.forEach(coord => {
@@ -240,7 +258,6 @@ export const DocumentService = {
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
       
-      // Traducción estricta a español para el historial y UI
       const actionLabels: Record<string, string> = {
           'APPROVE': 'Aprobación',
           'REJECT': 'Rechazo',
@@ -253,14 +270,28 @@ export const DocumentService = {
 
       if (customVersion) {
         newVersion = customVersion;
-        newState = determineStateFromVersion(customVersion).state;
+        const info = determineStateFromVersion(customVersion);
+        newState = info.state;
       }
       
       if (action === 'APPROVE') hasPending = false;
-      else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
+      else if (action === 'REJECT') { 
+          hasPending = false; 
+          newState = determineStateFromVersion(newVersion).state; 
+      }
       else if (action === 'REQUEST_APPROVAL') hasPending = true;
+
+      // ACTUALIZACIÓN DE PROGRESO: Aseguramos que se guarde el porcentaje correcto en la BD
+      const { progress: newProgress } = determineStateFromVersion(newVersion);
       
-      await updateDoc(docRef, { state: newState, version: newVersion, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
+      await updateDoc(docRef, { 
+          state: newState, 
+          version: newVersion, 
+          progress: newProgress,
+          hasPendingRequest: hasPending, 
+          updatedAt: new Date().toISOString() 
+      });
+      
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
       const allUsers = await UserService.getAll();

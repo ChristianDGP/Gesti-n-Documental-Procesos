@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './views/Login';
@@ -57,7 +56,6 @@ const App: React.FC = () => {
                                     <Route path="/profile" element={<Profile user={user} onUpdate={() => window.location.reload()} />} /> 
                                     <Route path="/manual" element={<ManualAnalista />} />
                                     
-                                    {/* Rutas con acceso condicional para Analistas */}
                                     <Route 
                                         path="/admin/referents" 
                                         element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessReferents)) 
@@ -71,7 +69,6 @@ const App: React.FC = () => {
                                             : <Navigate to="/" />} 
                                     />
 
-                                    {/* Rutas exclusivas de Coordinación y Admin */}
                                     {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
                                       <>
                                         <Route path="/admin/structure" element={<AdminHierarchy user={user} />} />
@@ -79,7 +76,6 @@ const App: React.FC = () => {
                                       </>
                                     )}
 
-                                    {/* Rutas exclusivas de Administración */}
                                     {user.role === UserRole.ADMIN && (
                                         <>
                                             <Route path="/admin/users" element={<AdminUsers />} />
