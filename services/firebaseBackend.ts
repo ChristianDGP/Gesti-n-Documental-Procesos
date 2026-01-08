@@ -1,3 +1,4 @@
+
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -20,31 +21,18 @@ import {
 const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
     const v = (version || '').trim().toUpperCase();
     if (!v || v === '-' || v === '0') return { state: DocState.NOT_STARTED, progress: 0 };
-    
-    // Regla de Oro: ACG es siempre 100% de progreso y estado Aprobado
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
-    
-    // Control de Gestión: 90%
     if (v.endsWith('AR')) {
         if (/^V1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
         return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     }
-    
-    // Referentes: 80%
     if (v.startsWith('V1.')) {
         if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
         return { state: DocState.SENT_TO_REFERENT, progress: 80 };
     }
-    
-    // Revisión Interna: 60%
     if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
-    
-    // Iniciado: 10%
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
-    
-    // En Proceso: 30%
     if (/^0\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
-    
     return { state: DocState.IN_PROCESS, progress: 30 };
 };
 
@@ -177,8 +165,12 @@ export const UserService = {
 };
 
 export const HistoryService = {
-  getHistory: async (docId: string): Promise<DocHistory[]> => {
-    const q = query(collection(db, "history"), where("documentId", "==", docId));
+  getHistory: async (docIds: string | string[]): Promise<DocHistory[]> => {
+    const ids = Array.isArray(docIds) ? docIds : [docIds];
+    if (ids.length === 0) return [];
+    
+    // Firestore limit is 10 for 'in' queries, but we usually have few fragments
+    const q = query(collection(db, "history"), where("documentId", "in", ids.slice(0, 10)));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => doc.data() as DocHistory).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   },
@@ -216,37 +208,42 @@ export const DocumentService = {
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as Document) : null;
   },
-  create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any): Promise<Document> => {
+  getRelatedDocIds: async (project: string, micro: string, type: string): Promise<string[]> => {
+      const q = query(
+          collection(db, "documents"), 
+          where("project", "==", project),
+          where("docType", "==", type)
+      );
+      const snap = await getDocs(q);
+      const normalizedMicro = normalizeHeader(micro);
+      return snap.docs
+          .filter(d => normalizeHeader(d.data().microprocess || d.data().title.split(' - ')[0]) === normalizedMicro)
+          .map(d => d.id);
+  },
+  create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any, existingId?: string): Promise<Document> => {
     const state = initialState || DocState.INITIATED;
     const isSubmission = state === DocState.INTERNAL_REVIEW || state === DocState.SENT_TO_REFERENT || state === DocState.SENT_TO_CONTROL;
-    let uploadedFiles: DocFile[] = [];
-    const mergedAssignees = Array.from(new Set([...(hierarchy?.assignees || []), author.id]));
     const version = initialVersion || '0.0';
-    
     const info = determineStateFromVersion(version);
     const progress = initialProgress !== undefined ? initialProgress : info.progress;
 
-    const newDocData: Omit<Document, 'id'> = {
-      title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress, hasPendingRequest: isSubmission, files: uploadedFiles, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
-    };
-    const docRef = await addDoc(collection(db, "documents"), newDocData);
-    
-    await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Iniciado Versión ${version}`, version);
-    
-    const allUsers = await UserService.getAll();
-    const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
-    coordinators.forEach(coord => {
-        NotificationService.create(
-            coord.id,
-            docRef.id,
-            'ASSIGNMENT',
-            'Nueva Solicitud de Documento',
-            `El analista ${author.name} ha iniciado: ${title}`,
-            author.name
-        );
-    });
-
-    return { id: docRef.id, ...newDocData } as Document;
+    if (existingId) {
+        const docRef = doc(db, "documents", existingId);
+        const oldSnap = await getDoc(docRef);
+        const oldData = oldSnap.data() as Document;
+        const updateData: Partial<Document> = { state, version, progress, description, hasPendingRequest: isSubmission, updatedAt: new Date().toISOString() };
+        await updateDoc(docRef, updateData);
+        await HistoryService.log(existingId, author, 'Nueva Versión (Carga)', oldData.state, state, `Carga de archivo versión ${version}`, version);
+        return { id: existingId, ...oldData, ...updateData } as Document;
+    } else {
+        const mergedAssignees = Array.from(new Set([...(hierarchy?.assignees || []), author.id]));
+        const newDocData: Omit<Document, 'id'> = {
+          title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress, hasPendingRequest: isSubmission, files: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
+        };
+        const docRef = await addDoc(collection(db, "documents"), newDocData);
+        await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Iniciado Versión ${version}`, version);
+        return { id: docRef.id, ...newDocData } as Document;
+    }
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
   transitionState: async (docId: string, user: User, action: any, comment: string, file?: File, customVersion?: string): Promise<void> => {
@@ -257,88 +254,19 @@ export const DocumentService = {
       let newState = currentDoc.state;
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
-      
-      const actionLabels: Record<string, string> = {
-          'APPROVE': 'Aprobación',
-          'REJECT': 'Rechazo',
-          'COMMENT': 'Observación',
-          'REQUEST_APPROVAL': 'Solicitud de Revisión',
-          'ADVANCE': 'Avance de Flujo'
-      };
-
+      const actionLabels: Record<string, string> = { 'APPROVE': 'Aprobación', 'REJECT': 'Rechazo', 'COMMENT': 'Observación', 'REQUEST_APPROVAL': 'Solicitud de Revisión', 'ADVANCE': 'Avance de Flujo' };
       const displayAction = actionLabels[action] || action;
-
       if (customVersion) {
         newVersion = customVersion;
         const info = determineStateFromVersion(customVersion);
         newState = info.state;
       }
-      
       if (action === 'APPROVE') hasPending = false;
-      else if (action === 'REJECT') { 
-          hasPending = false; 
-          newState = determineStateFromVersion(newVersion).state; 
-      }
+      else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
       else if (action === 'REQUEST_APPROVAL') hasPending = true;
-
-      // ACTUALIZACIÓN DE PROGRESO: Aseguramos que se guarde el porcentaje correcto en la BD
       const { progress: newProgress } = determineStateFromVersion(newVersion);
-      
-      await updateDoc(docRef, { 
-          state: newState, 
-          version: newVersion, 
-          progress: newProgress,
-          hasPendingRequest: hasPending, 
-          updatedAt: new Date().toISOString() 
-      });
-      
+      await updateDoc(docRef, { state: newState, version: newVersion, progress: newProgress, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
-
-      const allUsers = await UserService.getAll();
-      
-      if (action === 'APPROVE' || action === 'REJECT') {
-          const notificationType = action === 'APPROVE' ? 'APPROVAL' : 'REJECTION';
-          const title = action === 'APPROVE' ? 'Documento Aprobado' : 'Documento Rechazado';
-          const msg = `El documento "${currentDoc.title}" ha sido ${action === 'APPROVE' ? 'aprobado' : 'rechazado'} (Versión ${newVersion}).`;
-          
-          currentDoc.assignees.forEach(aid => {
-              if (aid !== user.id) {
-                NotificationService.create(aid, docId, notificationType, title, msg, user.name);
-              }
-          });
-          
-          if (!currentDoc.assignees.includes(currentDoc.authorId) && currentDoc.authorId !== user.id) {
-              NotificationService.create(currentDoc.authorId, docId, notificationType, title, msg, user.name);
-          }
-      } 
-      else if (action === 'COMMENT') {
-          const msg = `Nueva observación en "${currentDoc.title}": ${comment.substring(0, 50)}...`;
-          const targets = new Set([...(currentDoc.assignees || []), currentDoc.authorId]);
-          targets.forEach(aid => {
-              if (aid !== user.id) {
-                NotificationService.create(aid, docId, 'COMMENT', 'Nueva Observación', msg, user.name);
-              }
-          });
-      } 
-      else if (customVersion) {
-          const reviewStates = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW];
-          if (reviewStates.includes(newState)) {
-              const coordinators = allUsers.filter(u => u.role === UserRole.COORDINATOR || u.role === UserRole.ADMIN);
-              const estadoNombre = STATE_CONFIG[newState]?.label.split('(')[0].trim();
-              coordinators.forEach(coord => {
-                  if (coord.id !== user.id) {
-                    NotificationService.create(
-                        coord.id,
-                        docId,
-                        'ASSIGNMENT',
-                        'Revisión Solicitada',
-                        `Nueva versión en ${estadoNombre}: ${currentDoc.title} (${newVersion})`,
-                        user.name
-                    );
-                  }
-              });
-          }
-      }
   }
 };
 
@@ -349,14 +277,11 @@ export const HierarchyService = {
     const hierarchy: FullHierarchy = {};
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      const proj = data.project;
-      const macro = data.macroprocess || 'Sin Macroproceso';
-      const process = data.process;
       const node: ProcessNode = { name: data.name, docId: doc.id, assignees: data.assignees || [], referentIds: data.referentIds || [], requiredTypes: data.requiredTypes || [], active: data.active !== false };
-      if (!hierarchy[proj]) hierarchy[proj] = {};
-      if (!hierarchy[proj][macro]) hierarchy[proj][macro] = {};
-      if (!hierarchy[proj][macro][process]) hierarchy[proj][macro][process] = [];
-      hierarchy[proj][macro][process].push(node);
+      if (!hierarchy[data.project]) hierarchy[data.project] = {};
+      if (!hierarchy[data.project][data.macroprocess || 'Sin Macro']) hierarchy[data.project][data.macroprocess || 'Sin Macro'] = {};
+      if (!hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process]) hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process] = [];
+      hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process].push(node);
     });
     return hierarchy;
   },
@@ -366,37 +291,23 @@ export const HierarchyService = {
       const hierarchy: UserHierarchy = {};
       snapshot.docs.forEach(doc => {
           const data = doc.data();
-          if (data.active === false) return;
-          const proj = data.project;
-          const macro = data.macroprocess || 'Sin Macroproceso';
-          const process = data.process;
-          if (!hierarchy[proj]) hierarchy[proj] = {};
-          if (!hierarchy[proj][macro]) hierarchy[proj][macro] = {};
-          if (!hierarchy[proj][macro][process]) hierarchy[proj][macro][process] = [];
-          hierarchy[proj][macro][process].push(data.name);
+          if (!hierarchy[data.project]) hierarchy[data.project] = {};
+          if (!hierarchy[data.project][data.macroprocess || 'Sin Macro']) hierarchy[data.project][data.macroprocess || 'Sin Macro'] = {};
+          if (!hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process]) hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process] = [];
+          hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process].push(data.name);
       });
       return hierarchy;
   },
-  updateMatrixAssignment: async (docId: string, assignees: string[]) => {
-      const ref = doc(db, "process_matrix", docId);
-      await updateDoc(ref, { assignees });
-  },
+  updateMatrixAssignment: async (docId: string, assignees: string[]) => { await updateDoc(doc(db, "process_matrix", docId), { assignees }); },
   updateReferentLinks: async (referentId: string, selectedDocIds: string[]) => {
       const q = query(collection(db, "process_matrix"));
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
-      
       snapshot.docs.forEach(d => {
-          const data = d.data();
-          let referents = data.referentIds || [];
+          let referents = d.data().referentIds || [];
           const isSelected = selectedDocIds.includes(d.id);
-          const hasReferent = referents.includes(referentId);
-          
-          if (isSelected && !hasReferent) {
-              batch.update(d.ref, { referentIds: [...referents, referentId] });
-          } else if (!isSelected && hasReferent) {
-              batch.update(d.ref, { referentIds: referents.filter((id:string) => id !== referentId) });
-          }
+          if (isSelected && !referents.includes(referentId)) batch.update(d.ref, { referentIds: [...referents, referentId] });
+          else if (!isSelected && referents.includes(referentId)) batch.update(d.ref, { referentIds: referents.filter((id:string) => id !== referentId) });
       });
       await batch.commit();
   },
@@ -419,26 +330,17 @@ export const HierarchyService = {
       const snapshot = await getDocs(q);
       const map: Record<string, DocType[]> = {};
       snapshot.docs.forEach(d => {
-          const data = d.data();
-          const key = `${normalizeHeader(data.project)}|${normalizeHeader(data.name)}`;
-          map[key] = data.requiredTypes || [];
+          const key = `${normalizeHeader(d.data().project)}|${normalizeHeader(d.data().name)}`;
+          map[key] = d.data().requiredTypes || [];
       });
       return map;
   },
-  toggleProcessStatus: async (docId: string, currentStatus: boolean) => {
-      const ref = doc(db, "process_matrix", docId);
-      await updateDoc(ref, { active: !currentStatus });
-  },
+  toggleProcessStatus: async (docId: string, currentStatus: boolean) => { await updateDoc(doc(db, "process_matrix", docId), { active: !currentStatus }); },
   deleteHierarchyNode: async (level: 'PROJECT' | 'MACRO' | 'PROCESS', name: string, context: { project?: string, macro?: string }) => {
       let q;
-      if (level === 'PROJECT') {
-          q = query(collection(db, "process_matrix"), where("project", "==", name));
-      } else if (level === 'MACRO') {
-          q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", name));
-      } else { // PROCESS
-          q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", name));
-      }
-      
+      if (level === 'PROJECT') q = query(collection(db, "process_matrix"), where("project", "==", name));
+      else if (level === 'MACRO') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", name));
+      else q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", name));
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
       snapshot.docs.forEach(d => batch.delete(d.ref));
@@ -446,13 +348,9 @@ export const HierarchyService = {
   },
   updateHierarchyNode: async (level: 'PROJECT' | 'MACRO' | 'PROCESS', oldName: string, newName: string, context: { project?: string, macro?: string }) => {
       let q;
-      if (level === 'PROJECT') {
-          q = query(collection(db, "process_matrix"), where("project", "==", oldName));
-      } else if (level === 'MACRO') {
-          q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", oldName));
-      } else { // PROCESS
-          q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", oldName));
-      }
+      if (level === 'PROJECT') q = query(collection(db, "process_matrix"), where("project", "==", oldName));
+      else if (level === 'MACRO') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", oldName));
+      else q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", oldName));
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
       snapshot.docs.forEach(d => {
@@ -465,12 +363,7 @@ export const HierarchyService = {
       await batch.commit();
   },
   moveMicroprocess: async (docId: string, targetProject: string, targetMacro: string, targetProcess: string) => {
-      const ref = doc(db, "process_matrix", docId);
-      await updateDoc(ref, {
-          project: targetProject,
-          macroprocess: targetMacro,
-          process: targetProcess
-      });
+      await updateDoc(doc(db, "process_matrix", docId), { project: targetProject, macroprocess: targetMacro, process: targetProcess });
   },
   seedDefaults: async () => {
       const batch = writeBatch(db);
@@ -478,8 +371,7 @@ export const HierarchyService = {
            const [project, micro, asis, fce, pm, tobe] = row;
            const requiredTypes: string[] = [];
            if (asis) requiredTypes.push('AS IS'); if (fce) requiredTypes.push('FCE'); if (pm) requiredTypes.push('PM'); if (tobe) requiredTypes.push('TO BE');
-           const id = generateMatrixId(project, micro);
-           batch.set(doc(db, "process_matrix", id), { project, macroprocess: 'Macroproceso General', process: 'Proceso General', name: micro, assignees: [], referentIds: [], requiredTypes, active: true });
+           batch.set(doc(db, "process_matrix", generateMatrixId(project, micro)), { project, macroprocess: 'Macroproceso General', process: 'Proceso General', name: micro, assignees: [], referentIds: [], requiredTypes, active: true });
       }
       await batch.commit();
   }
@@ -534,19 +426,13 @@ export const DatabaseService = {
             const cols = rows[i].split(/[;,]/).map(c => c.trim());
             if (cols.length < 3) continue;
             const project = cols[idxProject] || 'GENERAL';
-            const macro = cols[idxMacro] || 'General';
-            const process = cols[idxProcess] || 'General';
-            const micro = cols[idxMicro];
-            if (!micro) continue;
             const assignees = findUserIdsFromCSV(allUsers, cols[idxAnalyst]);
             const requiredTypes: string[] = [];
             if (cols[idxAsis] === '1') requiredTypes.push('AS IS');
             if (cols[idxFce] === '1') requiredTypes.push('FCE');
             if (cols[idxPm] === '1') requiredTypes.push('PM');
             if (cols[idxTobe] === '1') requiredTypes.push('TO BE');
-            const id = generateMatrixId(project, micro);
-            const nodeData = { project, macroprocess: macro, process, name: micro, assignees, referentIds: [], requiredTypes, active: true };
-            batch.set(doc(db, "process_matrix", id), nodeData);
+            batch.set(doc(db, "process_matrix", generateMatrixId(project, cols[idxMicro])), { project, macroprocess: cols[idxMacro] || 'General', process: cols[idxProcess] || 'General', name: cols[idxMicro], assignees, referentIds: [], requiredTypes, active: true });
             opCount++; createdCount++;
             if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
         }
