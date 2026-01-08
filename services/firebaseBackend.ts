@@ -84,11 +84,11 @@ export const ReferentService = {
   getAll: async (): Promise<Referent[]> => {
     const q = query(collection(db, "referents"), orderBy("name"));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Referent));
+    return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Referent));
   },
   create: async (data: Omit<Referent, 'id'>): Promise<Referent> => {
     const docRef = await addDoc(collection(db, "referents"), data);
-    return { id: docRef.id, ...data };
+    return { ...data, id: docRef.id } as Referent;
   },
   update: async (id: string, data: Partial<Referent>): Promise<void> => {
     const ref = doc(db, "referents", id);
@@ -113,7 +113,7 @@ export const NotificationService = {
     getByUser: async (userId: string): Promise<Notification[]> => {
         const q = query(collection(db, "notifications"), where("userId", "==", userId));
         const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+        const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Notification));
         return data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     },
     subscribeToUnreadCount: (userId: string, callback: (count: number) => void) => {
@@ -136,13 +136,14 @@ export const UserService = {
   getAll: async (): Promise<User[]> => {
     const q = query(collection(db, "users"));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, active: true, ...doc.data() } as User));
+    // Solución al error TS2783: id y active van al final para sobrescribir y evitar alertas de duplicidad
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, active: (doc.data() as any).active ?? true } as User));
   },
   update: async (id: string, userData: Partial<User>): Promise<User> => {
     const userRef = doc(db, "users", id);
     await updateDoc(userRef, userData);
     const updatedSnap = await getDoc(userRef);
-    return updatedSnap.data() as User;
+    return { ...updatedSnap.data(), id: updatedSnap.id } as User;
   },
   toggleActiveStatus: async (id: string, currentStatus: boolean): Promise<void> => {
     await updateDoc(doc(db, "users", id), { active: !currentStatus });
@@ -169,15 +170,14 @@ export const HistoryService = {
     const ids = Array.isArray(docIds) ? docIds : [docIds];
     if (ids.length === 0) return [];
     
-    // Firestore limit is 10 for 'in' queries, but we usually have few fragments
     const q = query(collection(db, "history"), where("documentId", "in", ids.slice(0, 10)));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => doc.data() as DocHistory).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as DocHistory)).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   },
   getAll: async (): Promise<DocHistory[]> => {
     const q = query(collection(db, "history"), orderBy("timestamp", "desc"));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => doc.data() as DocHistory);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as DocHistory));
   },
   log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string) => {
     const entryId = `hist-${docId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -201,12 +201,12 @@ export const DocumentService = {
   getAll: async (): Promise<Document[]> => {
     const q = query(collection(db, "documents"), orderBy("updatedAt", "desc"));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Document));
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Document));
   },
   getById: async (id: string): Promise<Document | null> => {
     const docRef = doc(db, "documents", id);
     const docSnap = await getDoc(docRef);
-    return docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as Document) : null;
+    return docSnap.exists() ? ({ ...docSnap.data(), id: docSnap.id } as Document) : null;
   },
   getRelatedDocIds: async (project: string, micro: string, type: string): Promise<string[]> => {
       const q = query(
@@ -234,7 +234,8 @@ export const DocumentService = {
         const updateData: Partial<Document> = { state, version, progress, description, hasPendingRequest: isSubmission, updatedAt: new Date().toISOString() };
         await updateDoc(docRef, updateData);
         await HistoryService.log(existingId, author, 'Nueva Versión (Carga)', oldData.state, state, `Carga de archivo versión ${version}`, version);
-        return { id: existingId, ...oldData, ...updateData } as Document;
+        // Solución al error TS2783: id al final para evitar duplicidad detectada por el compilador
+        return { ...oldData, ...updateData, id: existingId } as Document;
     } else {
         const mergedAssignees = Array.from(new Set([...(hierarchy?.assignees || []), author.id]));
         const newDocData: Omit<Document, 'id'> = {
@@ -242,7 +243,7 @@ export const DocumentService = {
         };
         const docRef = await addDoc(collection(db, "documents"), newDocData);
         await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Iniciado Versión ${version}`, version);
-        return { id: docRef.id, ...newDocData } as Document;
+        return { ...newDocData, id: docRef.id } as Document;
     }
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
