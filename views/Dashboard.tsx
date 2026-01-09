@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
+import { DocumentService, UserService, HierarchyService, normalizeHeader, formatVersionForDisplay } from '../services/firebaseBackend';
 import { Document, User, UserRole, DocState, DocType, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
@@ -258,7 +259,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   return (getDocTypeOrder(a.docType) - getDocTypeOrder(b.docType)) * modifier;
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
               case 'state': 
-                  // Sincronizar ordenamiento con la configuración oficial de progreso
                   return (STATE_CONFIG[a.state].progress - STATE_CONFIG[b.state].progress) * modifier;
               default: return 0;
           }
@@ -428,8 +428,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                 <td className="px-4 py-3 align-top">
                                     <div className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mb-1 border ${!doc.isRequired ? 'bg-gray-200 text-gray-500 border-gray-300' : STATE_CONFIG[doc.state].color}`}>{STATE_CONFIG[doc.state].label.split('(')[0]}</div>
                                     <div className="text-[10px] font-mono text-slate-500">
-                                        {/* SINCRONIZACIÓN CRÍTICA: Mostrar progreso de la configuración oficial del estado */}
-                                        {doc.version} ({STATE_CONFIG[doc.state].progress}%)
+                                        {formatVersionForDisplay(doc.version)} ({STATE_CONFIG[doc.state].progress}%)
                                     </div>
                                 </td>
                                 <td className="px-4 py-3 align-top text-right">

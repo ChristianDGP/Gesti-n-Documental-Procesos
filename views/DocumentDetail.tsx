@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader, determineStateFromVersion } from '../services/firebaseBackend';
+import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader, determineStateFromVersion, formatVersionForDisplay } from '../services/firebaseBackend';
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
@@ -167,8 +167,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           alert("No hay correos de analistas definidos para este proceso.");
           return;
       }
-      const subject = encodeURIComponent(`Respuesta Solicitud: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}`);
-      const body = encodeURIComponent(`Estimada/o,\nAdjunto el Informe: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}\n\nEstado Actual: ${STATE_CONFIG[doc.state].label}\n\nPuede revisar el detalle y los comentarios en: ${getDocLink()}\n\nSaludos\n${user.name}`);
+      const displayVersion = formatVersionForDisplay(doc.version);
+      const subject = encodeURIComponent(`Respuesta Solicitud: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
+      const body = encodeURIComponent(`Estimada/o,\nAdjunto el Informe: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nEstado Actual: ${STATE_CONFIG[doc.state].label}\n\nPuede revisar el detalle y los comentarios en: ${getDocLink()}\n\nSaludos\n${user.name}`);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(assigneeEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
   };
 
@@ -177,16 +178,18 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           alert("No hay correos de referentes vinculados a este proceso en la matriz.");
           return;
       }
-      const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}`);
+      const displayVersion = formatVersionForDisplay(doc.version);
+      const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
       const greeting = referentNames.length > 0 ? `Estimada/o ${referentNames.join(', ')}` : 'Estimados Referentes';
-      const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}\n\nQuedamos atentos a sus observaciones.\n\nSaludos\n${user.name}`);
+      const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nQuedamos atentos a sus observaciones.\n\nSaludos\n${user.name}`);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(referentEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
   };
 
   const handleNotifyCoordinator = () => {
     if (!doc || !coordinatorEmail) { alert(`Aviso: No se ha detectado correo del coordinador.`); return; }
-    const subject = encodeURIComponent(`Solicitud de Revisión: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}`);
-    const body = encodeURIComponent(`Estimado,\nPara su revisión, he cargado el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}",\n\nLink: ${getDocLink()}\n\nSaludos\n${user.name}`);
+    const displayVersion = formatVersionForDisplay(doc.version);
+    const subject = encodeURIComponent(`Solicitud de Revisión: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
+    const body = encodeURIComponent(`Estimado,\nPara su revisión, he cargado el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}",\n\nLink: ${getDocLink()}\n\nSaludos\n${user.name}`);
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
@@ -310,7 +313,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                   <AlertTriangle className="text-amber-500 shrink-0" size={24} />
                   <div>
                       <p className="text-sm font-black text-amber-900 uppercase tracking-tighter">Inconsistencia Detectada en Metadatos</p>
-                      <p className="text-xs text-amber-800 font-medium">La versión "{doc.version}" corresponde a "{STATE_CONFIG[expectedState].label.split('(')[0]}", pero el documento figura como "{STATE_CONFIG[doc.state].label.split('(')[0]}".</p>
+                      <p className="text-xs text-amber-800 font-medium">La versión "{formatVersionForDisplay(doc.version)}" corresponde a "{STATE_CONFIG[expectedState].label.split('(')[0]}", pero el documento figura como "{STATE_CONFIG[doc.state].label.split('(')[0]}".</p>
                   </div>
               </div>
               <button 
@@ -341,7 +344,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-[11px] border-t border-slate-100 pt-5">
             <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Analistas</p>{assigneeNames.length > 0 ? assigneeNames.map((name, i) => <p key={i} className="font-bold text-slate-700">{name}</p>) : <p className="font-bold text-slate-700">{doc.authorName || 'Sin Asignar'}</p>}</div>
-            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Versión Actual</p><p className="font-mono text-slate-800 font-black text-xs">{doc.version}</p></div>
+            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Versión Actual</p><p className="font-mono text-slate-800 font-black text-xs">{formatVersionForDisplay(doc.version)}</p></div>
             <div>
                 <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Progreso</p>
                 <div className="flex items-center gap-2">
@@ -357,8 +360,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
-            {/* UBICACIÓN SOLICITADA: Botón "Nueva Solicitud" arriba de acciones de flujo, alineado a la izquierda, estilo verde esmeralda */}
-            {/* ACTUALIZACIÓN LOGICA: Solo visible si no está aprobado y no tiene solicitud pendiente */}
             {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && !doc.hasPendingRequest && (
                  <div className="flex justify-start">
                     <button onClick={handleNewRequestPrefilled} className="flex items-center text-white px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-95 text-[11px] font-black uppercase tracking-widest">
@@ -452,7 +453,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                               </div>
                               <div className="mb-2.5">
                                   <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-black border border-slate-200 uppercase tracking-tighter">
-                                      Versión: {h.version || '-'}
+                                      Versión: {formatVersionForDisplay(h.version || '-')}
                                   </span>
                               </div>
                               {h.comment && (
@@ -501,7 +502,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                     <div className="text-green-700 animate-fadeIn">
                                         <CheckCircle size={40} className="mx-auto mb-3" />
                                         <p className="font-black text-sm">{responseFile.name}</p>
-                                        <p className="text-[10px] mt-1 font-black uppercase opacity-60">Versión Detectada: {detectedVersion}</p>
+                                        <p className="text-[10px] mt-1 font-black uppercase opacity-60">Versión Detectada: {formatVersionForDisplay(detectedVersion)}</p>
                                     </div>
                                 ) : (
                                     <div className="text-red-600 animate-fadeIn">
@@ -527,33 +528,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 <Save size={16} />Confirmar {pendingAction === 'APPROVE' ? 'Aprobación' : 'Rechazo'}
                             </button>
                         </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {showDeleteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
-                  <div className="p-5 border-b border-red-100 bg-red-50 flex items-center justify-between">
-                      <h3 className="text-lg font-black text-red-800 flex items-center gap-2"><Trash2 size={24} /> Gestión de Eliminación</h3>
-                      <button onClick={() => setShowDeleteModal(false)} className="text-red-400 hover:text-red-600 transition-colors"><XCircle size={20} /></button>
-                  </div>
-                  <div className="p-8 text-center">
-                      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto mb-4">
-                          <AlertTriangle size={32} />
-                      </div>
-                      <p className="text-slate-700 mb-6 text-sm font-medium leading-relaxed">
-                          {history.length > 1 
-                            ? `Se eliminará la ÚLTIMA gestión realizada en "${doc.title}". El documento regresará al estado anterior y se conservará el resto del historial.`
-                            : `Esta es la versión inicial de "${doc.title}". Al eliminarla, se borrará el registro completo del sistema de forma permanente.`}
-                      </p>
-                      <div className="flex justify-center gap-3">
-                          <button onClick={() => setShowDeleteModal(false)} className="px-5 py-2 text-slate-500 hover:text-slate-800 text-sm font-bold uppercase tracking-tighter">Cancelar</button>
-                          <button onClick={handleRevertAction} className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-black text-sm shadow-lg shadow-red-100 transition-all active:scale-95">
-                              {history.length > 1 ? 'Eliminar Estado Actual' : 'Eliminar Registro Completo'}
-                          </button>
-                      </div>
                   </div>
               </div>
           </div>

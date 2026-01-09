@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen } from 'lucide-react';
@@ -18,11 +19,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white shadow-inner' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
   useEffect(() => {
+    if (!user?.id) return;
+    
+    // Establishing real-time connection for notification badge
     const unsubscribeInbox = NotificationService.subscribeToUnreadCount(user.id, (count) => {
         setInboxCount(count);
     });
+    
     return () => {
-        unsubscribeInbox();
+        if (unsubscribeInbox) unsubscribeInbox();
     };
   }, [user.id]); 
 
@@ -35,10 +40,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       <div className="relative">
         <Icon 
             size={20} 
-            className={isActive(to) === 'bg-slate-800 text-white shadow-inner' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-white'} 
+            className={isActive(to).includes('bg-slate-800') ? 'text-indigo-400' : 'text-slate-400 group-hover:text-white'} 
         />
         {badge !== undefined && badge > 0 && (
-            <span className="absolute -top-2 -right-2 flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-lg ring-2 ring-slate-900 animate-pulse px-1">
+            <span className="absolute -top-2.5 -right-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-md ring-2 ring-slate-900 animate-pulse px-1">
                 {badge > 99 ? '99+' : badge}
             </span>
         )}

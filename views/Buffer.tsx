@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationService } from '../services/firebaseBackend';
 import { User, Notification } from '../types';
-import { Inbox, CheckCircle, MailOpen, Mail, User as UserIcon, MessageSquare, AlertTriangle, CheckSquare, ArrowRight, Search, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Inbox, CheckCircle, MailOpen, Mail, User as UserIcon, MessageSquare, AlertTriangle, CheckSquare, ArrowRight, Search, ChevronLeft, ChevronRight, Filter, Upload } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -58,6 +58,7 @@ const Buffer: React.FC<Props> = ({ user }) => {
           case 'APPROVAL': return <CheckSquare size={18} className="text-green-500" />;
           case 'REJECTION': return <AlertTriangle size={18} className="text-red-500" />;
           case 'COMMENT': return <MessageSquare size={18} className="text-amber-500" />;
+          case 'UPLOAD': return <Upload size={18} className="text-indigo-500" />;
           default: return <Mail size={18} className="text-slate-500" />;
       }
   };

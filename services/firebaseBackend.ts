@@ -1,4 +1,3 @@
-
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -20,23 +19,39 @@ import {
 
 // Helper to infer state and progress from version string (The Source of Truth)
 export const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
+    // Robust normalization: handle both v/V but internal logic works with uppercase for regex
     const v = (version || '').trim().toUpperCase();
     if (!v || v === '-' || v === '0') return { state: DocState.NOT_STARTED, progress: 0 };
+    
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
+    
     if (v.endsWith('AR')) {
         if (/^V1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
         return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     }
+    
     if (v.startsWith('V1.')) {
         if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
         return { state: DocState.SENT_TO_REFERENT, progress: 80 };
     }
-    // V0.x is strictly Internal Review phase
+    
     if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+    
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
-    // 0.x (without V) is development phase
+    
+    // Fallback for development versions (0.x)
     if (/^0\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
+    
     return { state: DocState.IN_PROCESS, progress: 30 };
+};
+
+// UI helper to ensure version always looks like "v0.1" instead of "V0.1"
+export const formatVersionForDisplay = (v: string): string => {
+    if (!v) return '-';
+    if (v.startsWith('V') || v.startsWith('v')) {
+        return 'v' + v.substring(1);
+    }
+    return v;
 };
 
 export const normalizeHeader = (header: string): string => {
@@ -67,22 +82,6 @@ const deleteCollectionInBatches = async (collectionName: string) => {
     if (count > 0) await batch.commit();
 };
 
-const findUserIdsFromCSV = (allUsers: User[], rawString: string): string[] => {
-    if (!rawString) return [];
-    const searchTerms = rawString.split(/[;,]/).map(s => s.trim().toLowerCase());
-    const foundIds: string[] = [];
-    searchTerms.forEach(term => {
-        if (!term) return;
-        const match = allUsers.find(u => 
-            u.name.toLowerCase().includes(term) || 
-            u.email.toLowerCase().includes(term) ||
-            (u.nickname && u.nickname.toLowerCase().includes(term))
-        );
-        if (match) foundIds.push(match.id);
-    });
-    return Array.from(new Set(foundIds));
-};
-
 export const ReferentService = {
   getAll: async (): Promise<Referent[]> => {
     const q = query(collection(db, "referents"), orderBy("name"));
@@ -107,17 +106,19 @@ export const NotificationService = {
         if (!userId) return;
         try {
             const notif: Omit<Notification, 'id'> = {
-                userId, documentId: docId, type, title, message, isRead: false,
-                timestamp: new Date().toISOString(), actorName
+                userId, 
+                documentId: docId, 
+                type, 
+                title, 
+                message, 
+                isRead: false,
+                timestamp: new Date().toISOString(), 
+                actorName
             };
             await addDoc(collection(db, "notifications"), notif);
-        } catch (e) { console.error(e); }
-    },
-    getByUser: async (userId: string): Promise<Notification[]> => {
-        const q = query(collection(db, "notifications"), where("userId", "==", userId));
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Notification));
-        return data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        } catch (e) { 
+            console.error("Error creating notification record", e); 
+        }
     },
     subscribeToNotifications: (userId: string, callback: (notifications: Notification[]) => void) => {
         const q = query(collection(db, "notifications"), where("userId", "==", userId));
@@ -127,8 +128,13 @@ export const NotificationService = {
         });
     },
     subscribeToUnreadCount: (userId: string, callback: (count: number) => void) => {
-        const q = query(collection(db, "notifications"), where("userId", "==", userId), where("isRead", "==", false));
-        return onSnapshot(q, (snapshot) => callback(snapshot.size));
+        const q = query(collection(db, "notifications"), 
+            where("userId", "==", userId), 
+            where("isRead", "==", false)
+        );
+        return onSnapshot(q, (snapshot) => {
+            callback(snapshot.size);
+        });
     },
     markAsRead: async (notifId: string) => {
         await updateDoc(doc(db, "notifications", notifId), { isRead: true });
@@ -139,14 +145,41 @@ export const NotificationService = {
         const batch = writeBatch(db);
         snapshot.docs.forEach(d => batch.update(d.ref, { isRead: true }));
         await batch.commit();
+    },
+    // NEW: Efficiently notify all managers without reading all users
+    notifyManagers: async (docId: string, type: Notification['type'], title: string, message: string, actorName: string, actorId: string) => {
+        try {
+            // Find admins and coordinators directly via queries
+            const roles = [UserRole.ADMIN, UserRole.COORDINATOR];
+            const recipientIds = new Set<string>();
+            
+            for (const role of roles) {
+                const q = query(collection(db, "users"), where("role", "==", role));
+                const snap = await getDocs(q);
+                snap.docs.forEach(d => {
+                    if (d.id !== actorId) recipientIds.add(d.id);
+                });
+            }
+
+            const promises = Array.from(recipientIds).map(uid => 
+                NotificationService.create(uid, docId, type, title, message, actorName)
+            );
+            await Promise.all(promises);
+        } catch (e) {
+            console.error("Manager notification flow failed", e);
+        }
     }
 };
 
 export const UserService = {
   getAll: async (): Promise<User[]> => {
-    const q = query(collection(db, "users"));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, active: (doc.data() as any).active ?? true } as User));
+    try {
+        const q = query(collection(db, "users"));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, active: (doc.data() as any).active ?? true } as User));
+    } catch (e) {
+        return [];
+    }
   },
   update: async (id: string, userData: Partial<User>): Promise<User> => {
     const userRef = doc(db, "users", id);
@@ -178,7 +211,6 @@ export const HistoryService = {
   getHistory: async (docIds: string | string[]): Promise<DocHistory[]> => {
     const ids = Array.isArray(docIds) ? docIds : [docIds];
     if (ids.length === 0) return [];
-    
     const q = query(collection(db, "history"), where("documentId", "in", ids.slice(0, 10)));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as DocHistory)).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -191,16 +223,9 @@ export const HistoryService = {
   log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string) => {
     const entryId = `hist-${docId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newEntry: DocHistory = { 
-        id: entryId, 
-        documentId: docId, 
-        userId: user.id, 
-        userName: user.name, 
-        action, 
-        previousState: prev, 
-        newState: next, 
-        version: version || '-',
-        comment, 
-        timestamp: new Date().toISOString() 
+        id: entryId, documentId: docId, userId: user.id, userName: user.name, 
+        action, previousState: prev, newState: next, version: version || '-',
+        comment, timestamp: new Date().toISOString() 
     };
     await addDoc(collection(db, "history"), newEntry);
   }
@@ -259,21 +284,26 @@ export const DocumentService = {
         finalDocData = { ...newDocData, id: docRef.id } as Document;
     }
 
+    // AUTOMATIC NOTIFICATION: Notify all managers
+    const displayVersion = formatVersionForDisplay(version);
+    await NotificationService.notifyManagers(
+        finalDocId, 
+        'UPLOAD', 
+        `Nuevo Documento: ${finalDocData.microprocess}`, 
+        `${author.name} ha cargado la versión ${displayVersion} para revisión.`, 
+        author.name,
+        author.id
+    );
+
     return finalDocData;
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
   
-  // FIX CRITICAL: Explicitly restore Version and recalculate Progress on revert
   revertLastTransition: async (docId: string): Promise<boolean> => {
       const histQ = query(collection(db, "history"), where("documentId", "==", docId));
       const histSnap = await getDocs(histQ);
-      
       if (histSnap.empty) return true;
-
-      const sortedHistory = histSnap.docs
-          .map(d => ({ ...d.data(), _id: d.id, _ref: d.ref } as any))
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
+      const sortedHistory = histSnap.docs.map(d => ({ ...d.data(), _id: d.id, _ref: d.ref } as any)).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       if (sortedHistory.length <= 1) {
           await deleteDoc(doc(db, "documents", docId));
           const batch = writeBatch(db);
@@ -281,24 +311,12 @@ export const DocumentService = {
           await batch.commit();
           return true;
       }
-
-      const lastAction = sortedHistory[0]; // Current state (to be removed)
-      const previousAction = sortedHistory[1]; // Target state (to be restored)
-      
+      const lastAction = sortedHistory[0]; 
+      const previousAction = sortedHistory[1]; 
       const docRef = doc(db, "documents", docId);
-      
-      // We restore the metadata from the action that BROUGHT the document to the current previous state
       const restoredVersion = previousAction.version || '0.0';
       const info = determineStateFromVersion(restoredVersion);
-
-      await updateDoc(docRef, {
-          state: previousAction.newState,
-          version: restoredVersion,
-          progress: info.progress,
-          updatedAt: previousAction.timestamp,
-          hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(previousAction.newState)
-      });
-
+      await updateDoc(docRef, { state: previousAction.newState, version: restoredVersion, progress: info.progress, updatedAt: previousAction.timestamp, hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(previousAction.newState) });
       await deleteDoc(lastAction._ref);
       return false;
   },
@@ -309,10 +327,9 @@ export const DocumentService = {
       if(!docSnap.exists()) return;
       const data = docSnap.data() as Document;
       const { state, progress } = determineStateFromVersion(data.version);
-      
       if (data.state !== state || data.progress !== progress) {
           await updateDoc(docRef, { state, progress, updatedAt: new Date().toISOString() });
-          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección automática de inconsistencia: Estado ${state} y progreso ${progress}% sincronizados con versión ${data.version}.`, data.version);
+          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección automática: ${state} / ${progress}%`, data.version);
       }
   },
 
@@ -325,11 +342,8 @@ export const DocumentService = {
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
       const actionLabels: Record<string, string> = { 
-          'APPROVE': 'Aprobación', 
-          'REJECT': 'Rechazo', 
-          'COMMENT': 'Observación', 
-          'REQUEST_APPROVAL': 'Solicitud de Revisión', 
-          'ADVANCE': 'Avance de Flujo' 
+          'APPROVE': 'Aprobación', 'REJECT': 'Rechazo', 'COMMENT': 'Observación', 
+          'REQUEST_APPROVAL': 'Solicitud de Revisión', 'ADVANCE': 'Avance de Flujo' 
       };
       const displayAction = actionLabels[action] || action;
       
@@ -349,20 +363,31 @@ export const DocumentService = {
       }
       
       const { progress: newProgress } = determineStateFromVersion(newVersion);
-      await updateDoc(docRef, { state: newState, version: newVersion, progress: newProgress, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
+      await updateDoc(docRef, { 
+          state: newState, 
+          version: newVersion, 
+          progress: newProgress, 
+          hasPendingRequest: hasPending, 
+          updatedAt: new Date().toISOString() 
+      });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
-      const recipients = new Set([...(currentDoc.assignees || []), currentDoc.authorId]);
-      recipients.delete(user.id);
-
-      if (action === 'APPROVE' || action === 'REJECT' || action === 'COMMENT' || action === 'REQUEST_APPROVAL') {
-          const type = (action === 'REQUEST_APPROVAL') ? 'COMMENT' : action as 'APPROVAL' | 'REJECTION' | 'COMMENT';
-          const title = `${displayAction}: ${currentDoc.microprocess}`;
-          const msg = `El usuario ${user.name} ha realizado una ${displayAction.toLowerCase()} en "${currentDoc.title}".`;
-          
-          for (const recipientId of Array.from(recipients)) {
-              await NotificationService.create(recipientId, docId, type, title, msg, user.name);
-          }
+      // NOTIFICATION LOGIC
+      const typeMapping: Record<string, Notification['type']> = {
+          'APPROVE': 'APPROVAL', 'REJECT': 'REJECTION', 
+          'COMMENT': 'COMMENT', 'REQUEST_APPROVAL': 'COMMENT'
+      };
+      const type = typeMapping[action] || 'COMMENT';
+      const displayVersion = formatVersionForDisplay(newVersion);
+      const title = `${displayAction}: ${currentDoc.microprocess}`;
+      const msg = `${user.name} ha realizado una ${displayAction.toLowerCase()} en "${currentDoc.title}" (${displayVersion}).`;
+      
+      // Always notify managers
+      await NotificationService.notifyManagers(docId, type, title, msg, user.name, user.id);
+      
+      // Also notify author if they are not the one performing the action and not a manager
+      if (currentDoc.authorId && currentDoc.authorId !== user.id) {
+          await NotificationService.create(currentDoc.authorId, docId, type, title, msg, user.name);
       }
   }
 };
@@ -472,6 +497,26 @@ export const HierarchyService = {
       }
       await batch.commit();
   }
+};
+
+/**
+ * Helper to find user IDs from a string of names or emails in CSV
+ */
+const findUserIdsFromCSV = (allUsers: User[], input: string): string[] => {
+    if (!input) return [];
+    const terms = input.split(/[;|,]/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+    const ids: string[] = [];
+    
+    terms.forEach(term => {
+        const found = allUsers.find(u => 
+            u.name.toLowerCase().includes(term) || 
+            (u.nickname && u.nickname.toLowerCase().includes(term)) ||
+            u.email.toLowerCase().includes(term)
+        );
+        if (found) ids.push(found.id);
+    });
+    
+    return Array.from(new Set(ids));
 };
 
 export const DatabaseService = {

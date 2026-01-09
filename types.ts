@@ -68,7 +68,7 @@ export interface Notification {
   id: string;
   userId: string;
   documentId: string;
-  type: 'ASSIGNMENT' | 'APPROVAL' | 'REJECTION' | 'COMMENT';
+  type: 'ASSIGNMENT' | 'APPROVAL' | 'REJECTION' | 'COMMENT' | 'UPLOAD';
   title: string;
   message: string;
   isRead: boolean;
