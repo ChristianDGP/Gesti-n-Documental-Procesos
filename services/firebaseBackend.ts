@@ -18,7 +18,8 @@ import {
   STATE_CONFIG, INITIAL_DATA_LOAD, NAME_TO_ID_MAP, REQUIRED_DOCS_MATRIX 
 } from "../constants";
 
-const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
+// Helper to infer state and progress from version string (The Source of Truth)
+export const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
     const v = (version || '').trim().toUpperCase();
     if (!v || v === '-' || v === '0') return { state: DocState.NOT_STARTED, progress: 0 };
     if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
@@ -30,9 +31,10 @@ const determineStateFromVersion = (version: string): { state: DocState, progress
         if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
         return { state: DocState.SENT_TO_REFERENT, progress: 80 };
     }
-    // CRITICAL FIX: Ensure V0.n is always Internal Review
+    // V0.x is strictly Internal Review phase
     if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
+    // 0.x (without V) is development phase
     if (/^0\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
     return { state: DocState.IN_PROCESS, progress: 30 };
 };
@@ -261,13 +263,15 @@ export const DocumentService = {
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
   
+  // FIX CRITICAL: Explicitly restore Version and recalculate Progress on revert
   revertLastTransition: async (docId: string): Promise<boolean> => {
-      // FIX: Removed orderBy to avoid Firestore composite index requirement. Sorting in memory.
       const histQ = query(collection(db, "history"), where("documentId", "==", docId));
       const histSnap = await getDocs(histQ);
       
+      if (histSnap.empty) return true;
+
       const sortedHistory = histSnap.docs
-          .map(d => ({ ...d.data(), _ref: d.ref } as any))
+          .map(d => ({ ...d.data(), _id: d.id, _ref: d.ref } as any))
           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       if (sortedHistory.length <= 1) {
@@ -278,23 +282,38 @@ export const DocumentService = {
           return true;
       }
 
-      const lastAction = sortedHistory[0];
-      const previousAction = sortedHistory[1];
-      const prevData = previousAction as DocHistory;
+      const lastAction = sortedHistory[0]; // Current state (to be removed)
+      const previousAction = sortedHistory[1]; // Target state (to be restored)
       
       const docRef = doc(db, "documents", docId);
-      const info = determineStateFromVersion(prevData.version || '0.0');
+      
+      // We restore the metadata from the action that BROUGHT the document to the current previous state
+      const restoredVersion = previousAction.version || '0.0';
+      const info = determineStateFromVersion(restoredVersion);
 
       await updateDoc(docRef, {
-          state: prevData.newState,
-          version: prevData.version || '0.0',
+          state: previousAction.newState,
+          version: restoredVersion,
           progress: info.progress,
-          updatedAt: prevData.timestamp,
-          hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(prevData.newState)
+          updatedAt: previousAction.timestamp,
+          hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(previousAction.newState)
       });
 
       await deleteDoc(lastAction._ref);
       return false;
+  },
+
+  syncMetadata: async (docId: string, user: User): Promise<void> => {
+      const docRef = doc(db, "documents", docId);
+      const docSnap = await getDoc(docRef);
+      if(!docSnap.exists()) return;
+      const data = docSnap.data() as Document;
+      const { state, progress } = determineStateFromVersion(data.version);
+      
+      if (data.state !== state || data.progress !== progress) {
+          await updateDoc(docRef, { state, progress, updatedAt: new Date().toISOString() });
+          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección automática de inconsistencia: Estado ${state} y progreso ${progress}% sincronizados con versión ${data.version}.`, data.version);
+      }
   },
 
   transitionState: async (docId: string, user: User, action: any, comment: string, file?: File, customVersion?: string): Promise<void> => {
@@ -324,7 +343,6 @@ export const DocumentService = {
       else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
       else if (action === 'REQUEST_APPROVAL') {
           hasPending = true;
-          // Automically move to the next logical review state if in initiation/process phase
           if (newState === DocState.INITIATED || newState === DocState.IN_PROCESS || newState === DocState.REJECTED) {
               newState = DocState.INTERNAL_REVIEW;
           }

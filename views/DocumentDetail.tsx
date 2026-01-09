@@ -1,11 +1,11 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader } from '../services/firebaseBackend';
+import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader, determineStateFromVersion } from '../services/firebaseBackend';
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus, RefreshCw } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -27,6 +27,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'APPROVE' | 'REJECT' | null>(null);
@@ -144,6 +145,19 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         setDoc(null);
         setLoading(false);
     }
+  };
+
+  const handleSyncState = async () => {
+      if (!doc) return;
+      setSyncing(true);
+      try {
+          await DocumentService.syncMetadata(doc.id, user);
+          await loadData(doc.id);
+      } catch (e: any) {
+          alert("Error al sincronizar: " + e.message);
+      } finally {
+          setSyncing(false);
+      }
   };
 
   const getDocLink = () => `${window.location.origin}/#/doc/${doc?.id}`;
@@ -265,6 +279,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
   const isDocActive = doc.state !== DocState.APPROVED;
 
+  // Inconsistency detection
+  const expectedState = determineStateFromVersion(doc.version).state;
+  const isInconsistent = !doc.id.startsWith('virtual-') && doc.state !== expectedState;
+
   // Flow advancing logic for Analyst
   const canRequestReview = isAnalystAssigned && [DocState.INITIATED, DocState.IN_PROCESS, DocState.REJECTED].includes(doc.state);
   // Flow management for Coordinator
@@ -277,11 +295,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             <ArrowLeft size={16} className="mr-1" /> Volver
         </button>
         <div className="flex items-center gap-2">
-            {(isAnalystAssigned || isCoordinatorOrAdmin) && (
-                 <button onClick={handleNewRequestPrefilled} className="flex items-center text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-100 transition-colors shadow-sm">
-                    <FilePlus size={14} className="mr-1.5" /> Nueva Solicitud / Carga
-                </button>
-            )}
             {user.role === UserRole.ADMIN && !doc.id.startsWith('virtual-') && (
                 <button onClick={() => setShowDeleteModal(true)} className="flex items-center text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors shadow-sm">
                     <Trash2 size={14} className="mr-1.5" /> Eliminar
@@ -289,6 +302,27 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             )}
         </div>
       </div>
+
+      {/* INCONSISTENCY ALERT */}
+      {isInconsistent && (
+          <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4 animate-fadeIn shadow-sm">
+              <div className="flex items-center gap-3">
+                  <AlertTriangle className="text-amber-500 shrink-0" size={24} />
+                  <div>
+                      <p className="text-sm font-black text-amber-900 uppercase tracking-tighter">Inconsistencia Detectada en Metadatos</p>
+                      <p className="text-xs text-amber-800 font-medium">La versión "{doc.version}" corresponde a "{STATE_CONFIG[expectedState].label.split('(')[0]}", pero el documento figura como "{STATE_CONFIG[doc.state].label.split('(')[0]}".</p>
+                  </div>
+              </div>
+              <button 
+                onClick={handleSyncState} 
+                disabled={syncing}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-amber-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
+              >
+                  {syncing ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Sincronizar Estado
+              </button>
+          </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
@@ -323,6 +357,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
+            {/* UBICACIÓN SOLICITADA: Botón "Nueva Solicitud" arriba de acciones de flujo, alineado a la izquierda, estilo verde esmeralda */}
+            {/* ACTUALIZACIÓN LOGICA: Solo visible si no está aprobado y no tiene solicitud pendiente */}
+            {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && !doc.hasPendingRequest && (
+                 <div className="flex justify-start">
+                    <button onClick={handleNewRequestPrefilled} className="flex items-center text-white px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-95 text-[11px] font-black uppercase tracking-widest">
+                        <FilePlus size={16} className="mr-2" /> NUEVA SOLICITUD / CARGA
+                    </button>
+                </div>
+            )}
+
             {!canEdit && <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium"><Lock size={18} className="text-amber-500" /> Vista de solo lectura. No tiene permisos de gestión en este documento.</div>}
             
             {canEdit && (
