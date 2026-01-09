@@ -1,11 +1,11 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader, determineStateFromVersion, formatVersionForDisplay } from '../services/firebaseBackend';
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus, RefreshCw } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus, RefreshCw, ChevronRight } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -38,6 +38,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // Estado para detectar si hay una versión más nueva
+  const [latestDocInfo, setLatestDocInfo] = useState<{ id: string, version: string } | null>(null);
+
   useEffect(() => {
     if (location.state?.docData) {
         const passedDoc = location.state.docData;
@@ -68,14 +71,29 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               currentDoc.docType!
           );
 
-          const [h, allUsers, hierarchy, allReferents] = await Promise.all([
+          const [h, allUsers, hierarchy, allReferents, allDocs] = await Promise.all([
               HistoryService.getHistory(relatedIds),
               UserService.getAll(),
               HierarchyService.getFullHierarchy(),
-              ReferentService.getAll()
+              ReferentService.getAll(),
+              DocumentService.getAll()
           ]);
           
           setHistory(h);
+
+          // Detectar si este documento es el más reciente de su grupo
+          const relatedDocs = allDocs.filter(d => relatedIds.includes(d.id));
+          if (relatedDocs.length > 1) {
+              const latest = [...relatedDocs].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+              if (latest && latest.id !== currentDoc.id) {
+                  setLatestDocInfo({ id: latest.id, version: latest.version });
+              } else {
+                  setLatestDocInfo(null);
+              }
+          } else {
+              setLatestDocInfo(null);
+          }
+
           const coordinator = allUsers.find(u => ['COORDINATOR', 'COORDINADOR', 'ADMIN'].includes((u.role || '').toString().toUpperCase()));
           if (coordinator) setCoordinatorEmail(coordinator.email);
           const author = allUsers.find(u => u.id === currentDoc.authorId);
@@ -305,6 +323,28 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             )}
         </div>
       </div>
+
+      {/* BANNER DE VERSIÓN OBSOLETA */}
+      {latestDocInfo && (
+          <div className="bg-indigo-600 border-l-4 border-white p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 animate-fadeIn shadow-lg text-white">
+              <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-lg">
+                      <HistoryIcon size={24} />
+                  </div>
+                  <div>
+                      <p className="text-sm font-black uppercase tracking-tighter">Estás viendo una versión antigua</p>
+                      <p className="text-xs opacity-90 font-medium">Existe una versión más reciente para este microproceso: <span className="font-black bg-white/20 px-1 rounded">{formatVersionForDisplay(latestDocInfo.version)}</span></p>
+                  </div>
+              </div>
+              <button 
+                onClick={() => navigate(`/doc/${latestDocInfo.id}`)} 
+                className="flex items-center gap-2 px-6 py-2 bg-white text-indigo-600 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-md active:scale-95"
+              >
+                  Ir a versión actual
+                  <ChevronRight size={14} />
+              </button>
+          </div>
+      )}
 
       {/* INCONSISTENCY ALERT */}
       {isInconsistent && (
