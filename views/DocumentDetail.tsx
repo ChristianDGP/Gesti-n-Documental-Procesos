@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService, HierarchyService, Referen
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -176,10 +176,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
-  const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT') => {
+  const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT' | 'REQUEST_APPROVAL') => {
       if (!doc) return;
       if (action === 'COMMENT') { if (!comment.trim()) { alert('Escribe una observación.'); return; } executeTransition('COMMENT', comment); return; }
       if (action === 'ADVANCE') { executeTransition('ADVANCE', ''); return; }
+      if (action === 'REQUEST_APPROVAL') { executeTransition('REQUEST_APPROVAL', comment || 'Solicitud formal de revisión.'); return; }
       if (action === 'APPROVE' || action === 'REJECT') {
           if (action === 'REJECT' && !comment) { alert('Agrega una observación para el rechazo.'); return; }
           setPendingAction(action); setResponseFile(null); setFileError([]); setIsFileValid(false); setDetectedVersion(''); setShowResponseModal(true);
@@ -228,6 +229,21 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
   };
 
+  const handleNewRequestPrefilled = () => {
+      if (!doc) return;
+      navigate('/new', { 
+          state: { 
+              prefill: { 
+                  project: doc.project, 
+                  macro: doc.macroprocess, 
+                  process: doc.process, 
+                  micro: doc.microprocess, 
+                  docType: doc.docType 
+              } 
+          } 
+      });
+  };
+
   const formatDate = (isoString: string) => {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return 'Fecha no disponible';
@@ -249,17 +265,29 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
   const isDocActive = doc.state !== DocState.APPROVED;
 
+  // Flow advancing logic for Analyst
+  const canRequestReview = isAnalystAssigned && [DocState.INITIATED, DocState.IN_PROCESS, DocState.REJECTED].includes(doc.state);
+  // Flow management for Coordinator
+  const canReview = isCoordinatorOrAdmin && [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(doc.state);
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
       <div className="flex justify-between items-center">
         <button onClick={() => navigate(-1)} className="flex items-center text-slate-500 hover:text-slate-800 text-sm font-medium transition-colors">
             <ArrowLeft size={16} className="mr-1" /> Volver
         </button>
-        {user.role === UserRole.ADMIN && !doc.id.startsWith('virtual-') && (
-            <button onClick={() => setShowDeleteModal(true)} className="flex items-center text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors">
-                <Trash2 size={14} className="mr-1.5" /> Eliminar
-            </button>
-        )}
+        <div className="flex items-center gap-2">
+            {(isAnalystAssigned || isCoordinatorOrAdmin) && (
+                 <button onClick={handleNewRequestPrefilled} className="flex items-center text-indigo-600 hover:text-indigo-800 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-100 transition-colors shadow-sm">
+                    <FilePlus size={14} className="mr-1.5" /> Nueva Solicitud / Carga
+                </button>
+            )}
+            {user.role === UserRole.ADMIN && !doc.id.startsWith('virtual-') && (
+                <button onClick={() => setShowDeleteModal(true)} className="flex items-center text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors shadow-sm">
+                    <Trash2 size={14} className="mr-1.5" /> Eliminar
+                </button>
+            )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -278,7 +306,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-[11px] border-t border-slate-100 pt-5">
-            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Analistas</p>{assigneeNames.length > 0 ? assigneeNames.map((name, i) => <p key={i} className="font-bold text-slate-700">{name}</p>) : <p className="font-bold text-slate-700">{doc.authorName}</p>}</div>
+            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Analistas</p>{assigneeNames.length > 0 ? assigneeNames.map((name, i) => <p key={i} className="font-bold text-slate-700">{name}</p>) : <p className="font-bold text-slate-700">{doc.authorName || 'Sin Asignar'}</p>}</div>
             <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Versión Actual</p><p className="font-mono text-slate-800 font-black text-xs">{doc.version}</p></div>
             <div>
                 <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Progreso</p>
@@ -289,7 +317,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     <span className="font-black text-slate-800">{config.progress}%</span>
                 </div>
             </div>
-            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Actualizado</p><p className="font-bold text-slate-700">{new Date(doc.updatedAt).toLocaleDateString('es-CL')}</p></div>
+            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Actualizado</p><p className="font-bold text-slate-700">{doc.updatedAt && doc.updatedAt !== new Date(0).toISOString() ? new Date(doc.updatedAt).toLocaleDateString('es-CL') : 'Sin actividad'}</p></div>
         </div>
       </div>
 
@@ -316,6 +344,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             <MessageSquare size={18} className="mr-2" /> Guardar Observación
                         </button>
 
+                        {canRequestReview && isDocActive && (
+                             <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-bold shadow-md shadow-indigo-100 transition-all active:scale-95">
+                                <Send size={18} className="mr-2" /> Solicitar Revisión
+                            </button>
+                        )}
+
                         {isCoordinatorOrAdmin && (
                             <button onClick={handleNotifyAnalyst} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95">
                                 <Mail size={18} className="mr-2 text-indigo-500" /> Notificar Analista
@@ -334,13 +368,13 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             </button>
                         )}
 
-                        {isCoordinatorOrAdmin && isDocActive && (
+                        {canReview && isDocActive && (
                             <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-6 py-2.5 bg-[#22c55e] text-white rounded-lg hover:bg-green-600 text-sm font-bold shadow-md shadow-green-100 transition-all active:scale-95">
                                 <CheckCircle size={18} className="mr-2" /> Aprobar
                             </button>
                         )}
 
-                        {isCoordinatorOrAdmin && isDocActive && (
+                        {canReview && isDocActive && (
                             <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-100 transition-all active:scale-95">
                                 <XCircle size={18} className="mr-2" /> Rechazar
                             </button>

@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
 import { User, DocState, DocType, UserHierarchy, UserRole, Document, FullHierarchy } from '../types';
-// Fix: Added missing import for STATE_CONFIG
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename } from '../utils/filenameParser';
 import { Save, ArrowLeft, Upload, FileCheck, FileX, AlertTriangle, Info, Layers, FileType, FilePlus, ListFilter, Lock, RefreshCw, History } from 'lucide-react';
@@ -39,15 +38,15 @@ const REQUEST_TYPE_LEVELS: Record<RequestType, number> = {
 
 const CreateDocument: React.FC<Props> = ({ user }) => {
   const navigate = useNavigate();
-  const location = useLocation(); // Hook to access passed state
+  const location = useLocation(); 
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
 
-  // Hierarchy Selection State with Strict Typing
+  // Hierarchy Selection State
   const [userHierarchy, setUserHierarchy] = useState<UserHierarchy>({});
-  const [fullHierarchyCache, setFullHierarchyCache] = useState<FullHierarchy>({}); // Cache full hierarchy for assignments
+  const [fullHierarchyCache, setFullHierarchyCache] = useState<FullHierarchy>({}); 
   
-  // Matrix Requirement Map (Project|Micro -> AllowedTypes[])
+  // Matrix Requirement Map
   const [requirementsMap, setRequirementsMap] = useState<Record<string, DocType[]>>({});
 
   const [selectedProject, setSelectedProject] = useState<string>('');
@@ -56,10 +55,9 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedMicro, setSelectedMicro] = useState<string>('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
   
-  // New: Request Type for Safety
   const [requestType, setRequestType] = useState<RequestType | ''>('');
 
-  // Existing Document State (for filtering)
+  // Existing Document State
   const [existingDoc, setExistingDoc] = useState<Document | null>(null);
   const [existingDocLevel, setExistingDocLevel] = useState<number>(0);
 
@@ -107,7 +105,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           setExistingDocLevel(0);
       }
       
-      setRequestType('');
+      // Do not reset requestType automatically if pre-filled, but handle file reset
       resetFile();
 
   }, [selectedProject, selectedMicro, selectedDocType, allDocsCache]);
@@ -124,23 +122,24 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           setAllDocsCache(docs);
           setFullHierarchyCache(full);
 
-          if (user.role === UserRole.ADMIN) {
-               const adminTree: UserHierarchy = {};
+          let currentHierarchy: UserHierarchy = {};
+          if (user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) {
                Object.keys(full).forEach(p => {
-                   adminTree[p] = {};
+                   currentHierarchy[p] = {};
                    Object.keys(full[p]).forEach(m => {
-                       adminTree[p][m] = {};
+                       currentHierarchy[p][m] = {};
                        Object.keys(full[p][m]).forEach(proc => {
-                           adminTree[p][m][proc] = full[p][m][proc].map(n => n.name);
+                           currentHierarchy[p][m][proc] = full[p][m][proc].map(n => n.name);
                        });
                    });
                });
-               setUserHierarchy(adminTree);
+               setUserHierarchy(currentHierarchy);
           } else {
-              const userH = await HierarchyService.getUserHierarchy(user.id);
-              setUserHierarchy(userH);
+              currentHierarchy = await HierarchyService.getUserHierarchy(user.id);
+              setUserHierarchy(currentHierarchy);
           }
 
+          // Handle Pre-fill from Document Detail
           if (location.state?.prefill) {
               const { project, macro, process, micro, docType } = location.state.prefill;
               if (project) setSelectedProject(project);
@@ -152,7 +151,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                   const key = `${normalizeHeader(project)}|${normalizeHeader(micro)}`;
                   const allowed = reqMap[key] || [];
                   if (allowed.includes(docType)) {
-                      setSelectedDocType(docType);
+                      setSelectedDocType(docType as DocType);
                   }
               }
           }
@@ -219,12 +218,12 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       switch (parserState) {
           case 'Iniciado': return DocState.INITIATED;
           case 'En Proceso': return DocState.IN_PROCESS;
-          case 'En revisión interna': return DocState.INTERNAL_REVIEW;
+          case 'Revisión Interna': return DocState.INTERNAL_REVIEW;
           case 'Enviado a Referente': return DocState.SENT_TO_REFERENT;
           case 'Revisión Interna Referente': return DocState.REFERENT_REVIEW;
-          case 'Enviado a Control de Gestión': return DocState.SENT_TO_CONTROL;
+          case 'Enviado a Control': return DocState.SENT_TO_CONTROL;
           case 'Revisión Interna Control': return DocState.CONTROL_REVIEW;
-          case 'Aprobado': return DocState.APPROVED;
+          case 'Aprobado Final': return DocState.APPROVED;
           default: return DocState.INITIATED;
       }
   };
@@ -248,7 +247,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               const cleanMicro = result.microproceso || selectedMicro;
               const cleanType = result.tipo || selectedDocType;
               setTitle(`${cleanMicro} - ${cleanType}`);
-              setDescription(`Carga de documento: ${cleanType} (${result.nomenclatura})`);
+              setDescription(`Carga de archivo: ${cleanType} (${result.nomenclatura})`);
               if (result.estado) setDetectedState(mapParserStateToEnum(result.estado));
               if (result.nomenclatura) setDetectedVersion(result.nomenclatura);
               if (result.porcentaje) setDetectedProgress(result.porcentaje);
@@ -284,7 +283,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               docType: selectedDocType,
               assignees: matrixAssignees
           },
-          existingDoc?.id // CRITICAL: Pass existing ID to consolidate history
+          existingDoc?.id 
       );
 
       navigate(`/doc/${updatedDoc.id}`);
@@ -320,8 +319,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 md:p-8">
             <div className="mb-8 border-b border-slate-100 pb-4">
-                <h1 className="text-2xl font-bold text-slate-900 mb-2">Nueva Solicitud</h1>
-                <p className="text-slate-500">Carga de documento para gestión y aprobación.</p>
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">Nueva Solicitud / Carga</h1>
+                <p className="text-slate-500">Gestione el versionamiento formal de sus informes institucionales.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
@@ -386,7 +385,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                     {existingDoc ? <History size={16} /> : <ListFilter size={16} />}
                                     Etapa / Versión de Carga
                                  </label>
-                                 {existingDoc && <span className="text-[10px] bg-white border border-amber-200 px-2 py-1 rounded text-amber-700 font-bold uppercase tracking-tighter shadow-sm animate-fadeIn">Documento Detectado</span>}
+                                 {existingDoc && <span className="text-[10px] bg-white border border-amber-200 px-2 py-1 rounded text-amber-700 font-bold uppercase tracking-tighter shadow-sm animate-fadeIn">Actualización Detectada</span>}
                              </div>
                              
                              <select value={requestType} onChange={(e) => handleRequestTypeChange(e.target.value)} disabled={!selectedDocType} className="w-full p-3 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-700 disabled:bg-slate-100">
@@ -402,7 +401,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                                 <Info size={14} className={existingDoc ? 'text-amber-600' : 'text-indigo-600'} />
                                 <p className={`text-[10px] leading-tight ${existingDoc ? 'text-amber-700 font-medium' : 'text-indigo-600'}`}>
                                     {existingDoc 
-                                        ? `Aviso: Se actualizará el registro existente. La última versión cargada fue la ${existingDoc.version} en estado ${STATE_CONFIG[existingDoc.state].label.split('(')[0]}. Las versiones anteriores han sido ocultadas.`
+                                        ? `Aviso: Se actualizará el registro existente. La última versión cargada fue la ${existingDoc.version} en estado ${STATE_CONFIG[existingDoc.state].label.split('(')[0]}. Las versiones anteriores han sido consolidadas.`
                                         : "* El archivo que subas debe coincidir estrictamente con la etapa seleccionada."
                                     }
                                 </p>
@@ -465,7 +464,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                          <div className={`flex items-center gap-3 p-4 rounded-lg border mb-6 ${existingDoc ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
                             <FileType size={20} className="text-slate-500 flex-shrink-0" />
                             <div className="text-sm text-slate-700 grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                                <div><span className="text-slate-400 text-xs uppercase block">Nuevo Estado</span>{mapParserStateToEnum(parseDocumentFilename(file!.name).estado || '').replace(/_/g, ' ')}</div>
+                                <div><span className="text-slate-400 text-xs uppercase block">Nuevo Estado</span>{detectedState.replace(/_/g, ' ')}</div>
                                 <div><span className="text-slate-400 text-xs uppercase block">Nueva Versión</span>{detectedVersion}</div>
                                 <div><span className="text-slate-400 text-xs uppercase block">Progreso</span>{detectedProgress}%</div>
                                 <div><span className="text-slate-400 text-xs uppercase block">Modo Carga</span>{existingDoc ? 'ACTUALIZAR HISTORIAL' : 'NUEVO REGISTRO'}</div>

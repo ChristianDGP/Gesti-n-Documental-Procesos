@@ -30,6 +30,7 @@ const determineStateFromVersion = (version: string): { state: DocState, progress
         if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
         return { state: DocState.SENT_TO_REFERENT, progress: 80 };
     }
+    // CRITICAL FIX: Ensure V0.n is always Internal Review
     if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
     if (/^0\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
@@ -260,25 +261,26 @@ export const DocumentService = {
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
   
-  // NEW: ROLLBACK LOGIC FOR ADMINISTRATORS
   revertLastTransition: async (docId: string): Promise<boolean> => {
-      const histQ = query(collection(db, "history"), where("documentId", "==", docId), orderBy("timestamp", "desc"));
+      // FIX: Removed orderBy to avoid Firestore composite index requirement. Sorting in memory.
+      const histQ = query(collection(db, "history"), where("documentId", "==", docId));
       const histSnap = await getDocs(histQ);
       
-      if (histSnap.empty || histSnap.size <= 1) {
-          // If only 1 record exists, it's the creation. Delete entire document.
+      const sortedHistory = histSnap.docs
+          .map(d => ({ ...d.data(), _ref: d.ref } as any))
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      if (sortedHistory.length <= 1) {
           await deleteDoc(doc(db, "documents", docId));
-          // Clean up history
           const batch = writeBatch(db);
           histSnap.docs.forEach(d => batch.delete(d.ref));
           await batch.commit();
-          return true; // True indicates document was fully removed
+          return true;
       }
 
-      // Revert to the state before the latest action
-      const lastAction = histSnap.docs[0];
-      const previousAction = histSnap.docs[1];
-      const prevData = previousAction.data() as DocHistory;
+      const lastAction = sortedHistory[0];
+      const previousAction = sortedHistory[1];
+      const prevData = previousAction as DocHistory;
       
       const docRef = doc(db, "documents", docId);
       const info = determineStateFromVersion(prevData.version || '0.0');
@@ -291,9 +293,8 @@ export const DocumentService = {
           hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(prevData.newState)
       });
 
-      // Delete the latest history entry
-      await deleteDoc(lastAction.ref);
-      return false; // False indicates document still exists in a reverted state
+      await deleteDoc(lastAction._ref);
+      return false;
   },
 
   transitionState: async (docId: string, user: User, action: any, comment: string, file?: File, customVersion?: string): Promise<void> => {
@@ -321,7 +322,13 @@ export const DocumentService = {
       
       if (action === 'APPROVE') hasPending = false;
       else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
-      else if (action === 'REQUEST_APPROVAL') hasPending = true;
+      else if (action === 'REQUEST_APPROVAL') {
+          hasPending = true;
+          // Automically move to the next logical review state if in initiation/process phase
+          if (newState === DocState.INITIATED || newState === DocState.IN_PROCESS || newState === DocState.REJECTED) {
+              newState = DocState.INTERNAL_REVIEW;
+          }
+      }
       
       const { progress: newProgress } = determineStateFromVersion(newVersion);
       await updateDoc(docRef, { state: newState, version: newVersion, progress: newProgress, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
@@ -330,8 +337,8 @@ export const DocumentService = {
       const recipients = new Set([...(currentDoc.assignees || []), currentDoc.authorId]);
       recipients.delete(user.id);
 
-      if (action === 'APPROVE' || action === 'REJECT' || action === 'COMMENT') {
-          const type = action as 'APPROVAL' | 'REJECTION' | 'COMMENT';
+      if (action === 'APPROVE' || action === 'REJECT' || action === 'COMMENT' || action === 'REQUEST_APPROVAL') {
+          const type = (action === 'REQUEST_APPROVAL') ? 'COMMENT' : action as 'APPROVAL' | 'REJECTION' | 'COMMENT';
           const title = `${displayAction}: ${currentDoc.microprocess}`;
           const msg = `El usuario ${user.name} ha realizado una ${displayAction.toLowerCase()} en "${currentDoc.title}".`;
           
