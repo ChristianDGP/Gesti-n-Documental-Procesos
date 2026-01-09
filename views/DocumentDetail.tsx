@@ -532,6 +532,48 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               </div>
           </div>
       )}
+
+      {/* REVERT / DELETE MODAL */}
+      {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-red-100">
+                  <div className="p-5 border-b border-red-50 bg-red-50 flex justify-between items-center">
+                      <h3 className="text-lg font-black flex items-center gap-2 text-red-800">
+                          <AlertTriangle size={24} /> 
+                          Revertir Última Acción
+                      </h3>
+                      <button onClick={() => setShowDeleteModal(false)} className="text-red-400 hover:text-red-600 transition-colors">
+                          <XCircle size={20} />
+                      </button>
+                  </div>
+                  <div className="p-6">
+                      <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl mb-6">
+                          <p className="text-sm text-amber-800 font-bold leading-relaxed">
+                              ⚠️ Esta acción eliminará el último hito registrado en el historial y restaurará el documento a su <b>estado, versión y progreso inmediatamente anterior</b>.
+                          </p>
+                          <p className="text-xs text-amber-700 mt-2">
+                              Si este es el único hito del documento, el registro completo será eliminado.
+                          </p>
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                          <button 
+                            onClick={handleRevertAction}
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-100 transition-all active:scale-95"
+                          >
+                              <Trash2 size={16} /> Confirmar Reversión
+                          </button>
+                          <button 
+                            onClick={() => setShowDeleteModal(false)}
+                            className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-xs transition-all"
+                          >
+                              Cancelar
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
