@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
@@ -160,7 +161,6 @@ const Reports: React.FC<Props> = ({ user }) => {
         return docs;
     }, [unifiedData, filterProject, filterAnalyst]);
 
-    // LÓGICA DE AGREGACIÓN DE MICROPROCESOS (Unidad de Negocio)
     const microStats = useMemo(() => {
         const groups: Record<string, { project: string, name: string, states: DocState[], ids: string[] }> = {};
         
@@ -183,25 +183,16 @@ const Reports: React.FC<Props> = ({ user }) => {
         Object.values(groups).forEach(group => {
             const microItem = { name: group.name, project: group.project, ids: group.ids };
             stats.total.push(microItem);
-
-            // REGLA CRÍTICA: Un microproceso está TERMINADO solo si el 100% de sus documentos requeridos son APPROVED.
             const allApproved = group.states.length > 0 && group.states.every(s => s === DocState.APPROVED);
-            
             const hasControl = group.states.some(s => [DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(s));
             const hasReferent = group.states.some(s => [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(s));
             const hasProgress = group.states.some(s => s !== DocState.NOT_STARTED);
 
-            if (allApproved) {
-                stats.finished.push(microItem);
-            } else if (hasControl) {
-                stats.control.push(microItem);
-            } else if (hasReferent) {
-                stats.referent.push(microItem);
-            } else if (hasProgress) {
-                stats.inProcess.push(microItem);
-            } else {
-                stats.notStarted.push(microItem);
-            }
+            if (allApproved) stats.finished.push(microItem);
+            else if (hasControl) stats.control.push(microItem);
+            else if (hasReferent) stats.referent.push(microItem);
+            else if (hasProgress) stats.inProcess.push(microItem);
+            else stats.notStarted.push(microItem);
         });
         return stats;
     }, [filteredDocs]);
@@ -243,76 +234,36 @@ const Reports: React.FC<Props> = ({ user }) => {
         return stats;
     }, [filteredDocs]);
 
-    // CFD CON CONTEO CORREGIDO PARA ALINEARSE CON KPIs
     const cfdData = useMemo(() => {
         const data: any[] = [];
         const now = new Date();
         const currentMonthIdx = now.getMonth();
         const currentYearIdx = now.getFullYear();
-        
         const historyByDoc: Record<string, DocHistory[]> = {};
-        history.forEach(h => {
-            if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = [];
-            historyByDoc[h.documentId].push(h);
-        });
-
+        history.forEach(h => { if (!historyByDoc[h.documentId]) historyByDoc[h.documentId] = []; historyByDoc[h.documentId].push(h); });
         for (let i = cfdRange - 1; i >= 0; i--) {
             const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const monthLabel = targetDate.toLocaleString('es-ES', { month: 'short' });
-            
-            // Determinar si es el periodo actual para forzar coincidencia con KPIs
             const isCurrentPeriod = targetDate.getMonth() === currentMonthIdx && targetDate.getFullYear() === currentYearIdx;
-            
             const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
             const endOfMonthISO = endOfMonth.toISOString();
-            
             let backlog = 0, dev = 0, review = 0, validation = 0, done = 0;
-            
             filteredDocs.forEach(doc => {
                 let stateToCount: DocState = DocState.NOT_STARTED;
-
-                if (isCurrentPeriod) {
-                    // SI ES EL MES ACTUAL: Usar el estado real para que coincida 1:1 con las fichas superiores
-                    stateToCount = doc.state;
-                } else if (doc.isVirtual) {
-                    // Documentos no iniciados aún en la matriz
-                    stateToCount = DocState.NOT_STARTED;
-                } else {
-                    // SI ES UN MES PASADO: Reconstruir desde historial
+                if (isCurrentPeriod) stateToCount = doc.state;
+                else if (doc.isVirtual) stateToCount = DocState.NOT_STARTED;
+                else {
                     const docHistory = (historyByDoc[doc.id] || []).filter(h => h.timestamp <= endOfMonthISO);
-                    
-                    if (docHistory.length > 0) {
-                        const latestEntry = docHistory.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
-                        stateToCount = latestEntry.newState;
-                    } else {
-                        // Fallback: Si no hay historial pero el documento se creó ANTES del fin de este mes analizado
-                        const createdDate = new Date(doc.createdAt || doc.updatedAt);
-                        if (createdDate <= endOfMonth) {
-                            // Asumimos que estaba en su estado actual si no hay registros de cambio
-                            stateToCount = doc.state;
-                        } else {
-                            // Si se creó después del mes analizado, era Backlog (No existía aún en el flujo real)
-                            stateToCount = DocState.NOT_STARTED;
-                        }
-                    }
+                    if (docHistory.length > 0) { const latestEntry = docHistory.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]; stateToCount = latestEntry.newState; }
+                    else { const createdDate = new Date(doc.createdAt || doc.updatedAt); if (createdDate <= endOfMonth) stateToCount = doc.state; else stateToCount = DocState.NOT_STARTED; }
                 }
-
-                // Clasificación estricta (igual que en agileFlowStats)
                 if (stateToCount === DocState.APPROVED) done++;
                 else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(stateToCount)) validation++;
                 else if (stateToCount === DocState.INTERNAL_REVIEW) review++;
                 else if (stateToCount === DocState.INITIATED || stateToCount === DocState.IN_PROCESS) dev++;
                 else backlog++;
             });
-
-            data.push({ 
-                month: monthLabel, 
-                'Backlog': backlog, 
-                'Desarrollo': dev, 
-                'Rev. Interna': review, 
-                'Validación': validation, 
-                'Finalizado': done 
-            });
+            data.push({ month: monthLabel, 'Backlog': backlog, 'Desarrollo': dev, 'Rev. Interna': review, 'Validación': validation, 'Finalizado': done });
         }
         return data;
     }, [filteredDocs, history, cfdRange]);
@@ -423,26 +374,10 @@ const Reports: React.FC<Props> = ({ user }) => {
         link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
-    const handleCfdZoomIn = () => {
-        if (cfdRange === 12) setCfdRange(6);
-        else if (cfdRange === 6) setCfdRange(3);
-    };
-
-    const handleCfdZoomOut = () => {
-        if (cfdRange === 3) setCfdRange(6);
-        else if (cfdRange === 6) setCfdRange(12);
-    };
-
-    // LÓGICA DE ZOOM PARA EVOLUCIÓN DE CIERRES
-    const handleEvolutionZoomIn = () => {
-        if (chartScale === 'ANNUAL') setChartScale('MONTHLY');
-        else if (chartScale === 'MONTHLY') setChartScale('WEEKLY');
-    };
-
-    const handleEvolutionZoomOut = () => {
-        if (chartScale === 'WEEKLY') setChartScale('MONTHLY');
-        else if (chartScale === 'MONTHLY') setChartScale('ANNUAL');
-    };
+    const handleCfdZoomIn = () => { if (cfdRange === 12) setCfdRange(6); else if (cfdRange === 6) setCfdRange(3); };
+    const handleCfdZoomOut = () => { if (cfdRange === 3) setCfdRange(6); else if (cfdRange === 6) setCfdRange(12); };
+    const handleEvolutionZoomIn = () => { if (chartScale === 'ANNUAL') setChartScale('MONTHLY'); else if (chartScale === 'MONTHLY') setChartScale('WEEKLY'); };
+    const handleEvolutionZoomOut = () => { if (chartScale === 'WEEKLY') setChartScale('MONTHLY'); else if (chartScale === 'MONTHLY') setChartScale('ANNUAL'); };
 
     if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando métricas ejecutivas...</div>;
 
@@ -557,9 +492,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                 <KPICard title="Docs. Totales" value={kpis.total} icon={FileText} color="indigo" sub="Inventario Operativo" onClick={() => goToDashboard(kpis.totalIds)} canClick={kpis.total > 0} />
-                                <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en v0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
-                                <KPICard title="Alertas Referente" value={kpis.overdueReferentIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en v1.n / v1.n.i" onClick={() => goToDashboard(kpis.overdueReferentIds)} canClick={kpis.overdueReferentIds.length > 0} />
-                                <KPICard title="Alerta Control Gestión" value={kpis.overdueControlIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en v1.nAR" onClick={() => goToDashboard(kpis.overdueControlIds)} canClick={kpis.overdueControlIds.length > 0} />
+                                <KPICard title="Alertas Rev. Interna" value={kpis.overdueInternalIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en V0.n" onClick={() => goToDashboard(kpis.overdueInternalIds)} canClick={kpis.overdueInternalIds.length > 0} />
+                                <KPICard title="Alertas Referente" value={kpis.overdueReferentIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en V1.n / V1.n.i" onClick={() => goToDashboard(kpis.overdueReferentIds)} canClick={kpis.overdueReferentIds.length > 0} />
+                                <KPICard title="Alerta Control Gestión" value={kpis.overdueControlIds.length} icon={AlertTriangle} color="amber" sub="&gt; 30 días en V1.nAR" onClick={() => goToDashboard(kpis.overdueControlIds)} canClick={kpis.overdueControlIds.length > 0} />
                                 <KPICard title="Docs. Terminados" value={kpis.approved} icon={CheckCircle} color="green" sub="Cierre Administrativo" onClick={() => goToDashboard(kpis.approvedIds)} canClick={kpis.approved > 0} />
                             </div>
                         </div>
@@ -631,43 +566,21 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <p className="text-xs text-slate-500">Velocidad de entrega acumulada por periodo. Escala: <b>{getScaleLabel(chartScale)}</b></p>
                                 </div>
                                 <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
-                                    <button 
-                                        onClick={handleEvolutionZoomOut} 
-                                        disabled={chartScale === 'ANNUAL'} 
-                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" 
-                                        title="Zoom Out (Menos detalle / Anual)"
-                                    >
-                                        <ZoomOut size={18} />
-                                    </button>
+                                    <button onClick={handleEvolutionZoomOut} disabled={chartScale === 'ANNUAL'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom Out (Menos detalle / Anual)"><ZoomOut size={18} /></button>
                                     <div className="px-2 text-[10px] font-bold uppercase text-slate-500 min-w-[70px] text-center">{getScaleLabel(chartScale)}</div>
-                                    <button 
-                                        onClick={handleEvolutionZoomIn} 
-                                        disabled={chartScale === 'WEEKLY'} 
-                                        className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" 
-                                        title="Zoom In (Más detalle / Semanal)"
-                                    >
-                                        <ZoomIn size={18} />
-                                    </button>
+                                    <button onClick={handleEvolutionZoomIn} disabled={chartScale === 'WEEKLY'} className="p-1.5 hover:bg-white hover:text-indigo-600 disabled:opacity-30 rounded transition-all" title="Zoom In (Más detalle / Semanal)"><ZoomIn size={18} /></button>
                                 </div>
                             </div>
                             <div className="h-[350px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={evolutionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                        <defs>
-                                            {Object.entries(TYPE_COLORS).map(([type, color]) => (
-                                                <linearGradient key={type} id={`grad-${type.replace(' ', '')}`} x1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/>
-                                                </linearGradient>
-                                            ))}
-                                        </defs>
+                                        <defs>{Object.entries(TYPE_COLORS).map(([type, color]) => ( <linearGradient key={type} id={`grad-${type.replace(' ', '')}`} x1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.3}/><stop offset="95%" stopColor={color} stopOpacity={0}/></linearGradient> ))}</defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="label" tick={{fontSize: 11, fill: '#64748b'}} axisLine={{stroke: '#e2e8f0'}} tickLine={false} />
                                         <YAxis allowDecimals={false} domain={[0, 'dataMax']} tick={{fontSize: 11, fill: '#64748b'}} axisLine={{stroke: '#e2e8f0'}} tickLine={false} />
                                         <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                                         <Legend verticalAlign="top" height={40} iconType="circle" onClick={(o) => { const { dataKey } = o; setActiveType(activeType === dataKey ? null : dataKey as string); }} wrapperStyle={{ cursor: 'pointer' }} />
-                                        {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => (
-                                            <Area key={type} type="monotone" dataKey={type} stroke={TYPE_COLORS[type]} fill={`url(#grad-${type.replace(' ', '')})`} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} hide={activeType !== null && activeType !== type} />
-                                        ))}
+                                        {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => ( <Area key={type} type="monotone" dataKey={type} stroke={TYPE_COLORS[type]} fill={`url(#grad-${type.replace(' ', '')})`} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} hide={activeType !== null && activeType !== type} /> ))}
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -711,10 +624,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <Area type="monotone" dataKey="Finalizado" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
                                     </AreaChart>
                                 </ResponsiveContainer>
-                            </div>
-                            <div className="flex items-start gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-4">
-                                <Info size={16} className="text-slate-400 mt-0.5" />
-                                <p className="text-[10px] text-slate-500 leading-relaxed italic"><b>Interpretación CFD:</b> La base (gris) muestra el volumen total pendiente por iniciar. Las capas superiores muestran el avance del trabajo. Un ensanchamiento excesivo de las capas medias indica cuellos de botella en el flujo.</p>
                             </div>
                         </div>
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
@@ -789,7 +698,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 <td className="px-4 py-4 border-b border-slate-50 font-bold text-slate-700">{item.project}</td>
                                                 <td className="px-4 py-4 border-b border-slate-50"><div className="flex flex-col"><span className="font-bold text-slate-700 truncate max-w-[200px]" title={item.macro}>{item.macro}</span><span className="text-slate-500 text-[9px] truncate max-w-[200px]" title={item.process}>{item.process}</span></div></td>
                                                 <td className="px-4 py-4 border-b border-slate-50 sticky left-0 bg-white z-10 shadow-[2px_0_5px_rgba(0,0,0,0.02)]"><span className="font-bold text-indigo-700">{item.micro}</span></td>
-                                                {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => { const data = item.docs[type]; if (!data) return ( <React.Fragment key={type}><td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic border-l border-slate-50">-</td><td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic">No req.</td></React.Fragment> ); const cfg = STATE_CONFIG[data.state as DocState]; return ( <React.Fragment key={type}><td className="px-2 py-4 border-b border-slate-50 text-center font-mono font-bold text-slate-600 border-l border-slate-50">{data.version}</td><td className="px-2 py-4 border-b border-slate-50 text-center"><div className={`inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold uppercase border shadow-sm ${cfg.color}`}>{cfg.label.split('(')[0].trim()}</div></td></React.Fragment> ); })}
+                                                {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => { const data = item.docs[type]; if (!data) return ( <React.Fragment key={type}><td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic border-l border-slate-50">-</td><td className="px-2 py-4 border-b border-slate-50 text-center text-slate-200 italic">No req.</td></React.Fragment> ); const cfg = STATE_CONFIG[data.state as DocState]; return ( <React.Fragment key={type}><td className="px-2 py-4 border-b border-slate-50 text-center font-mono font-bold text-slate-600 border-l border-slate-50">{data.version}</td><td className="px-2 py-4 border-b border-slate-50 text-center"><div className={`inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold border shadow-sm ${cfg.color}`}>{cfg.label.split('(')[0].trim()}</div></td></React.Fragment> ); })}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -814,32 +723,13 @@ const Reports: React.FC<Props> = ({ user }) => {
 };
 
 const KPICard = ({ title, value, icon: Icon, color, sub, onClick, canClick }: any) => {
-    const colorClasses: Record<string, string> = { 
-        indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100', green: 'bg-green-50 text-green-600 border-green-100', amber: 'bg-amber-50 text-amber-600 border-amber-100', slate: 'bg-slate-50 text-slate-600 border-slate-100'
-    };
-    return (
-        <div onClick={canClick ? onClick : undefined} className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${colorClasses[color] || colorClasses.indigo} ${canClick ? 'cursor-pointer hover:shadow-md transition-all active:scale-95' : ''}`}>
-            <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-bold uppercase tracking-wider opacity-70">{title}</span><Icon size={16} /></div>
-            <div><span className="text-xl font-bold">{value}</span><div className="flex justify-between items-center mt-1"><p className="text-[9px] opacity-80 font-medium">{sub}</p>{canClick && <ArrowRight size={10} className="opacity-60" />}</div></div>
-        </div>
-    );
+    const colorClasses: Record<string, string> = { indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100', green: 'bg-green-50 text-green-600 border-green-100', amber: 'bg-amber-50 text-amber-600 border-amber-100', slate: 'bg-slate-50 text-slate-600 border-slate-100' };
+    return ( <div onClick={canClick ? onClick : undefined} className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${colorClasses[color] || colorClasses.indigo} ${canClick ? 'cursor-pointer hover:shadow-md transition-all active:scale-95' : ''}`}> <div className="flex justify-between items-start mb-2"><span className="text-[9px] font-bold uppercase tracking-wider opacity-70">{title}</span><Icon size={16} /></div> <div><span className="text-xl font-bold">{value}</span><div className="flex justify-between items-center mt-1"><p className="text-[9px] opacity-80 font-medium">{sub}</p>{canClick && <ArrowRight size={10} className="opacity-60" />}</div></div> </div> );
 };
 
 const AgileBucket = ({ title, value, icon: Icon, color, onClick }: any) => {
-    const colorMap: Record<string, string> = {
-        slate: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100',
-        blue: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
-        amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-        purple: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-        green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-    };
-    return (
-        <div onClick={onClick} className={`p-3 rounded-xl border cursor-pointer transition-all active:scale-95 flex flex-col items-center text-center shadow-sm ${colorMap[color]}`}>
-            <div className="p-2 rounded-full bg-white/50 mb-2"><Icon size={18} /></div>
-            <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{title}</span>
-            <span className="text-xl font-extrabold">{value}</span>
-        </div>
-    );
+    const colorMap: Record<string, string> = { slate: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100', blue: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100', amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100', purple: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100', green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' };
+    return ( <div onClick={onClick} className={`p-3 rounded-xl border cursor-pointer transition-all active:scale-95 flex flex-col items-center text-center shadow-sm ${colorMap[color]}`}> <div className="p-2 rounded-full bg-white/50 mb-2"><Icon size={18} /></div> <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{title}</span> <span className="text-xl font-extrabold">{value}</span> </div> );
 };
 
 export default Reports;

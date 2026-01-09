@@ -6,12 +6,12 @@ export const STATE_CONFIG: Record<DocState, { label: string; color: string; prog
   [DocState.NOT_STARTED]: { label: 'No Iniciado', color: 'bg-slate-100 text-slate-400 border border-slate-200', progress: 0 },
   [DocState.INITIATED]: { label: 'Iniciado (0.0)', color: 'bg-gray-100 text-gray-800', progress: 10 },
   [DocState.IN_PROCESS]: { label: 'En Proceso (0.n)', color: 'bg-blue-100 text-blue-800', progress: 30 },
-  [DocState.INTERNAL_REVIEW]: { label: 'Revisión Interna (v0.n)', color: 'bg-yellow-100 text-yellow-800', progress: 60 },
-  [DocState.SENT_TO_REFERENT]: { label: 'Enviado a Referente (v1.n)', color: 'bg-purple-100 text-purple-800', progress: 80 },
-  [DocState.REFERENT_REVIEW]: { label: 'Revisión Interna Referente (v1.n.i)', color: 'bg-indigo-100 text-indigo-800', progress: 80 },
-  [DocState.SENT_TO_CONTROL]: { label: 'Enviado a Control (v1.nAR)', color: 'bg-orange-100 text-orange-800', progress: 90 },
-  [DocState.CONTROL_REVIEW]: { label: 'Revisión Interna Control (v1.n.iAR)', color: 'bg-pink-100 text-pink-800', progress: 90 },
-  [DocState.APPROVED]: { label: 'Aprobado Final (v1.nACG)', color: 'bg-green-100 text-green-800', progress: 100 },
+  [DocState.INTERNAL_REVIEW]: { label: 'Revisión Interna (V0.n)', color: 'bg-yellow-100 text-yellow-800', progress: 60 },
+  [DocState.SENT_TO_REFERENT]: { label: 'Enviado a Referente (V1.n)', color: 'bg-purple-100 text-purple-800', progress: 80 },
+  [DocState.REFERENT_REVIEW]: { label: 'Revisión Interna Referente (V1.n.i)', color: 'bg-indigo-100 text-indigo-800', progress: 80 },
+  [DocState.SENT_TO_CONTROL]: { label: 'Enviado a Control (V1.nAR)', color: 'bg-orange-100 text-orange-800', progress: 90 },
+  [DocState.CONTROL_REVIEW]: { label: 'Revisión Interna Control (V1.n.iAR)', color: 'bg-pink-100 text-pink-800', progress: 90 },
+  [DocState.APPROVED]: { label: 'Aprobado Final (V1.nACG)', color: 'bg-green-100 text-green-800', progress: 100 },
   [DocState.REJECTED]: { label: 'Rechazado', color: 'bg-red-100 text-red-800', progress: 0 },
 };
 
@@ -30,17 +30,10 @@ export const MOCK_USERS = [
 ];
 
 export const NAME_TO_ID_MAP: Record<string, string> = {};
-
-// Defines the hierarchy and assignments
 export const INITIAL_DATA_LOAD: string[][] = [];
-
-// Defines the actual document status, version and type for seed
 export const DOCUMENT_STATUS_LOAD: string[][] = [];
 
-// Definition Matrix for Required Documents per Microprocess
-// Format: [Project, Microprocess, AS IS(0/1), FCE(0/1), PM(0/1), TO BE(0/1)]
 export const REQUIRED_DOCS_MATRIX = [
-    // HPC
     ["HPC", "Admisión Ambulatoria", 1, 1, 1, 1],
     ["HPC", "Admisión Toma de Muestras", 1, 1, 1, 1],
     ["HPC", "Anatomía Patológica", 1, 1, 1, 1],
@@ -111,8 +104,6 @@ export const REQUIRED_DOCS_MATRIX = [
     ["HPC", "Kinesiología Ambulatoria", 1, 1, 1, 1],
     ["HPC", "Hospitalización", 0, 1, 0, 1],
     ["HPC", "Quimioterapia", 0, 1, 0, 1],
-    
-    // HSR
     ["HSR", "Adquisición de Servicios", 0, 0, 0, 1],
     ["HSR", "Esterilización", 0, 0, 0, 1],
     ["HSR", "Farmacia Ambulatoria", 0, 0, 0, 1],

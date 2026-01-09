@@ -116,6 +116,13 @@ export const NotificationService = {
         const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Notification));
         return data.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     },
+    subscribeToNotifications: (userId: string, callback: (notifications: Notification[]) => void) => {
+        const q = query(collection(db, "notifications"), where("userId", "==", userId));
+        return onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Notification));
+            callback(data.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
+        });
+    },
     subscribeToUnreadCount: (userId: string, callback: (count: number) => void) => {
         const q = query(collection(db, "notifications"), where("userId", "==", userId), where("isRead", "==", false));
         return onSnapshot(q, (snapshot) => callback(snapshot.size));
@@ -136,7 +143,6 @@ export const UserService = {
   getAll: async (): Promise<User[]> => {
     const q = query(collection(db, "users"));
     const querySnapshot = await getDocs(q);
-    // Solución al error TS2783: id y active van al final para sobrescribir y evitar alertas de duplicidad
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, active: (doc.data() as any).active ?? true } as User));
   },
   update: async (id: string, userData: Partial<User>): Promise<User> => {
@@ -222,31 +228,74 @@ export const DocumentService = {
   },
   create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any, existingId?: string): Promise<Document> => {
     const state = initialState || DocState.INITIATED;
-    const isSubmission = state === DocState.INTERNAL_REVIEW || state === DocState.SENT_TO_REFERENT || state === DocState.SENT_TO_CONTROL;
+    const isSubmission = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(state);
     const version = initialVersion || '0.0';
     const info = determineStateFromVersion(version);
     const progress = initialProgress !== undefined ? initialProgress : info.progress;
 
+    let finalDocId: string;
+    let finalDocData: Document;
+
     if (existingId) {
+        finalDocId = existingId;
         const docRef = doc(db, "documents", existingId);
         const oldSnap = await getDoc(docRef);
         const oldData = oldSnap.data() as Document;
         const updateData: Partial<Document> = { state, version, progress, description, hasPendingRequest: isSubmission, updatedAt: new Date().toISOString() };
         await updateDoc(docRef, updateData);
         await HistoryService.log(existingId, author, 'Nueva Versión (Carga)', oldData.state, state, `Carga de archivo versión ${version}`, version);
-        // Solución al error TS2783: id al final para evitar duplicidad detectada por el compilador
-        return { ...oldData, ...updateData, id: existingId } as Document;
+        finalDocData = { ...oldData, ...updateData, id: existingId } as Document;
     } else {
         const mergedAssignees = Array.from(new Set([...(hierarchy?.assignees || []), author.id]));
         const newDocData: Omit<Document, 'id'> = {
           title, description, authorId: author.id, authorName: author.name, assignedTo: author.id, assignees: mergedAssignees, state, version, progress, hasPendingRequest: isSubmission, files: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), project: hierarchy?.project, macroprocess: hierarchy?.macro, process: hierarchy?.process, microprocess: hierarchy?.micro, docType: hierarchy?.docType
         };
         const docRef = await addDoc(collection(db, "documents"), newDocData);
+        finalDocId = docRef.id;
         await HistoryService.log(docRef.id, author, 'Creación', DocState.NOT_STARTED, state, `Iniciado Versión ${version}`, version);
-        return { ...newDocData, id: docRef.id } as Document;
+        finalDocData = { ...newDocData, id: docRef.id } as Document;
     }
+
+    return finalDocData;
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "documents", id)); },
+  
+  // NEW: ROLLBACK LOGIC FOR ADMINISTRATORS
+  revertLastTransition: async (docId: string): Promise<boolean> => {
+      const histQ = query(collection(db, "history"), where("documentId", "==", docId), orderBy("timestamp", "desc"));
+      const histSnap = await getDocs(histQ);
+      
+      if (histSnap.empty || histSnap.size <= 1) {
+          // If only 1 record exists, it's the creation. Delete entire document.
+          await deleteDoc(doc(db, "documents", docId));
+          // Clean up history
+          const batch = writeBatch(db);
+          histSnap.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+          return true; // True indicates document was fully removed
+      }
+
+      // Revert to the state before the latest action
+      const lastAction = histSnap.docs[0];
+      const previousAction = histSnap.docs[1];
+      const prevData = previousAction.data() as DocHistory;
+      
+      const docRef = doc(db, "documents", docId);
+      const info = determineStateFromVersion(prevData.version || '0.0');
+
+      await updateDoc(docRef, {
+          state: prevData.newState,
+          version: prevData.version || '0.0',
+          progress: info.progress,
+          updatedAt: prevData.timestamp,
+          hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(prevData.newState)
+      });
+
+      // Delete the latest history entry
+      await deleteDoc(lastAction.ref);
+      return false; // False indicates document still exists in a reverted state
+  },
+
   transitionState: async (docId: string, user: User, action: any, comment: string, file?: File, customVersion?: string): Promise<void> => {
       const docRef = doc(db, "documents", docId);
       const docSnap = await getDoc(docRef);
@@ -255,19 +304,41 @@ export const DocumentService = {
       let newState = currentDoc.state;
       let newVersion = currentDoc.version;
       let hasPending = currentDoc.hasPendingRequest;
-      const actionLabels: Record<string, string> = { 'APPROVE': 'Aprobación', 'REJECT': 'Rechazo', 'COMMENT': 'Observación', 'REQUEST_APPROVAL': 'Solicitud de Revisión', 'ADVANCE': 'Avance de Flujo' };
+      const actionLabels: Record<string, string> = { 
+          'APPROVE': 'Aprobación', 
+          'REJECT': 'Rechazo', 
+          'COMMENT': 'Observación', 
+          'REQUEST_APPROVAL': 'Solicitud de Revisión', 
+          'ADVANCE': 'Avance de Flujo' 
+      };
       const displayAction = actionLabels[action] || action;
+      
       if (customVersion) {
         newVersion = customVersion;
         const info = determineStateFromVersion(customVersion);
         newState = info.state;
       }
+      
       if (action === 'APPROVE') hasPending = false;
       else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
       else if (action === 'REQUEST_APPROVAL') hasPending = true;
+      
       const { progress: newProgress } = determineStateFromVersion(newVersion);
       await updateDoc(docRef, { state: newState, version: newVersion, progress: newProgress, hasPendingRequest: hasPending, updatedAt: new Date().toISOString() });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
+
+      const recipients = new Set([...(currentDoc.assignees || []), currentDoc.authorId]);
+      recipients.delete(user.id);
+
+      if (action === 'APPROVE' || action === 'REJECT' || action === 'COMMENT') {
+          const type = action as 'APPROVAL' | 'REJECTION' | 'COMMENT';
+          const title = `${displayAction}: ${currentDoc.microprocess}`;
+          const msg = `El usuario ${user.name} ha realizado una ${displayAction.toLowerCase()} en "${currentDoc.title}".`;
+          
+          for (const recipientId of Array.from(recipients)) {
+              await NotificationService.create(recipientId, docId, type, title, msg, user.name);
+          }
+      }
   }
 };
 

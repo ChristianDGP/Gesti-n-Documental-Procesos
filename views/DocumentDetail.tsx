@@ -5,7 +5,6 @@ import { DocumentService, HistoryService, UserService, HierarchyService, Referen
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-// Fixed: Added AlertTriangle to imports from lucide-react
 import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle } from 'lucide-react';
 
 interface Props {
@@ -165,7 +164,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           return;
       }
       const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}`);
-      // Actualizado: Salutación personalizada según solicitud del usuario
       const greeting = referentNames.length > 0 ? `Estimada/o ${referentNames.join(', ')}` : 'Estimados Referentes';
       const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${doc.version}\n\nQuedamos atentos a sus observaciones.\n\nSaludos\n${user.name}`);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(referentEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
@@ -213,6 +211,23 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       } catch (err: any) { alert('Error: ' + err.message); } finally { setActionLoading(false); }
   };
 
+  const handleRevertAction = async () => {
+      if (!doc) return;
+      setShowDeleteModal(false);
+      setLoading(true);
+      try {
+          const wasDeleted = await DocumentService.revertLastTransition(doc.id);
+          if (wasDeleted) {
+              navigate('/', { replace: true });
+          } else {
+              await loadData(doc.id);
+          }
+      } catch (e: any) {
+          alert("Error al revertir: " + e.message);
+          setLoading(false);
+      }
+  };
+
   const formatDate = (isoString: string) => {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return 'Fecha no disponible';
@@ -247,7 +262,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         )}
       </div>
 
-      {/* HEADER CARD */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
             <div>
@@ -259,7 +273,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 <h1 className="text-2xl font-black text-slate-900 leading-tight">{doc.title}</h1>
                 <p className="text-slate-500 text-sm font-medium mt-1">{doc.description}</p>
             </div>
-            <div className={`px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-widest flex items-center self-start border shadow-sm ${config.color}`}>
+            <div className={`px-3 py-2 rounded-lg text-xs font-bold tracking-wide flex items-center self-start border shadow-sm ${config.color}`}>
                 <Activity size={14} className="mr-2" />{config.label}
             </div>
         </div>
@@ -280,7 +294,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* LEFT COLUMN: ACTIONS */}
         <div className="lg:col-span-2 space-y-6">
             {!canEdit && <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium"><Lock size={18} className="text-amber-500" /> Vista de solo lectura. No tiene permisos de gestión en este documento.</div>}
             
@@ -299,40 +312,34 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                      />
                      
                      <div className="flex flex-wrap gap-3">
-                        {/* GUARDAR OBSERVACIÓN - COLOR OSCURO COMO IMAGEN */}
                         <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 text-sm font-bold shadow-sm transition-all active:scale-95">
                             <MessageSquare size={18} className="mr-2" /> Guardar Observación
                         </button>
 
-                        {/* NOTIFICAR ANALISTA - COLOR CLARO COMO IMAGEN */}
                         {isCoordinatorOrAdmin && (
                             <button onClick={handleNotifyAnalyst} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95">
                                 <Mail size={18} className="mr-2 text-indigo-500" /> Notificar Analista
                             </button>
                         )}
 
-                        {/* NOTIFICAR REFERENTE (SI ES COORDINADOR Y HAY REFERENTES) */}
                         {isCoordinatorOrAdmin && referentEmails.length > 0 && [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(doc.state) && (
                             <button onClick={handleNotifyReferent} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95">
                                 <Users size={18} className="mr-2 text-indigo-500" /> Notificar Referente
                             </button>
                         )}
 
-                        {/* NOTIFICAR COORDINADOR (SI ES ANALISTA) */}
                         {isAnalystAssigned && isDocActive && (
                              <button onClick={handleNotifyCoordinator} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95">
                                 <Mail size={18} className="mr-2 text-indigo-500" /> Notificar Coordinador
                             </button>
                         )}
 
-                        {/* APROBAR - COLOR VERDE COMO IMAGEN */}
                         {isCoordinatorOrAdmin && isDocActive && (
                             <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-6 py-2.5 bg-[#22c55e] text-white rounded-lg hover:bg-green-600 text-sm font-bold shadow-md shadow-green-100 transition-all active:scale-95">
                                 <CheckCircle size={18} className="mr-2" /> Aprobar
                             </button>
                         )}
 
-                        {/* RECHAZAR - COLOR ROJO CLARO COMO IMAGEN */}
                         {isCoordinatorOrAdmin && isDocActive && (
                             <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-100 transition-all active:scale-95">
                                 <XCircle size={18} className="mr-2" /> Rechazar
@@ -343,7 +350,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             )}
         </div>
         
-        {/* RIGHT COLUMN: HISTORIAL COMPLETO (APARIENCIA EXACTA) */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col min-h-[550px]">
             <h3 className="font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4 text-sm">Historial Completo</h3>
             
@@ -357,29 +363,20 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                   <div className="space-y-10 pl-5 border-l-[1.5px] border-slate-100 relative ml-2">
                       {history.map((h) => (
                           <div key={h.id} className="relative group animate-fadeIn">
-                              {/* Punto en el timeline */}
                               <div className="absolute -left-[23px] top-2 h-3 w-3 rounded-full bg-slate-300 border-2 border-white shadow-sm ring-4 ring-white group-hover:bg-indigo-500 transition-colors"></div>
-
-                              {/* Fecha y Hora (Gris arriba como imagen) */}
                               <div className="text-[11px] font-bold text-slate-400 mb-1 flex items-center gap-1.5 uppercase tracking-tighter">
                                   {formatDate(h.timestamp)}
                               </div>
-
-                              {/* Acción y Usuario (Negrita como imagen) */}
                               <div className="text-[13px] text-slate-700 mb-2">
                                   <span className="font-black text-slate-900">{h.action}</span>
                                   <span className="mx-1.5 font-medium text-slate-400 text-xs">por</span>
                                   <span className="font-black text-slate-800">{h.userName}</span>
                               </div>
-
-                              {/* Versión Badge (Pill gris) */}
                               <div className="mb-2.5">
                                   <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-black border border-slate-200 uppercase tracking-tighter">
                                       Versión: {h.version || '-'}
                                   </span>
                               </div>
-
-                              {/* Caja de Comentario (Gris claro cursiva como imagen) */}
                               {h.comment && (
                                   <div className="bg-slate-50/80 border border-slate-100 rounded-lg p-3.5 text-xs italic text-slate-600 leading-relaxed shadow-sm relative overflow-hidden">
                                       <div className="absolute top-0 left-0 w-1 h-full bg-slate-200/50"></div>
@@ -401,7 +398,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         </div>
       </div>
 
-      {/* Response Modal */}
       {showResponseModal && pendingAction && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100">
@@ -458,12 +454,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           </div>
       )}
 
-      {/* Delete Modal */}
       {showDeleteModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100">
                   <div className="p-5 border-b border-red-100 bg-red-50 flex items-center justify-between">
-                      <h3 className="text-lg font-black text-red-800 flex items-center gap-2"><Trash2 size={24} /> Eliminar Registro</h3>
+                      <h3 className="text-lg font-black text-red-800 flex items-center gap-2"><Trash2 size={24} /> Gestión de Eliminación</h3>
                       <button onClick={() => setShowDeleteModal(false)} className="text-red-400 hover:text-red-600 transition-colors"><XCircle size={20} /></button>
                   </div>
                   <div className="p-8 text-center">
@@ -471,11 +466,15 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                           <AlertTriangle size={32} />
                       </div>
                       <p className="text-slate-700 mb-6 text-sm font-medium leading-relaxed">
-                          ¿Está seguro de que desea eliminar permanentemente: <strong>{doc.title}</strong>? Esta acción es irreversible y borrará todo el historial consolidado.
+                          {history.length > 1 
+                            ? `Se eliminará la ÚLTIMA gestión realizada en "${doc.title}". El documento regresará al estado anterior y se conservará el resto del historial.`
+                            : `Esta es la versión inicial de "${doc.title}". Al eliminarla, se borrará el registro completo del sistema de forma permanente.`}
                       </p>
                       <div className="flex justify-center gap-3">
                           <button onClick={() => setShowDeleteModal(false)} className="px-5 py-2 text-slate-500 hover:text-slate-800 text-sm font-bold uppercase tracking-tighter">Cancelar</button>
-                          <button onClick={async () => { if (!doc) return; setShowDeleteModal(false); setLoading(true); await DocumentService.delete(doc.id); navigate('/', { replace: true }); }} className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-black text-sm shadow-lg shadow-red-100 transition-all active:scale-95">Eliminar Definitivamente</button>
+                          <button onClick={handleRevertAction} className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-black text-sm shadow-lg shadow-red-100 transition-all active:scale-95">
+                              {history.length > 1 ? 'Eliminar Estado Actual' : 'Eliminar Registro Completo'}
+                          </button>
                       </div>
                   </div>
               </div>

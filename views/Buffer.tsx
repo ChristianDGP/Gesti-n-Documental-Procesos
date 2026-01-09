@@ -22,29 +22,21 @@ const Buffer: React.FC<Props> = ({ user }) => {
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  const loadNotifications = async () => {
     setLoading(true);
-    const data = await NotificationService.getByUser(user.id);
-    setNotifications(data);
+    // Real-time synchronization
+    const unsubscribe = NotificationService.subscribeToNotifications(user.id, (data) => {
+        setNotifications(data);
+        setLoading(false);
+    });
     
-    // If no unread messages, default to ALL to avoid empty screen confusion
-    const hasUnread = data.some(n => !n.isRead);
-    if (!hasUnread && data.length > 0) {
-        setActiveTab('ALL');
-    }
-    
-    setLoading(false);
-  };
+    return () => unsubscribe();
+  }, [user.id]);
 
   const handleItemClick = async (notif: Notification) => {
       // Mark as read
       if (!notif.isRead) {
           await NotificationService.markAsRead(notif.id);
-          // Optimistic update
-          setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
+          // Snapshot listener will update state
       }
       
       // Navigation Logic
@@ -57,8 +49,7 @@ const Buffer: React.FC<Props> = ({ user }) => {
 
   const handleMarkAllRead = async () => {
       await NotificationService.markAllAsRead(user.id);
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      setActiveTab('ALL'); // Switch to history view since there are no unread items left
+      // Snapshot listener will handle the UI update
   };
 
   const getIcon = (type: Notification['type']) => {
