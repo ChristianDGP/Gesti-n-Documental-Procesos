@@ -221,14 +221,16 @@ const Reports: React.FC<Props> = ({ user }) => {
             backlog: { count: 0, ids: [] as string[] },
             development: { count: 0, ids: [] as string[] },
             internalReview: { count: 0, ids: [] as string[] },
-            validation: { count: 0, ids: [] as string[] },
+            referent: { count: 0, ids: [] as string[] },
+            control: { count: 0, ids: [] as string[] },
             done: { count: 0, ids: [] as string[] }
         };
         filteredDocs.forEach(d => {
             if (d.state === DocState.NOT_STARTED) { stats.backlog.count++; stats.backlog.ids.push(d.id); }
             else if (d.state === DocState.INITIATED || d.state === DocState.IN_PROCESS) { stats.development.count++; stats.development.ids.push(d.id); }
             else if (d.state === DocState.INTERNAL_REVIEW) { stats.internalReview.count++; stats.internalReview.ids.push(d.id); }
-            else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(d.state)) { stats.validation.count++; stats.validation.ids.push(d.id); }
+            else if (d.state === DocState.SENT_TO_REFERENT || d.state === DocState.REFERENT_REVIEW) { stats.referent.count++; stats.referent.ids.push(d.id); }
+            else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) { stats.control.count++; stats.control.ids.push(d.id); }
             else if (d.state === DocState.APPROVED) { stats.done.count++; stats.done.ids.push(d.id); }
         });
         return stats;
@@ -247,23 +249,43 @@ const Reports: React.FC<Props> = ({ user }) => {
             const isCurrentPeriod = targetDate.getMonth() === currentMonthIdx && targetDate.getFullYear() === currentYearIdx;
             const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
             const endOfMonthISO = endOfMonth.toISOString();
-            let backlog = 0, dev = 0, review = 0, validation = 0, done = 0;
+            
+            let noIniciado = 0, enProceso = 0, revInterna = 0, referente = 0, control = 0, terminado = 0;
+            
             filteredDocs.forEach(doc => {
                 let stateToCount: DocState = DocState.NOT_STARTED;
                 if (isCurrentPeriod) stateToCount = doc.state;
                 else if (doc.isVirtual) stateToCount = DocState.NOT_STARTED;
                 else {
                     const docHistory = (historyByDoc[doc.id] || []).filter(h => h.timestamp <= endOfMonthISO);
-                    if (docHistory.length > 0) { const latestEntry = docHistory.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]; stateToCount = latestEntry.newState; }
-                    else { const createdDate = new Date(doc.createdAt || doc.updatedAt); if (createdDate <= endOfMonth) stateToCount = doc.state; else stateToCount = DocState.NOT_STARTED; }
+                    if (docHistory.length > 0) { 
+                        const latestEntry = docHistory.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]; 
+                        stateToCount = latestEntry.newState; 
+                    }
+                    else { 
+                        const createdDate = new Date(doc.createdAt || doc.updatedAt); 
+                        if (createdDate <= endOfMonth) stateToCount = doc.state; 
+                        else stateToCount = DocState.NOT_STARTED; 
+                    }
                 }
-                if (stateToCount === DocState.APPROVED) done++;
-                else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(stateToCount)) validation++;
-                else if (stateToCount === DocState.INTERNAL_REVIEW) review++;
-                else if (stateToCount === DocState.INITIATED || stateToCount === DocState.IN_PROCESS) dev++;
-                else backlog++;
+                
+                if (stateToCount === DocState.APPROVED) terminado++;
+                else if ([DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(stateToCount)) control++;
+                else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(stateToCount)) referente++;
+                else if (stateToCount === DocState.INTERNAL_REVIEW) revInterna++;
+                else if (stateToCount === DocState.INITIATED || stateToCount === DocState.IN_PROCESS) enProceso++;
+                else noIniciado++;
             });
-            data.push({ month: monthLabel, 'Backlog': backlog, 'Desarrollo': dev, 'Rev. Interna': review, 'Validación': validation, 'Finalizado': done });
+            
+            data.push({ 
+                month: monthLabel, 
+                'No Iniciado': noIniciado, 
+                'En Proceso': enProceso, 
+                'Revisión Interna': revInterna, 
+                'Referente': referente, 
+                'Control': control, 
+                'Terminados': terminado 
+            });
         }
         return data;
     }, [filteredDocs, history, cfdRange]);
@@ -310,7 +332,13 @@ const Reports: React.FC<Props> = ({ user }) => {
     }, [history, filteredDocs]);
 
     const stateData = useMemo(() => {
-        const stats = { notStarted: { value: 0, ids: [] as string[] }, inProcess: { value: 0, ids: [] as string[] }, referent: { value: 0, ids: [] as string[] }, control: { value: 0, ids: [] as string[] }, finished: { value: 0, ids: [] as string[] } };
+        const stats = { 
+            notStarted: { value: 0, ids: [] as string[] }, 
+            inProcess: { value: 0, ids: [] as string[] }, 
+            referent: { value: 0, ids: [] as string[] }, 
+            control: { value: 0, ids: [] as string[] }, 
+            finished: { value: 0, ids: [] as string[] } 
+        };
         filteredDocs.forEach(d => {
             if (d.state === DocState.NOT_STARTED) { stats.notStarted.value++; stats.notStarted.ids.push(d.id); }
             else if (d.state === DocState.APPROVED) { stats.finished.value++; stats.finished.ids.push(d.id); }
@@ -318,7 +346,13 @@ const Reports: React.FC<Props> = ({ user }) => {
             else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) { stats.control.value++; stats.control.ids.push(d.id); }
             else { stats.inProcess.value++; stats.inProcess.ids.push(d.id); }
         });
-        return [ { name: 'No Iniciado', ...stats.notStarted }, { name: 'En Proceso', ...stats.inProcess }, { name: 'Referente', ...stats.referent }, { name: 'Control', ...stats.control }, { name: 'Terminados', ...stats.finished } ];
+        return [ 
+            { name: 'No Iniciado', ...stats.notStarted }, 
+            { name: 'En Proceso', ...stats.inProcess }, 
+            { name: 'Referente', ...stats.referent }, 
+            { name: 'Control', ...stats.control }, 
+            { name: 'Terminados', ...stats.finished } 
+        ];
     }, [filteredDocs]);
 
     const analystData = useMemo(() => {
@@ -590,12 +624,13 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                 {activeTab === 'SUMMARY' && (
                     <section className="space-y-6">
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                            <AgileBucket title="Backlog" value={agileFlowStats.backlog.count} icon={Layers} color="slate" onClick={() => goToDashboard(agileFlowStats.backlog.ids)} />
-                            <AgileBucket title="En Desarrollo" value={agileFlowStats.development.count} icon={PlayCircle} color="blue" onClick={() => goToDashboard(agileFlowStats.development.ids)} />
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                            <AgileBucket title="No Iniciado" value={agileFlowStats.backlog.count} icon={Layers} color="slate" onClick={() => goToDashboard(agileFlowStats.backlog.ids)} />
+                            <AgileBucket title="En Proceso" value={agileFlowStats.development.count} icon={PlayCircle} color="blue" onClick={() => goToDashboard(agileFlowStats.development.ids)} />
                             <AgileBucket title="Rev. Interna" value={agileFlowStats.internalReview.count} icon={FileText} color="amber" onClick={() => goToDashboard(agileFlowStats.internalReview.ids)} />
-                            <AgileBucket title="Validación" value={agileFlowStats.validation.count} icon={FastForward} color="purple" onClick={() => goToDashboard(agileFlowStats.validation.ids)} />
-                            <AgileBucket title="Finalizado" value={agileFlowStats.done.count} icon={CheckCircle} color="green" onClick={() => goToDashboard(agileFlowStats.done.ids)} />
+                            <AgileBucket title="Referente" value={agileFlowStats.referent.count} icon={Users} color="purple" onClick={() => goToDashboard(agileFlowStats.referent.ids)} />
+                            <AgileBucket title="Control" value={agileFlowStats.control.count} icon={ShieldCheck} color="orange" onClick={() => goToDashboard(agileFlowStats.control.ids)} />
+                            <AgileBucket title="Terminados" value={agileFlowStats.done.count} icon={CheckCircle} color="green" onClick={() => goToDashboard(agileFlowStats.done.ids)} />
                         </div>
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
@@ -617,11 +652,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <YAxis tick={{fontSize: 10}} />
                                         <Tooltip />
                                         <Legend verticalAlign="top" align="right" iconType="circle" />
-                                        <Area type="monotone" dataKey="Backlog" stackId="1" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Desarrollo" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Rev. Interna" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Validación" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Finalizado" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
+                                        <Area type="monotone" dataKey="No Iniciado" stackId="1" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="En Proceso" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Revisión Interna" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Referente" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Control" stackId="1" stroke="#f97316" fill="#f97316" fillOpacity={0.4} />
+                                        <Area type="monotone" dataKey="Terminados" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -728,7 +764,14 @@ const KPICard = ({ title, value, icon: Icon, color, sub, onClick, canClick }: an
 };
 
 const AgileBucket = ({ title, value, icon: Icon, color, onClick }: any) => {
-    const colorMap: Record<string, string> = { slate: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100', blue: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100', amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100', purple: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100', green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' };
+    const colorMap: Record<string, string> = { 
+        slate: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100', 
+        blue: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100', 
+        amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100', 
+        purple: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100', 
+        orange: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
+        green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
+    };
     return ( <div onClick={onClick} className={`p-3 rounded-xl border cursor-pointer transition-all active:scale-95 flex flex-col items-center text-center shadow-sm ${colorMap[color]}`}> <div className="p-2 rounded-full bg-white/50 mb-2"><Icon size={18} /></div> <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{title}</span> <span className="text-xl font-extrabold">{value}</span> </div> );
 };
 
