@@ -220,18 +220,16 @@ const Reports: React.FC<Props> = ({ user }) => {
         const stats = {
             backlog: { count: 0, ids: [] as string[] },
             development: { count: 0, ids: [] as string[] },
-            internalReview: { count: 0, ids: [] as string[] },
             referent: { count: 0, ids: [] as string[] },
             control: { count: 0, ids: [] as string[] },
             done: { count: 0, ids: [] as string[] }
         };
         filteredDocs.forEach(d => {
             if (d.state === DocState.NOT_STARTED) { stats.backlog.count++; stats.backlog.ids.push(d.id); }
-            else if (d.state === DocState.INITIATED || d.state === DocState.IN_PROCESS) { stats.development.count++; stats.development.ids.push(d.id); }
-            else if (d.state === DocState.INTERNAL_REVIEW) { stats.internalReview.count++; stats.internalReview.ids.push(d.id); }
+            else if (d.state === DocState.APPROVED) { stats.done.count++; stats.done.ids.push(d.id); }
             else if (d.state === DocState.SENT_TO_REFERENT || d.state === DocState.REFERENT_REVIEW) { stats.referent.count++; stats.referent.ids.push(d.id); }
             else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) { stats.control.count++; stats.control.ids.push(d.id); }
-            else if (d.state === DocState.APPROVED) { stats.done.count++; stats.done.ids.push(d.id); }
+            else { stats.development.count++; stats.development.ids.push(d.id); }
         });
         return stats;
     }, [filteredDocs]);
@@ -250,7 +248,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
             const endOfMonthISO = endOfMonth.toISOString();
             
-            let noIniciado = 0, enProceso = 0, revInterna = 0, referente = 0, control = 0, terminado = 0;
+            let noIniciado = 0, enProceso = 0, referente = 0, control = 0, terminado = 0;
             
             filteredDocs.forEach(doc => {
                 let stateToCount: DocState = DocState.NOT_STARTED;
@@ -272,16 +270,14 @@ const Reports: React.FC<Props> = ({ user }) => {
                 if (stateToCount === DocState.APPROVED) terminado++;
                 else if ([DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(stateToCount)) control++;
                 else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(stateToCount)) referente++;
-                else if (stateToCount === DocState.INTERNAL_REVIEW) revInterna++;
-                else if (stateToCount === DocState.INITIATED || stateToCount === DocState.IN_PROCESS) enProceso++;
-                else noIniciado++;
+                else if (stateToCount === DocState.NOT_STARTED) noIniciado++;
+                else enProceso++; // Incluye Iniciado, En Proceso y Revisión Interna para simplificar a 5 estados
             });
             
             data.push({ 
                 month: monthLabel, 
                 'No Iniciado': noIniciado, 
                 'En Proceso': enProceso, 
-                'Revisión Interna': revInterna, 
                 'Referente': referente, 
                 'Control': control, 
                 'Terminados': terminado 
@@ -346,6 +342,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) { stats.control.value++; stats.control.ids.push(d.id); }
             else { stats.inProcess.value++; stats.inProcess.ids.push(d.id); }
         });
+        // Retornamos en el orden exacto solicitado para el gráfico de torta
         return [ 
             { name: 'No Iniciado', ...stats.notStarted }, 
             { name: 'En Proceso', ...stats.inProcess }, 
@@ -624,10 +621,9 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                 {activeTab === 'SUMMARY' && (
                     <section className="space-y-6">
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             <AgileBucket title="No Iniciado" value={agileFlowStats.backlog.count} icon={Layers} color="slate" onClick={() => goToDashboard(agileFlowStats.backlog.ids)} />
                             <AgileBucket title="En Proceso" value={agileFlowStats.development.count} icon={PlayCircle} color="blue" onClick={() => goToDashboard(agileFlowStats.development.ids)} />
-                            <AgileBucket title="Rev. Interna" value={agileFlowStats.internalReview.count} icon={FileText} color="amber" onClick={() => goToDashboard(agileFlowStats.internalReview.ids)} />
                             <AgileBucket title="Referente" value={agileFlowStats.referent.count} icon={Users} color="purple" onClick={() => goToDashboard(agileFlowStats.referent.ids)} />
                             <AgileBucket title="Control" value={agileFlowStats.control.count} icon={ShieldCheck} color="orange" onClick={() => goToDashboard(agileFlowStats.control.ids)} />
                             <AgileBucket title="Terminados" value={agileFlowStats.done.count} icon={CheckCircle} color="green" onClick={() => goToDashboard(agileFlowStats.done.ids)} />
@@ -652,9 +648,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <YAxis tick={{fontSize: 10}} />
                                         <Tooltip />
                                         <Legend verticalAlign="top" align="right" iconType="circle" />
+                                        {/* Definimos las áreas en el orden exacto solicitado para que la leyenda sea correcta */}
                                         <Area type="monotone" dataKey="No Iniciado" stackId="1" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.4} />
                                         <Area type="monotone" dataKey="En Proceso" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Revisión Interna" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
                                         <Area type="monotone" dataKey="Referente" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
                                         <Area type="monotone" dataKey="Control" stackId="1" stroke="#f97316" fill="#f97316" fillOpacity={0.4} />
                                         <Area type="monotone" dataKey="Terminados" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
