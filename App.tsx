@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -64,7 +65,7 @@ const App: React.FC = () => {
                                     />
                                     <Route 
                                         path="/admin/reports" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessReports)) 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.role === UserRole.GUEST || (user.role === UserRole.ANALYST && user.canAccessReports)) 
                                             ? <Reports user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
