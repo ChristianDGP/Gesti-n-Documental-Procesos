@@ -8,7 +8,7 @@ import {
     Plus, Clock, CheckCircle, Filter, X, Activity, 
     BookOpen, Users, ShieldCheck, ArrowUp, ArrowDown, ArrowUpDown, Loader2,
     User as UserIcon, Database, Archive, Search,
-    ChevronLeft, ChevronRight, FileSpreadsheet, ListTodo, Layers
+    ChevronLeft, ChevronRight, FileSpreadsheet, ListTodo, Layers, ShieldAlert, Info
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -62,6 +62,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     key: 'project', 
     direction: 'asc'
   });
+
+  const isGuest = user.role === UserRole.GUEST;
 
   useEffect(() => {
     if (location.state?.filterIds && Array.isArray(location.state.filterIds)) {
@@ -330,6 +332,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             {user.role === UserRole.ANALYST && <Link to="/new" className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center shadow-sm font-medium"><Plus size={18} className="mr-2"/> Nueva Solicitud</Link>}
         </div>
       </div>
+
+      {isGuest && (
+          <div className="bg-indigo-600 text-white p-4 rounded-2xl shadow-lg border border-indigo-500/50 animate-fadeIn flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                  <div className="bg-white/20 p-3 rounded-xl">
+                      <ShieldAlert size={24} className="text-white" />
+                  </div>
+                  <div>
+                      <h2 className="font-bold text-lg">Perfil de Invitado</h2>
+                      <p className="text-sm text-indigo-100 font-medium">Usted tiene acceso de **Solo Lectura**. Para gestionar documentos, contacte a un administrador.</p>
+                  </div>
+              </div>
+              <Link to="/manual" className="px-5 py-2 bg-white text-indigo-600 rounded-lg text-sm font-black uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-md active:scale-95">
+                  Ver Manual
+              </Link>
+          </div>
+      )}
 
       {/* KPI DOCUMENTOS */}
       <div className="space-y-3">

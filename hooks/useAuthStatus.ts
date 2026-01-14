@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { auth, db } from '../services/firebaseConfig';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -46,6 +47,7 @@ export const useAuthStatus = () => {
                             setUser(userData);
                         }
                     } else {
+                        // Búsqueda de perfil legacy por email
                         let existingProfile: User | null = null;
                         let oldDocRef = null;
 
@@ -74,14 +76,15 @@ export const useAuthStatus = () => {
                             await deleteDoc(oldDocRef);
                             setUser(migratedUser);
                         } else {
+                            // NUEVO USUARIO: Por defecto GUEST
                             const newUser: User = {
                                 id: firebaseUser.uid,
                                 email: email,
                                 name: firebaseUser.displayName || email.split('@')[0],
                                 nickname: email.split('@')[0],
-                                role: shouldBeAdmin ? UserRole.ADMIN : UserRole.ANALYST,
+                                role: shouldBeAdmin ? UserRole.ADMIN : UserRole.GUEST,
                                 avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${firebaseUser.displayName || email}`,
-                                organization: shouldBeAdmin ? 'Administración Sistema' : 'Sin Asignar',
+                                organization: shouldBeAdmin ? 'Administración Sistema' : 'Invitado Externo',
                                 active: true 
                             };
 

@@ -297,7 +297,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAuthor = doc.authorId === user.id;
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
-  const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
+  const isGuest = user.role === UserRole.GUEST;
+  const canEdit = (isAnalystAssigned || isCoordinatorOrAdmin) && !isGuest;
   const isDocActive = doc.state !== DocState.APPROVED;
 
   // Inconsistency detection
@@ -356,14 +357,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                       <p className="text-xs text-amber-800 font-medium">La versión "{formatVersionForDisplay(doc.version)}" corresponde a "{STATE_CONFIG[expectedState].label.split('(')[0]}", pero el documento figura como "{STATE_CONFIG[doc.state].label.split('(')[0]}".</p>
                   </div>
               </div>
-              <button 
-                onClick={handleSyncState} 
-                disabled={syncing}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-amber-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
-              >
-                  {syncing ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                  Sincronizar Estado
-              </button>
+              {!isGuest && (
+                  <button 
+                    onClick={handleSyncState} 
+                    disabled={syncing}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-amber-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                  >
+                      {syncing ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Sincronizar Estado
+                  </button>
+              )}
           </div>
       )}
 
@@ -400,7 +403,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
-            {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && !doc.hasPendingRequest && (
+            {canEdit && isDocActive && !doc.hasPendingRequest && (
                  <div className="flex justify-start">
                     <button onClick={handleNewRequestPrefilled} className="flex items-center text-white px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-95 text-[11px] font-black uppercase tracking-widest">
                         <FilePlus size={16} className="mr-2" /> NUEVA SOLICITUD / CARGA
@@ -408,7 +411,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 </div>
             )}
 
-            {!canEdit && <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium"><Lock size={18} className="text-amber-500" /> Vista de solo lectura. No tiene permisos de gestión en este documento.</div>}
+            {!canEdit && (
+                <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium">
+                    <Lock size={18} className="text-amber-50" /> 
+                    {isGuest 
+                      ? "Modo Invitado: Solo puede visualizar el documento y su historial."
+                      : "Vista de solo lectura. No tiene permisos de gestión en este documento."}
+                </div>
+            )}
             
             {canEdit && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -576,7 +586,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       {/* REVERT / DELETE MODAL */}
       {showDeleteModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-red-100">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-md overflow-hidden border border-red-100">
                   <div className="p-5 border-b border-red-50 bg-red-50 flex justify-between items-center">
                       <h3 className="text-lg font-black flex items-center gap-2 text-red-800">
                           <AlertTriangle size={24} /> 
