@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, ShieldAlert } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen } from 'lucide-react';
 import { User, UserRole, DocState, Document } from '../types';
 import { NotificationService } from '../services/firebaseBackend';
 
@@ -53,8 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   );
 
   const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
-  const isGuest = user.role === UserRole.GUEST;
-  const canAccessReports = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReports) || isGuest;
+  const canAccessReports = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReports);
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
 
   return (
@@ -76,14 +75,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
             <div className="pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Gestión Principal</div>
             <NavItem to="/" icon={BarChart2} label="Dashboard" />
-            
-            {!isGuest && (
-                <>
-                    <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
-                    <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
-                    <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
-                </>
-            )}
+            <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
+            <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
+            <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
             
             {(canAccessReports || canAccessReferents || isAdminOrCoord) && (
               <>
@@ -121,9 +115,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <button onClick={() => setIsSidebarOpen(true)} className="text-slate-600 hover:bg-slate-50 p-1 rounded-md"><Menu size={24} /></button>
             <div className="flex flex-col items-center">
               <span className="font-bold text-slate-900 text-sm">SGD Mobile</span>
-              <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">
-                  {isGuest ? 'Perfil Visitante' : `Bandeja ${inboxCount > 0 ? `(${inboxCount})` : ''}`}
-              </span>
+              <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">Bandeja {inboxCount > 0 ? `(${inboxCount})` : ''}</span>
             </div>
             <div className="w-6" />
         </header>
