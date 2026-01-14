@@ -54,7 +54,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
   const isGuest = user.role === UserRole.GUEST;
-  // Un GUEST o un analista con permiso o un admin pueden ver reportes
   const canAccessReports = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReports) || isGuest;
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
 
@@ -86,10 +85,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 </>
             )}
             
-            {canAccessReports && (
+            {(canAccessReports || canAccessReferents || isAdminOrCoord) && (
               <>
                 <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Administración</div>
-                <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />
+                {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 {isAdminOrCoord && (
                     <>
                         <NavItem to="/admin/structure" icon={Network} label="Estructura" />

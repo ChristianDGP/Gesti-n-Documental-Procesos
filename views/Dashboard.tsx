@@ -329,7 +329,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 flex items-center justify-center shadow-sm font-medium transition-colors">
                 <FileSpreadsheet size={18} className="mr-2 text-green-600"/> <span className="hidden md:inline">Exportar Excel</span><span className="md:hidden">Excel</span>
             </button>
-            {/* Solo los ANALISTAS pueden ver el botón de nueva solicitud desde aquí */}
             {user.role === UserRole.ANALYST && <Link to="/new" className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center shadow-sm font-medium"><Plus size={18} className="mr-2"/> Nueva Solicitud</Link>}
         </div>
       </div>

@@ -23,31 +23,28 @@ export const useAuthStatus = () => {
                     const userSnap = await getDoc(userRef);
                     const email = firebaseUser.email || '';
                     
-                    const adminEmails = ['admin@empresa.com'];
-                    const shouldBeAdmin = adminEmails.includes(email) || email.toLowerCase().startsWith('admin');
-
+                    const INSTITUTIONAL_DOMAIN = '@ugp-ssmso.cl';
+                    const isInstitutional = email.toLowerCase().endsWith(INSTITUTIONAL_DOMAIN);
+                    
                     if (userSnap.exists()) {
+                        // USUARIO EXISTENTE: Respetamos lo que diga la base de datos.
+                        // Esto permite que el Admin cambie el rol y el cambio persista.
                         const userData = userSnap.data() as User;
                         
                         if (userData.active === false) {
-                            console.warn("Intento de acceso de cuenta inactiva:", email);
                             await signOut(auth);
                             localStorage.removeItem('sgd_user_cache');
                             setUser(null);
-                            alert("Su cuenta ha sido desactivada por el administrador. Contacte a soporte.");
+                            alert("Su cuenta ha sido desactivada. Contacte al administrador.");
                             return;
                         }
 
-                        if (shouldBeAdmin && userData.role !== UserRole.ADMIN) {
-                            console.log("Upgrading user to ADMIN.");
-                            const updatedUser = { ...userData, role: UserRole.ADMIN, organization: 'Administración Sistema' };
-                            await updateDoc(userRef, { role: UserRole.ADMIN, organization: 'Administración Sistema' });
-                            setUser(updatedUser);
-                        } else {
-                            setUser(userData);
-                        }
+                        setUser(userData);
+                        localStorage.setItem('sgd_user_cache', JSON.stringify(userData));
                     } else {
-                        // Búsqueda de perfil legacy por email
+                        // EL USUARIO ENTRA POR PRIMERA VEZ (No existe en la colección "users")
+                        
+                        // 1. Verificar si hay un perfil legacy (ej: cargado vía Excel)
                         let existingProfile: User | null = null;
                         let oldDocRef = null;
 
@@ -62,12 +59,15 @@ export const useAuthStatus = () => {
                         }
 
                         if (existingProfile && oldDocRef) {
+                            // MIGRACIÓN: El email existía pero es su primer login con esta cuenta de Google/Email
+                            // Forzamos GUEST por defecto para cumplimiento de seguridad inicial
                             const migratedUser: User = {
                                 ...existingProfile,
                                 id: firebaseUser.uid, 
                                 avatar: firebaseUser.photoURL || existingProfile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(existingProfile.name || 'User')}`, 
-                                role: shouldBeAdmin ? UserRole.ADMIN : existingProfile.role,
-                                active: true
+                                role: UserRole.GUEST, // REGLA: Siempre inicia como GUEST
+                                active: true,
+                                organization: isInstitutional ? 'Servicio de Salud Metropolitano Sur Oriente' : 'Acceso Externo (Visitante)'
                             };
                             
                             const safeUser = JSON.parse(JSON.stringify(migratedUser));
@@ -76,15 +76,15 @@ export const useAuthStatus = () => {
                             await deleteDoc(oldDocRef);
                             setUser(migratedUser);
                         } else {
-                            // NUEVO USUARIO: Por defecto GUEST
+                            // NUEVO USUARIO TOTAL
                             const newUser: User = {
                                 id: firebaseUser.uid,
                                 email: email,
                                 name: firebaseUser.displayName || email.split('@')[0],
                                 nickname: email.split('@')[0],
-                                role: shouldBeAdmin ? UserRole.ADMIN : UserRole.GUEST,
+                                role: UserRole.GUEST, // REGLA: Siempre inicia como GUEST
                                 avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${firebaseUser.displayName || email}`,
-                                organization: shouldBeAdmin ? 'Administración Sistema' : 'Invitado Externo',
+                                organization: isInstitutional ? 'Servicio de Salud Metropolitano Sur Oriente' : 'Acceso Externo (Visitante)',
                                 active: true 
                             };
 
@@ -98,21 +98,8 @@ export const useAuthStatus = () => {
                     setUser(null);
                 }
             } else {
-                const cached = localStorage.getItem('sgd_user_cache');
-                if (cached) {
-                    try {
-                        const parsedUser = JSON.parse(cached);
-                        if (parsedUser && parsedUser.id && parsedUser.role && parsedUser.active !== false) {
-                            setUser(parsedUser);
-                        } else {
-                            setUser(null);
-                        }
-                    } catch (e) {
-                        setUser(null);
-                    }
-                } else {
-                    setUser(null);
-                }
+                localStorage.removeItem('sgd_user_cache');
+                setUser(null);
             }
             setCargando(false);
         });
