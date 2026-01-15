@@ -1,3 +1,4 @@
+
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -19,7 +20,6 @@ import {
 
 // Helper to infer state and progress from version string (The Source of Truth)
 export const determineStateFromVersion = (version: string): { state: DocState, progress: number } => {
-    // Robust normalization: handle both v/V but internal logic works with uppercase for regex
     const v = (version || '').trim().toUpperCase();
     if (!v || v === '-' || v === '0') return { state: DocState.NOT_STARTED, progress: 0 };
     
@@ -39,13 +39,12 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
     
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
     
-    // Fallback for development versions (0.x)
     if (/^0\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
     
     return { state: DocState.IN_PROCESS, progress: 30 };
 };
 
-// UI helper to ensure version always looks like "v0.1" instead of "V0.1"
+// UI helper
 export const formatVersionForDisplay = (v: string): string => {
     if (!v) return '-';
     if (v.startsWith('V') || v.startsWith('v')) {
@@ -56,7 +55,22 @@ export const formatVersionForDisplay = (v: string): string => {
 
 export const normalizeHeader = (header: string): string => {
     if (!header) return '';
+    // Normalización robusta: trim, caps, remover tildes y comillas de Excel
     return header.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/^"|"$/g, ''); 
+};
+
+// Utility to parse DD-MM-YYYY dates from CSV
+const parseSpanishDate = (dateStr: string): string => {
+    if (!dateStr || dateStr.trim() === '' || dateStr === '-') return new Date().toISOString();
+    const parts = dateStr.split(/[-/]/);
+    if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const date = new Date(year, month, day);
+        return !isNaN(date.getTime()) ? date.toISOString() : new Date().toISOString();
+    }
+    return new Date(dateStr).toISOString();
 };
 
 export const generateMatrixId = (project: string, micro: string): string => {
@@ -146,13 +160,10 @@ export const NotificationService = {
         snapshot.docs.forEach(d => batch.update(d.ref, { isRead: true }));
         await batch.commit();
     },
-    // NEW: Efficiently notify all managers without reading all users
     notifyManagers: async (docId: string, type: Notification['type'], title: string, message: string, actorName: string, actorId: string) => {
         try {
-            // Find admins and coordinators directly via queries
             const roles = [UserRole.ADMIN, UserRole.COORDINATOR];
             const recipientIds = new Set<string>();
-            
             for (const role of roles) {
                 const q = query(collection(db, "users"), where("role", "==", role));
                 const snap = await getDocs(q);
@@ -160,7 +171,6 @@ export const NotificationService = {
                     if (d.id !== actorId) recipientIds.add(d.id);
                 });
             }
-
             const promises = Array.from(recipientIds).map(uid => 
                 NotificationService.create(uid, docId, type, title, message, actorName)
             );
@@ -220,12 +230,12 @@ export const HistoryService = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as DocHistory));
   },
-  log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string) => {
+  log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string, customTimestamp?: string) => {
     const entryId = `hist-${docId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newEntry: DocHistory = { 
         id: entryId, documentId: docId, userId: user.id, userName: user.name, 
         action, previousState: prev, newState: next, version: version || '-',
-        comment, timestamp: new Date().toISOString() 
+        comment, timestamp: customTimestamp || new Date().toISOString() 
     };
     await addDoc(collection(db, "history"), newEntry);
   }
@@ -284,7 +294,6 @@ export const DocumentService = {
         finalDocData = { ...newDocData, id: docRef.id } as Document;
     }
 
-    // AUTOMATIC NOTIFICATION: Notify all managers
     const displayVersion = formatVersionForDisplay(version);
     await NotificationService.notifyManagers(
         finalDocId, 
@@ -372,7 +381,6 @@ export const DocumentService = {
       });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
-      // NOTIFICATION LOGIC
       const typeMapping: Record<string, Notification['type']> = {
           'APPROVE': 'APPROVAL', 'REJECT': 'REJECTION', 
           'COMMENT': 'COMMENT', 'REQUEST_APPROVAL': 'COMMENT'
@@ -382,10 +390,8 @@ export const DocumentService = {
       const title = `${displayAction}: ${currentDoc.microprocess}`;
       const msg = `${user.name} ha realizado una ${displayAction.toLowerCase()} en "${currentDoc.title}" (${displayVersion}).`;
       
-      // Always notify managers
       await NotificationService.notifyManagers(docId, type, title, msg, user.name, user.id);
       
-      // Also notify author if they are not the one performing the action and not a manager
       if (currentDoc.authorId && currentDoc.authorId !== user.id) {
           await NotificationService.create(currentDoc.authorId, docId, type, title, msg, user.name);
       }
@@ -499,23 +505,18 @@ export const HierarchyService = {
   }
 };
 
-/**
- * Helper to find user IDs from a string of names or emails in CSV
- */
 const findUserIdsFromCSV = (allUsers: User[], input: string): string[] => {
     if (!input) return [];
-    const terms = input.split(/[;|,]/).map(t => t.trim().toLowerCase()).filter(t => t.length > 0);
+    const terms = input.split(/[;|,]/).map(t => normalizeHeader(t)).filter(t => t.length > 0);
     const ids: string[] = [];
-    
     terms.forEach(term => {
         const found = allUsers.find(u => 
-            u.name.toLowerCase().includes(term) || 
-            (u.nickname && u.nickname.toLowerCase().includes(term)) ||
-            u.email.toLowerCase().includes(term)
+            normalizeHeader(u.name).includes(term) || 
+            (u.nickname && normalizeHeader(u.nickname).includes(term)) ||
+            normalizeHeader(u.email).includes(term)
         );
         if (found) ids.push(found.id);
     });
-    
     return Array.from(new Set(ids));
 };
 
@@ -547,39 +548,173 @@ export const DatabaseService = {
     },
     fullSystemResetAndImport: async (rulesCSV: string, historyCSV: string, onProgress: (percent: number, status: string) => void): Promise<{ created: number, historyMatched: number }> => {
         onProgress(5, "Limpiando...");
-        await deleteCollectionInBatches("documents"); await deleteCollectionInBatches("history"); await deleteCollectionInBatches("process_matrix"); await deleteCollectionInBatches("notifications");
-        onProgress(10, "Reglas...");
+        await deleteCollectionInBatches("documents"); 
+        await deleteCollectionInBatches("history"); 
+        await deleteCollectionInBatches("process_matrix"); 
+        await deleteCollectionInBatches("notifications");
+        
+        const allUsers = await UserService.getAll();
+        const systemAdmin = allUsers.find(u => u.role === UserRole.ADMIN) || { id: 'system', name: 'Sistema' } as User;
+
+        // 1. MAP HISTORY
+        onProgress(15, "Mapeando Histórico...");
+        const historyMap: Record<string, any> = {};
+        if (historyCSV) {
+            const hRows = historyCSV.split(/\r?\n/).filter(r => r.trim().length > 0);
+            const hHeaders = hRows[0].split(/[;,]/).map(h => normalizeHeader(h));
+            
+            const hiProj = hHeaders.findIndex(h => h.includes('PROYECTO'));
+            const hiMicro = hHeaders.findIndex(h => h.includes('MICRO'));
+            
+            const types = ['AS IS', 'FCE', 'PM', 'TO BE'];
+            const typeCols = types.map(t => {
+                const typeNormalized = t.replace(' ', ''); // ASIS
+                const typeWithSpace = t; // AS IS
+                return {
+                    type: t,
+                    // Buscamos versión/fecha permitiendo que el header tenga o no el espacio del tipo
+                    vIdx: hHeaders.findIndex(h => h.includes('VERSION') && (h.includes(typeNormalized) || h.includes(typeWithSpace))),
+                    fIdx: hHeaders.findIndex(h => h.includes('FECHA') && (h.includes(typeNormalized) || h.includes(typeWithSpace)))
+                };
+            });
+
+            for (let i = 1; i < hRows.length; i++) {
+                const cols = hRows[i].split(/[;,]/).map(c => c.trim());
+                if (cols.length < 2) continue;
+                // Llave de vinculación normalizada
+                const key = `${normalizeHeader(cols[hiProj])}|${normalizeHeader(cols[hiMicro])}`;
+                historyMap[key] = {};
+                typeCols.forEach(tc => {
+                    if (tc.vIdx !== -1 && cols[tc.vIdx] && cols[tc.vIdx] !== '-' && cols[tc.vIdx] !== '') {
+                        historyMap[key][tc.type] = {
+                            version: cols[tc.vIdx],
+                            fecha: parseSpanishDate(cols[tc.fIdx])
+                        };
+                    }
+                });
+            }
+        }
+
+        // 2. IMPORT RULES & POPULATE DOCUMENTS
+        onProgress(40, "Importando Reglas y Estado...");
         const rows = rulesCSV.split(/\r?\n/).filter(r => r.trim().length > 0);
         const headers = rows[0].split(/[;,]/).map(h => normalizeHeader(h));
+        
         const idxProject = headers.findIndex(h => h.includes('PROYECTO'));
         const idxMacro = headers.findIndex(h => h.includes('MACRO'));
         const idxProcess = headers.findIndex(h => h === 'PROCESO');
         const idxMicro = headers.findIndex(h => h.includes('MICRO'));
         const idxAnalyst = headers.findIndex(h => h.includes('ANALISTA') || h.includes('RESPONSABLE'));
-        const idxAsis = headers.findIndex(h => h.includes('ASIS') || h.includes('AS IS'));
-        const idxFce = headers.findIndex(h => h.includes('FCE'));
-        const idxPm = headers.findIndex(h => h.includes('PM'));
-        const idxTobe = headers.findIndex(h => h.includes('TOBE') || h.includes('TO BE'));
-        const allUsers = await UserService.getAll();
+        
+        const typesMap = [
+            { type: 'AS IS' as DocType, idx: headers.findIndex(h => h.includes('ASIS') || h.includes('AS IS')) },
+            { type: 'FCE' as DocType, idx: headers.findIndex(h => h.includes('FCE')) },
+            { type: 'PM' as DocType, idx: headers.findIndex(h => h.includes('PM')) },
+            { type: 'TO BE' as DocType, idx: headers.findIndex(h => h.includes('TOBE') || h.includes('TO BE')) }
+        ];
+
         let createdCount = 0;
+        let historyMatchCount = 0;
         let batch = writeBatch(db);
         let opCount = 0;
+
         for (let i = 1; i < rows.length; i++) {
             const cols = rows[i].split(/[;,]/).map(c => c.trim());
             if (cols.length < 3) continue;
+            
             const project = cols[idxProject] || 'GENERAL';
+            const microName = cols[idxMicro];
+            const macro = cols[idxMacro] || 'General';
+            const process = cols[idxProcess] || 'General';
             const assignees = findUserIdsFromCSV(allUsers, cols[idxAnalyst]);
+            
             const requiredTypes: string[] = [];
-            if (cols[idxAsis] === '1') requiredTypes.push('AS IS');
-            if (cols[idxFce] === '1') requiredTypes.push('FCE');
-            if (cols[idxPm] === '1') requiredTypes.push('PM');
-            if (cols[idxTobe] === '1') requiredTypes.push('TO BE');
-            batch.set(doc(db, "process_matrix", generateMatrixId(project, cols[idxMicro])), { project, macroprocess: cols[idxMacro] || 'General', process: cols[idxProcess] || 'General', name: cols[idxMicro], assignees, referentIds: [], requiredTypes, active: true });
+            typesMap.forEach(tm => {
+                const val = cols[tm.idx];
+                // Aceptamos '1' o cualquier string de versión como "requerido"
+                if (val === '1' || (val && val.length > 1)) {
+                    requiredTypes.push(tm.type);
+                }
+            });
+
+            const matrixId = generateMatrixId(project, microName);
+            batch.set(doc(db, "process_matrix", matrixId), { 
+                project, 
+                macroprocess: macro, 
+                process, 
+                name: microName, 
+                assignees, 
+                referentIds: [], 
+                requiredTypes, 
+                active: true 
+            });
             opCount++; createdCount++;
-            if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
+
+            // CHECK HISTORY MATCH - Usamos la misma llave normalizada que en el paso 1
+            const histKey = `${normalizeHeader(project)}|${normalizeHeader(microName)}`;
+            const hData = historyMap[histKey];
+
+            for (const type of requiredTypes) {
+                const docId = `doc_${matrixId}_${type.replace(' ', '')}`;
+                let state = DocState.NOT_STARTED;
+                let version = '0.0';
+                let timestamp = new Date().toISOString();
+                let progress = 0;
+
+                // Si existe data en el historial, la usamos para inicializar el documento
+                if (hData && hData[type]) {
+                    version = hData[type].version;
+                    timestamp = hData[type].fecha;
+                    const info = determineStateFromVersion(version);
+                    state = info.state;
+                    progress = info.progress;
+                    historyMatchCount++;
+                }
+
+                // Creamos el documento solo si tiene algún progreso o versión definida
+                if (state !== DocState.NOT_STARTED || version !== '0.0') {
+                    const docData: Document = {
+                        id: docId,
+                        title: `${microName} - ${type}`,
+                        description: 'Carga masiva histórica',
+                        project, macroprocess: macro, process, microprocess: microName, docType: type as DocType,
+                        authorId: systemAdmin.id,
+                        authorName: `Sistema (Carga)`,
+                        assignees: assignees,
+                        state, version, progress,
+                        files: [], createdAt: timestamp, updatedAt: timestamp,
+                        hasPendingRequest: false
+                    };
+                    batch.set(doc(db, "documents", docId), docData);
+                    opCount++;
+
+                    // Añadimos hito al historial
+                    const histId = `hist_${docId}_init`;
+                    batch.set(doc(db, "history", histId), {
+                        documentId: docId,
+                        userId: systemAdmin.id,
+                        userName: `Sistema (Carga)`,
+                        action: 'Carga Histórica',
+                        previousState: DocState.NOT_STARTED,
+                        newState: state,
+                        version,
+                        comment: 'Estado inicial migrado desde archivo histórico.',
+                        timestamp
+                    });
+                    opCount++;
+                }
+            }
+
+            if (opCount >= 350) { 
+                await batch.commit(); 
+                batch = writeBatch(db); 
+                opCount = 0; 
+                onProgress(40 + Math.floor((i/rows.length)*50), `Procesando fila ${i}...`);
+            }
         }
+        
         if (opCount > 0) await batch.commit();
-        onProgress(100, "Finalizando...");
-        return { created: createdCount, historyMatched: 0 };
+        onProgress(100, "Carga Completa.");
+        return { created: createdCount, historyMatched: historyMatchCount };
     }
 };
