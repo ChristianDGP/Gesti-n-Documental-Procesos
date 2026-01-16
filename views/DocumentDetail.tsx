@@ -215,15 +215,34 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT' | 'REQUEST_APPROVAL') => {
-      // Bloqueo inmediato síncrono para evitar múltiples disparos rápidos
-      if (!doc || isProcessing.current || actionLoading) return;
+      // 1. BLOQUEO SÍNCRONO INMEDIATO
+      if (!doc || isProcessing.current) return;
       
-      if (action === 'COMMENT') { 
-          if (!comment.trim()) { alert('Escribe una observación.'); return; } 
-          await executeTransition('COMMENT', comment); 
-          return; 
+      // 2. MANEJO ESPECIAL PARA OBSERVACIONES (DUPLICIDAD CRÍTICA)
+      if (action === 'COMMENT') {
+          const currentComment = comment.trim();
+          if (!currentComment) { alert('Escribe una observación.'); return; }
+          
+          // Activamos bloqueos y limpiamos UI ANTES de cualquier await
+          isProcessing.current = true;
+          setActionLoading(true);
+          setComment(''); // Evita que Click 2 encuentre texto que enviar
+          
+          try {
+              // Llamada directa para evitar saltos de microtask
+              await DocumentService.transitionState(doc.id, user, 'COMMENT', currentComment);
+              await loadData(doc.id);
+          } catch (err: any) {
+              alert('Error al guardar: ' + err.message);
+              setComment(currentComment); // Restauramos si falló
+          } finally {
+              isProcessing.current = false;
+              setActionLoading(false);
+          }
+          return;
       }
       
+      // 3. OTROS FLUJOS
       if (action === 'ADVANCE') { 
           await executeTransition('ADVANCE', ''); 
           return; 
@@ -236,7 +255,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       
       if (action === 'APPROVE' || action === 'REJECT') {
           if (action === 'REJECT' && !comment) { alert('Agrega una observación para el rechazo.'); return; }
-          // Reiniciamos estados del modal
           setPendingAction(action); setResponseFile(null); setFileError([]); setIsFileValid(false); setDetectedVersion(''); setShowResponseModal(true);
       }
   };
@@ -253,10 +271,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleSubmitResponse = async () => {
-      // Bloqueo atómico preventivo
-      if (!doc || !pendingAction || !responseFile || !isFileValid || isProcessing.current || actionLoading) return;
+      if (!doc || !pendingAction || !responseFile || !isFileValid || isProcessing.current) return;
       
-      // Activar bloqueo antes de cerrar el modal
       isProcessing.current = true;
       setActionLoading(true);
       setShowResponseModal(false); 
@@ -264,7 +280,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       try {
         await executeTransition(pendingAction, comment, responseFile, detectedVersion, true);
       } finally {
-        // El estado se limpia dentro de executeTransition, pero nos aseguramos aquí también
         isProcessing.current = false;
         setActionLoading(false);
       }
@@ -273,7 +288,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const executeTransition = async (action: any, transitionComment: string, file?: File, customVersion?: string, skipGuardSet?: boolean) => {
       if (!doc) return;
       
-      // Si no viene de un flujo que ya activó el guard, lo activamos
       if (!skipGuardSet) {
           if (isProcessing.current) return;
           isProcessing.current = true;
@@ -290,19 +304,17 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             customVersion || undefined
         );
         setComment(''); 
-        // Esperamos a que los datos se recarguen completamente antes de liberar el bloqueo
         await loadData(doc.id);
       } catch (err: any) { 
         alert('Error: ' + err.message); 
       } finally { 
-        // Liberamos el bloqueo después de que todo haya terminado
         isProcessing.current = false;
         setActionLoading(false); 
       }
   };
 
   const handleRevertAction = async () => {
-      if (!doc || isProcessing.current || actionLoading) return;
+      if (!doc || isProcessing.current) return;
       setShowDeleteModal(false);
       
       isProcessing.current = true;
@@ -485,7 +497,11 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                      />
                      
                      <div className="flex flex-wrap gap-3">
-                        <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
+                        <button 
+                            onClick={() => handleActionClick('COMMENT')} 
+                            disabled={actionLoading || !comment.trim()} 
+                            className="flex items-center px-5 py-2.5 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                        >
                             <MessageSquare size={18} className="mr-2" /> {actionLoading ? 'Guardando...' : 'Guardar Observación'}
                         </button>
 
