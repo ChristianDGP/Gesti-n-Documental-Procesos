@@ -215,7 +215,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT' | 'REQUEST_APPROVAL') => {
-      // Bloqueo inmediato síncrono
+      // Bloqueo inmediato síncrono para evitar múltiples disparos rápidos
       if (!doc || isProcessing.current || actionLoading) return;
       
       if (action === 'COMMENT') { 
@@ -236,6 +236,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       
       if (action === 'APPROVE' || action === 'REJECT') {
           if (action === 'REJECT' && !comment) { alert('Agrega una observación para el rechazo.'); return; }
+          // Reiniciamos estados del modal
           setPendingAction(action); setResponseFile(null); setFileError([]); setIsFileValid(false); setDetectedVersion(''); setShowResponseModal(true);
       }
   };
@@ -252,17 +253,32 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleSubmitResponse = async () => {
+      // Bloqueo atómico preventivo
       if (!doc || !pendingAction || !responseFile || !isFileValid || isProcessing.current || actionLoading) return;
-      setShowResponseModal(false); 
-      await executeTransition(pendingAction, comment, responseFile, detectedVersion);
-  };
-
-  const executeTransition = async (action: any, transitionComment: string, file?: File, customVersion?: string) => {
-      // Doble verificación síncrona
-      if (!doc || isProcessing.current) return; 
       
+      // Activar bloqueo antes de cerrar el modal
       isProcessing.current = true;
       setActionLoading(true);
+      setShowResponseModal(false); 
+      
+      try {
+        await executeTransition(pendingAction, comment, responseFile, detectedVersion, true);
+      } finally {
+        // El estado se limpia dentro de executeTransition, pero nos aseguramos aquí también
+        isProcessing.current = false;
+        setActionLoading(false);
+      }
+  };
+
+  const executeTransition = async (action: any, transitionComment: string, file?: File, customVersion?: string, skipGuardSet?: boolean) => {
+      if (!doc) return;
+      
+      // Si no viene de un flujo que ya activó el guard, lo activamos
+      if (!skipGuardSet) {
+          if (isProcessing.current) return;
+          isProcessing.current = true;
+          setActionLoading(true);
+      }
       
       try {
         await DocumentService.transitionState(
