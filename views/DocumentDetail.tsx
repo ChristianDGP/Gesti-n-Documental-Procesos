@@ -29,6 +29,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
+  // Guardia de sincronización para evitar duplicidad por doble clic
+  const isProcessing = useRef(false);
+
   const [showResponseModal, setShowResponseModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<'APPROVE' | 'REJECT' | null>(null);
   const [responseFile, setResponseFile] = useState<File | null>(null);
@@ -166,7 +169,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleSyncState = async () => {
-      if (!doc) return;
+      if (!doc || syncing) return;
       setSyncing(true);
       try {
           await DocumentService.syncMetadata(doc.id, user);
@@ -212,7 +215,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT' | 'REQUEST_APPROVAL') => {
-      if (!doc || actionLoading) return;
+      // Bloqueo inmediato síncrono
+      if (!doc || isProcessing.current || actionLoading) return;
       
       if (action === 'COMMENT') { 
           if (!comment.trim()) { alert('Escribe una observación.'); return; } 
@@ -248,30 +252,46 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleSubmitResponse = async () => {
-      if (!doc || !pendingAction || !responseFile || !isFileValid || actionLoading) return;
+      if (!doc || !pendingAction || !responseFile || !isFileValid || isProcessing.current || actionLoading) return;
       setShowResponseModal(false); 
       await executeTransition(pendingAction, comment, responseFile, detectedVersion);
   };
 
   const executeTransition = async (action: any, transitionComment: string, file?: File, customVersion?: string) => {
-      if (!doc || actionLoading) return; 
+      // Doble verificación síncrona
+      if (!doc || isProcessing.current) return; 
       
+      isProcessing.current = true;
       setActionLoading(true);
+      
       try {
-        await DocumentService.transitionState(doc.id, user, action, transitionComment || `Gestión realizada.`, file || undefined, customVersion || undefined);
+        await DocumentService.transitionState(
+            doc.id, 
+            user, 
+            action, 
+            transitionComment || `Gestión realizada.`, 
+            file || undefined, 
+            customVersion || undefined
+        );
         setComment(''); 
+        // Esperamos a que los datos se recarguen completamente antes de liberar el bloqueo
         await loadData(doc.id);
       } catch (err: any) { 
         alert('Error: ' + err.message); 
       } finally { 
+        // Liberamos el bloqueo después de que todo haya terminado
+        isProcessing.current = false;
         setActionLoading(false); 
       }
   };
 
   const handleRevertAction = async () => {
-      if (!doc || actionLoading) return;
+      if (!doc || isProcessing.current || actionLoading) return;
       setShowDeleteModal(false);
+      
+      isProcessing.current = true;
       setLoading(true);
+      
       try {
           const wasDeleted = await DocumentService.revertLastTransition(doc.id);
           if (wasDeleted) {
@@ -282,6 +302,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       } catch (e: any) {
           alert("Error al revertir: " + e.message);
           setLoading(false);
+      } finally {
+          isProcessing.current = false;
       }
   };
 
@@ -310,7 +332,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     });
   };
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Cargando documento...</div>;
+  if (loading && !doc) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><RefreshCw size={24} className="animate-spin mb-2" />Cargando documento...</div>;
   if (!doc) return <div className="p-12 text-center text-slate-500">No se encontró el documento.</div>;
 
   const config = STATE_CONFIG[doc.state];
@@ -448,7 +470,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                      
                      <div className="flex flex-wrap gap-3">
                         <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
-                            <MessageSquare size={18} className="mr-2" /> Guardar Observación
+                            <MessageSquare size={18} className="mr-2" /> {actionLoading ? 'Guardando...' : 'Guardar Observación'}
                         </button>
 
                         {canRequestReview && isDocActive && (
