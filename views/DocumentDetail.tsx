@@ -212,10 +212,24 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT' | 'REQUEST_APPROVAL') => {
-      if (!doc) return;
-      if (action === 'COMMENT') { if (!comment.trim()) { alert('Escribe una observación.'); return; } executeTransition('COMMENT', comment); return; }
-      if (action === 'ADVANCE') { executeTransition('ADVANCE', ''); return; }
-      if (action === 'REQUEST_APPROVAL') { executeTransition('REQUEST_APPROVAL', comment || 'Solicitud formal de revisión.'); return; }
+      if (!doc || actionLoading) return;
+      
+      if (action === 'COMMENT') { 
+          if (!comment.trim()) { alert('Escribe una observación.'); return; } 
+          await executeTransition('COMMENT', comment); 
+          return; 
+      }
+      
+      if (action === 'ADVANCE') { 
+          await executeTransition('ADVANCE', ''); 
+          return; 
+      }
+      
+      if (action === 'REQUEST_APPROVAL') { 
+          await executeTransition('REQUEST_APPROVAL', comment || 'Solicitud formal de revisión.'); 
+          return; 
+      }
+      
       if (action === 'APPROVE' || action === 'REJECT') {
           if (action === 'REJECT' && !comment) { alert('Agrega una observación para el rechazo.'); return; }
           setPendingAction(action); setResponseFile(null); setFileError([]); setIsFileValid(false); setDetectedVersion(''); setShowResponseModal(true);
@@ -234,21 +248,28 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleSubmitResponse = async () => {
-      if (!doc || !pendingAction || !responseFile || !isFileValid) return;
+      if (!doc || !pendingAction || !responseFile || !isFileValid || actionLoading) return;
       setShowResponseModal(false); 
       await executeTransition(pendingAction, comment, responseFile, detectedVersion);
   };
 
   const executeTransition = async (action: any, transitionComment: string, file?: File, customVersion?: string) => {
-      if (!doc) return; setActionLoading(true);
+      if (!doc || actionLoading) return; 
+      
+      setActionLoading(true);
       try {
         await DocumentService.transitionState(doc.id, user, action, transitionComment || `Gestión realizada.`, file || undefined, customVersion || undefined);
-        setComment(''); await loadData(doc.id);
-      } catch (err: any) { alert('Error: ' + err.message); } finally { setActionLoading(false); }
+        setComment(''); 
+        await loadData(doc.id);
+      } catch (err: any) { 
+        alert('Error: ' + err.message); 
+      } finally { 
+        setActionLoading(false); 
+      }
   };
 
   const handleRevertAction = async () => {
-      if (!doc) return;
+      if (!doc || actionLoading) return;
       setShowDeleteModal(false);
       setLoading(true);
       try {
@@ -317,7 +338,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         </button>
         <div className="flex items-center gap-2">
             {user.role === UserRole.ADMIN && !doc.id.startsWith('virtual-') && (
-                <button onClick={() => setShowDeleteModal(true)} className="flex items-center text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors shadow-sm">
+                <button onClick={() => setShowDeleteModal(true)} disabled={actionLoading} className="flex items-center text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors shadow-sm disabled:opacity-50">
                     <Trash2 size={14} className="mr-1.5" /> Eliminar
                 </button>
             )}
@@ -402,7 +423,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         <div className="lg:col-span-2 space-y-6">
             {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && !doc.hasPendingRequest && (
                  <div className="flex justify-start">
-                    <button onClick={handleNewRequestPrefilled} className="flex items-center text-white px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-95 text-[11px] font-black uppercase tracking-widest">
+                    <button onClick={handleNewRequestPrefilled} disabled={actionLoading} className="flex items-center text-white px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-95 text-[11px] font-black uppercase tracking-widest disabled:opacity-50">
                         <FilePlus size={16} className="mr-2" /> NUEVA SOLICITUD / CARGA
                     </button>
                 </div>
@@ -422,45 +443,46 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         placeholder="Escriba aquí sus observaciones o comentarios técnicos..." 
                         value={comment} 
                         onChange={(e) => setComment(e.target.value)} 
+                        disabled={actionLoading}
                      />
                      
                      <div className="flex flex-wrap gap-3">
-                        <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 text-sm font-bold shadow-sm transition-all active:scale-95">
+                        <button onClick={() => handleActionClick('COMMENT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-[#1e293b] text-white rounded-lg hover:bg-slate-800 text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
                             <MessageSquare size={18} className="mr-2" /> Guardar Observación
                         </button>
 
                         {canRequestReview && isDocActive && (
-                             <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-bold shadow-md shadow-indigo-100 transition-all active:scale-95">
+                             <button onClick={() => handleActionClick('REQUEST_APPROVAL')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-bold shadow-md shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50">
                                 <Send size={18} className="mr-2" /> Solicitar Revisión
                             </button>
                         )}
 
                         {isCoordinatorOrAdmin && (
-                            <button onClick={handleNotifyAnalyst} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95">
+                            <button onClick={handleNotifyAnalyst} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
                                 <Mail size={18} className="mr-2 text-indigo-500" /> Notificar Analista
                             </button>
                         )}
 
                         {isCoordinatorOrAdmin && referentEmails.length > 0 && [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(doc.state) && (
-                            <button onClick={handleNotifyReferent} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95">
+                            <button onClick={handleNotifyReferent} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
                                 <Users size={18} className="mr-2 text-indigo-500" /> Notificar Referente
                             </button>
                         )}
 
                         {isAnalystAssigned && isDocActive && (
-                             <button onClick={handleNotifyCoordinator} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95">
+                             <button onClick={handleNotifyCoordinator} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
                                 <Mail size={18} className="mr-2 text-indigo-500" /> Notificar Coordinador
                             </button>
                         )}
 
                         {canReview && isDocActive && (
-                            <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-6 py-2.5 bg-[#22c55e] text-white rounded-lg hover:bg-green-600 text-sm font-bold shadow-md shadow-green-100 transition-all active:scale-95">
+                            <button onClick={() => handleActionClick('APPROVE')} disabled={actionLoading} className="flex items-center px-6 py-2.5 bg-[#22c55e] text-white rounded-lg hover:bg-green-600 text-sm font-bold shadow-md shadow-green-100 transition-all active:scale-95 disabled:opacity-50">
                                 <CheckCircle size={18} className="mr-2" /> Aprobar
                             </button>
                         )}
 
                         {canReview && isDocActive && (
-                            <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-100 transition-all active:scale-95">
+                            <button onClick={() => handleActionClick('REJECT')} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-100 transition-all active:scale-95 disabled:opacity-50">
                                 <XCircle size={18} className="mr-2" /> Rechazar
                             </button>
                         )}
@@ -536,7 +558,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         </div>
                         
                         <div className={`border-2 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center justify-center text-center group relative ${isFileValid ? 'border-green-400 bg-green-50/50' : fileError.length > 0 ? 'border-red-400 bg-red-50/50' : 'border-slate-200 hover:border-indigo-400 hover:bg-slate-50'}`}>
-                            <input type="file" ref={fileInputRef} onChange={handleResponseFileSelect} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                            <input type="file" ref={fileInputRef} onChange={handleResponseFileSelect} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={actionLoading} />
                             {responseFile ? (
                                 isFileValid ? (
                                     <div className="text-green-700 animate-fadeIn">
@@ -564,8 +586,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         
                         <div className="flex justify-end gap-3 pt-4">
                             <button onClick={() => setShowResponseModal(false)} className="px-4 py-2 text-slate-500 hover:text-slate-800 text-sm font-black uppercase tracking-tighter transition-colors">Cancelar</button>
-                            <button onClick={handleSubmitResponse} disabled={!isFileValid} className={`px-6 py-2 rounded-lg text-white text-sm font-black shadow-md transition-all flex items-center gap-2 ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} disabled:opacity-50 disabled:grayscale`}>
-                                <Save size={16} />Confirmar {pendingAction === 'APPROVE' ? 'Aprobación' : 'Rechazo'}
+                            <button onClick={handleSubmitResponse} disabled={!isFileValid || actionLoading} className={`px-6 py-2 rounded-lg text-white text-sm font-black shadow-md transition-all flex items-center gap-2 ${pendingAction === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} disabled:opacity-50 disabled:grayscale`}>
+                                <Save size={16} />{actionLoading ? 'Procesando...' : `Confirmar ${pendingAction === 'APPROVE' ? 'Aprobación' : 'Rechazo'}`}
                             </button>
                         </div>
                   </div>
@@ -599,9 +621,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                       <div className="flex flex-col gap-3">
                           <button 
                             onClick={handleRevertAction}
-                            className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-100 transition-all active:scale-95"
+                            disabled={actionLoading}
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-lg shadow-red-100 transition-all active:scale-95 disabled:opacity-50"
                           >
-                              <Trash2 size={16} /> Confirmar Reversión
+                              {actionLoading ? 'Procesando...' : <><Trash2 size={16} /> Confirmar Reversión</>}
                           </button>
                           <button 
                             onClick={() => setShowDeleteModal(false)}
