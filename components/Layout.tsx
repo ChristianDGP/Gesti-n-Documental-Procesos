@@ -21,15 +21,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   useEffect(() => {
     if (!user?.id) return;
     
-    // Establishing real-time connection for notification badge
-    const unsubscribeInbox = NotificationService.subscribeToUnreadCount(user.id, (count) => {
+    // Establishing reliable real-time connection for notification badge
+    const unsubscribeBadge = NotificationService.subscribeToUnreadCount(user.id, (count) => {
+        console.debug(`Badge update for user ${user.id}: ${count} unread.`);
         setInboxCount(count);
     });
     
     return () => {
-        if (unsubscribeInbox) unsubscribeInbox();
+        if (unsubscribeBadge) unsubscribeBadge();
     };
-  }, [user.id]); 
+  }, [user?.id]); 
 
   const NavItem = ({ to, icon: Icon, label, badge }: { to: string, icon: any, label: string, badge?: number }) => (
     <Link

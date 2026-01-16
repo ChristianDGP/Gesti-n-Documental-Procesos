@@ -222,7 +222,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       const now = Date.now();
       if (now - lastExecutionTime.current < 3000) return;
       
-      // 2. BLOQUEO SÍNCRONO DE REFERENCIA
+      // 2. BLOQUEO SÍNCRONO DE REFERENCIA (Atomic Lock)
       if (!doc || isProcessing.current) return;
       isProcessing.current = true;
       lastExecutionTime.current = now;
@@ -231,12 +231,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           const currentComment = comment.trim();
           if (!currentComment) { 
               alert('Escribe una observación.'); 
-              isProcessing.current = false; // Liberar si falló validación
+              isProcessing.current = false; 
               return; 
           }
           
           setActionLoading(true);
-          setComment(''); // LIMPIEZA INMEDIATA DE UI
+          setComment(''); // LIMPIEZA INMEDIATA PARA EVITAR DOBLE ENVÍO
           
           try {
               await DocumentService.transitionState(doc.id, user, 'COMMENT', currentComment);
@@ -266,7 +266,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       if (action === 'REQUEST_APPROVAL') { 
           setActionLoading(true);
           const currentComment = comment || 'Solicitud formal de revisión.';
-          setComment('');
+          setComment(''); // LIMPIEZA INMEDIATA
           try {
               await DocumentService.transitionState(doc.id, user, 'REQUEST_APPROVAL', currentComment);
               await loadData(doc.id);
@@ -405,7 +405,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         </button>
         <div className="flex items-center gap-2">
             {user.role === UserRole.ADMIN && !doc.id.startsWith('virtual-') && (
-                <button onClick={() => setShowDeleteModal(true)} disabled={actionLoading} className="flex items-center text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors shadow-sm disabled:opacity-50">
+                <button type="button" onClick={() => setShowDeleteModal(true)} disabled={actionLoading} className="flex items-center text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors shadow-sm disabled:opacity-50">
                     <Trash2 size={14} className="mr-1.5" /> Eliminar
                 </button>
             )}
