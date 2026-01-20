@@ -6,7 +6,7 @@ import { STATE_CONFIG } from '../constants';
 import { 
     CalendarRange, Filter, Search, ChevronLeft, ChevronRight, 
     Loader2, Clock, AlertTriangle, CheckCircle2, User as UserIcon,
-    Calendar, Layers, Briefcase, Info, TrendingUp, Save, X, ArrowRight
+    Calendar, Layers, Briefcase, Info, TrendingUp, Save, X, ArrowRight, FileSpreadsheet, Download
 } from 'lucide-react';
 
 interface Props {
@@ -28,6 +28,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     // Modal State
     const [editModalDoc, setEditModalDoc] = useState<Document | null>(null);
     const [newDeadline, setNewDeadline] = useState('');
+
+    // Permission check
+    const canEditDates = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
+    const isAnalyst = user.role === UserRole.ANALYST;
 
     useEffect(() => {
         loadData();
@@ -64,6 +68,9 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         fullHierarchy[proj][macro][proc].forEach(node => {
                             if (node.active === false) return;
                             
+                            // FILTRO PARA ANALISTAS: Solo microprocesos donde esté asignado
+                            if (isAnalyst && !node.assignees?.includes(user.id)) return;
+                            
                             // Determinamos qué tipos son requeridos para este microproceso
                             const requiredTypes = node.requiredTypes?.length > 0 
                                 ? node.requiredTypes 
@@ -76,7 +83,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                 const key = `${normalizeHeader(proj)}|${normalizeHeader(node.name)}|${normalizeHeader(type)}`;
                                 
                                 if (realDocMap.has(key)) {
-                                    unifiedList.push({ ...realDocMap.get(key)!, project: proj, microprocess: node.name });
+                                    unifiedList.push({ ...realDocMap.get(key)!, project: proj, microprocess: node.name, assignees: node.assignees });
                                 } else {
                                     // Documento virtual no iniciado (solo si es requerido)
                                     unifiedList.push({
@@ -112,7 +119,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     };
 
     const handleUpdateDeadline = async () => {
-        if (!editModalDoc || !newDeadline) return;
+        if (!canEditDates || !editModalDoc || !newDeadline) return;
         
         if (editModalDoc.id.startsWith('virtual-')) {
             alert("Inicie el documento antes de asignar un plazo especial.");
@@ -129,6 +136,37 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
         } finally {
             setUpdatingId(null);
         }
+    };
+
+    const handleExportExcel = () => {
+        if (documents.length === 0) return;
+        
+        const headers = ['PROYECTO', 'MICROPROCESO', 'ENTREGABLE', 'ESTADO', 'AVANCE', 'FECHA INICIO', 'FECHA META', 'SITUACION'];
+        const rows = documents.map(doc => {
+            const statusInfo = getStatusInfo(doc);
+            const deadline = doc.expectedEndDate ? new Date(doc.expectedEndDate) : new Date(DEFAULT_EXECUTIVE_DEADLINE);
+            return [
+                doc.project || '-',
+                doc.microprocess || '-',
+                doc.docType || '-',
+                STATE_CONFIG[doc.state].label.split('(')[0],
+                `${doc.progress}%`,
+                new Date(doc.createdAt).toLocaleDateString(),
+                deadline.toLocaleDateString(),
+                statusInfo.label
+            ];
+        });
+
+        const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
+        const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `SGD_Gantt_Estrategico_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const getStatusInfo = (doc: Document) => {
@@ -189,6 +227,13 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                     </h1>
                     <p className="text-slate-500 text-sm mt-1 font-medium">Seguimiento de entregables requeridos (Meta Corporativa: Junio 2026).</p>
                 </div>
+                <button 
+                    onClick={handleExportExcel}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-200 transition-all active:scale-95"
+                >
+                    <FileSpreadsheet size={18} />
+                    Exportar Reporte
+                </button>
             </div>
 
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
@@ -235,7 +280,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                 <th className="px-8 py-5">Microproceso / Entregables</th>
                                 <th className="px-8 py-5 w-48">Estado Operativo</th>
                                 <th className="px-8 py-5 w-80">Cronograma (Avance vs Meta)</th>
-                                <th className="px-8 py-5 text-right w-24">Acciones</th>
+                                <th className={`px-8 py-5 text-right w-24 ${!canEditDates ? 'opacity-0 pointer-events-none' : ''}`}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -244,7 +289,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                     <td colSpan={5} className="py-32 text-center">
                                         <div className="flex flex-col items-center opacity-20">
                                             <Search size={48} className="mb-4" />
-                                            <p className="text-sm font-black uppercase tracking-widest text-slate-900">Sin registros</p>
+                                            <p className="text-sm font-black uppercase tracking-widest text-slate-900">Sin registros asignados</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -324,16 +369,18 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                         </td>
 
                                                         <td className="px-8 py-5 align-top text-right">
-                                                            <button 
-                                                                disabled={doc.id.startsWith('virtual-')}
-                                                                onClick={() => {
-                                                                    setEditModalDoc(doc);
-                                                                    setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]);
-                                                                }}
-                                                                className={`p-2.5 rounded-xl border transition-all active:scale-90 ${doc.id.startsWith('virtual-') ? 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md'}`}
-                                                            >
-                                                                <Calendar size={18} />
-                                                            </button>
+                                                            {canEditDates && (
+                                                                <button 
+                                                                    disabled={doc.id.startsWith('virtual-')}
+                                                                    onClick={() => {
+                                                                        setEditModalDoc(doc);
+                                                                        setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]);
+                                                                    }}
+                                                                    className={`p-2.5 rounded-xl border transition-all active:scale-90 ${doc.id.startsWith('virtual-') ? 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md'}`}
+                                                                >
+                                                                    <Calendar size={18} />
+                                                                </button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 );
@@ -354,11 +401,15 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                 </div>
                 <div className="text-xs text-slate-400 leading-relaxed">
                     <p className="text-white font-black uppercase tracking-widest mb-1">Nota de Gestión</p>
-                    <p>Solo se visualizan los entregables requeridos según la matriz de procesos institucional. Los plazos meta asumen el <b>30 de Junio de 2026</b> como fecha de término corporativa global, a menos que el Administrador defina un plazo específico.</p>
+                    <p>
+                        {isAnalyst 
+                          ? "Solo se visualizan los microprocesos y entregables bajo su asignación directa. Los plazos son de carácter informativo."
+                          : "Solo se visualizan los entregables requeridos según la matriz de procesos institucional. Los plazos meta asumen el 30 de Junio de 2026 como fecha de término corporativa global, a menos que el Administrador defina un plazo específico."}
+                    </p>
                 </div>
             </div>
 
-            {editModalDoc && (
+            {canEditDates && editModalDoc && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
                         <div className="p-8 border-b border-slate-100 bg-slate-50/50">
