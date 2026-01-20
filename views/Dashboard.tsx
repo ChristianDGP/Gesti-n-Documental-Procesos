@@ -272,6 +272,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return sortedDocs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [sortedDocs, currentPage]);
 
+  // Robust pagination window calculation
+  const visiblePageNumbers = useMemo(() => {
+      const pages = [];
+      const maxVisible = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+      let end = Math.min(totalPages, start + maxVisible - 1);
+
+      if (end - start + 1 < maxVisible) {
+          start = Math.max(1, end - maxVisible + 1);
+      }
+      
+      for (let i = start; i <= end; i++) {
+          pages.push(i);
+      }
+      return pages;
+  }, [currentPage, totalPages]);
+
   const handleExportExcel = () => {
       if (sortedDocs.length === 0) return;
       const getUserNames = (ids: string[]) => ids.map(id => allUsers.find(u => u.id === id)?.name || id).join('; ');
@@ -446,15 +463,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="text-[11px] text-slate-500">Mostrando <b>{Math.min(totalItems, (currentPage - 1) * ITEMS_PER_PAGE + 1)}</b> a <b>{Math.min(totalItems, currentPage * ITEMS_PER_PAGE)}</b> de <b>{totalItems}</b> registros</div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronLeft size={16} /></button>
+                        <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 transition-all active:scale-95"><ChevronLeft size={16} /></button>
                         <div className="flex items-center gap-1">
-                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                let pageNum = i + 1;
-                                if (totalPages > 5 && currentPage > 3) { pageNum = currentPage - 2 + i; if (pageNum > totalPages) pageNum = totalPages - (4 - i); }
-                                return <button key={pageNum} onClick={() => setCurrentPage(pageNum)} className={`w-7 h-7 rounded-lg text-xs font-bold border transition-all ${currentPage === pageNum ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>{pageNum}</button>;
-                            })}
+                            {visiblePageNumbers.map((pageNum) => (
+                                <button 
+                                    key={pageNum} 
+                                    onClick={() => setCurrentPage(pageNum)} 
+                                    className={`w-7 h-7 rounded-lg text-xs font-bold border transition-all ${currentPage === pageNum ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-400'}`}
+                                >
+                                    {pageNum}
+                                </button>
+                            ))}
                         </div>
-                        <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"><ChevronRight size={16} /></button>
+                        <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 transition-all active:scale-95"><ChevronRight size={16} /></button>
                     </div>
                 </div>
             )}

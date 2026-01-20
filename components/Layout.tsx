@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange } from 'lucide-react';
 import { User, UserRole, DocState, Document } from '../types';
 import { NotificationService } from '../services/firebaseBackend';
 
@@ -56,6 +56,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
   const canAccessReports = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReports);
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
+  const canAccessGantt = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessGantt);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -80,10 +81,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
             <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
             
-            {(canAccessReports || canAccessReferents || isAdminOrCoord) && (
+            {(canAccessReports || canAccessReferents || canAccessGantt || isAdminOrCoord) && (
               <>
                 <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Administración</div>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
+                {canAccessGantt && <NavItem to="/admin/gantt" icon={CalendarRange} label="Diagrama Gantt" />}
                 {isAdminOrCoord && (
                     <>
                         <NavItem to="/admin/structure" icon={Network} label="Estructura" />

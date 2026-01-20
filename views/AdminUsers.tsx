@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
-import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2 } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange } from 'lucide-react';
 
 const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -20,6 +20,7 @@ const AdminUsers: React.FC = () => {
   const [password, setPassword] = useState('');
   const [canAccessReports, setCanAccessReports] = useState(false);
   const [canAccessReferents, setCanAccessReferents] = useState(false);
+  const [canAccessGantt, setCanAccessGantt] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -32,7 +33,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       try {
@@ -80,6 +81,7 @@ const AdminUsers: React.FC = () => {
       setPassword(''); 
       setCanAccessReports(user.canAccessReports || false);
       setCanAccessReferents(user.canAccessReferents || false);
+      setCanAccessGantt(user.canAccessGantt || false);
       setShowForm(true);
   };
 
@@ -113,7 +115,8 @@ const AdminUsers: React.FC = () => {
                 role,
                 organization,
                 canAccessReports: role === UserRole.ANALYST ? canAccessReports : true,
-                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : true
+                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : true,
+                canAccessGantt: role === UserRole.ANALYST ? canAccessGantt : true
             };
             if (password) {
                 updatePayload.password = password;
@@ -129,8 +132,9 @@ const AdminUsers: React.FC = () => {
                 organization,
                 password: password || undefined,
                 active: true,
-                canAccessReports: role === UserRole.ANALYST ? canAccessReports : true,
-                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : true
+                canAccessReports: role === UserRole.ANALYST ? canAccessReports : false,
+                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : false,
+                canAccessGantt: role === UserRole.ANALYST ? canAccessGantt : false
             } as User);
         }
         
@@ -152,6 +156,7 @@ const AdminUsers: React.FC = () => {
       setPassword('');
       setCanAccessReports(false);
       setCanAccessReferents(false);
+      setCanAccessGantt(false);
   };
 
   return (
@@ -209,7 +214,7 @@ const AdminUsers: React.FC = () => {
                             <h3 className="text-xs font-bold text-indigo-900 uppercase mb-3 flex items-center gap-2">
                                 <Shield size={14} /> Permisos de Analista (Control de Acceso)
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
                                     <input 
                                         type="checkbox" 
@@ -219,7 +224,7 @@ const AdminUsers: React.FC = () => {
                                     />
                                     <div className="flex items-center gap-2">
                                         <PieChart size={16} className="text-indigo-500" />
-                                        <span className="text-sm font-medium text-slate-700">Habilitar Vista de Reportes</span>
+                                        <span className="text-sm font-medium text-slate-700">Reportes</span>
                                     </div>
                                 </label>
                                 <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
@@ -231,7 +236,19 @@ const AdminUsers: React.FC = () => {
                                     />
                                     <div className="flex items-center gap-2">
                                         <UserCheck size={16} className="text-indigo-500" />
-                                        <span className="text-sm font-medium text-slate-700">Habilitar Vista de Referentes</span>
+                                        <span className="text-sm font-medium text-slate-700">Referentes</span>
+                                    </div>
+                                </label>
+                                <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={canAccessGantt}
+                                        onChange={(e) => setCanAccessGantt(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <CalendarRange size={16} className="text-indigo-500" />
+                                        <span className="text-sm font-medium text-slate-700">Diagrama Gantt</span>
                                     </div>
                                 </label>
                             </div>
@@ -271,7 +288,7 @@ const AdminUsers: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
                                         {/* BOTÓN REPORTE */}
                                         <button 
                                             onClick={() => handleTogglePermission(u, 'canAccessReports')}
@@ -282,7 +299,7 @@ const AdminUsers: React.FC = () => {
                                                     : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
                                             title={u.canAccessReports !== false ? "Deshabilitar Reportes" : "Habilitar Reportes"}
                                         >
-                                            {updatingId === `${u.id}-canAccessReports` ? <Loader2 size={16} className="animate-spin" /> : <PieChart size={16} />}
+                                            {updatingId === `${u.id}-canAccessReports` ? <Loader2 size={14} className="animate-spin" /> : <PieChart size={14} />}
                                         </button>
 
                                         {/* BOTÓN REFERENTES */}
@@ -295,7 +312,20 @@ const AdminUsers: React.FC = () => {
                                                     : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
                                             title={u.canAccessReferents !== false ? "Deshabilitar Referentes" : "Habilitar Referentes"}
                                         >
-                                            {updatingId === `${u.id}-canAccessReferents` ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                                            {updatingId === `${u.id}-canAccessReferents` ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                                        </button>
+
+                                        {/* BOTÓN GANTT */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessGantt')}
+                                            disabled={updatingId === `${u.id}-canAccessGantt`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessGantt !== false 
+                                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessGantt !== false ? "Deshabilitar Gantt" : "Habilitar Gantt"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessGantt` ? <Loader2 size={14} className="animate-spin" /> : <CalendarRange size={14} />}
                                         </button>
                                     </div>
                                 </td>

@@ -17,6 +17,7 @@ export interface User {
   active?: boolean;
   canAccessReports?: boolean;
   canAccessReferents?: boolean;
+  canAccessGantt?: boolean;
 }
 
 export interface Referent {
@@ -97,6 +98,7 @@ export interface Document {
   files: DocFile[];
   createdAt: string;
   updatedAt: string;
+  expectedEndDate?: string;
 }
 
 export interface ProcessNode {

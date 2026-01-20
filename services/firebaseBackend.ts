@@ -244,6 +244,10 @@ export const DocumentService = {
           .filter(d => normalizeHeader(d.data().microprocess || d.data().title.split(' - ')[0]) === normalizedMicro)
           .map(d => d.id);
   },
+  updateDeadline: async (docId: string, expectedEndDate: string) => {
+    const docRef = doc(db, "documents", docId);
+    await updateDoc(docRef, { expectedEndDate });
+  },
   create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any, existingId?: string): Promise<Document> => {
     const state = initialState || DocState.INITIATED;
     const isSubmission = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(state);

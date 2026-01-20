@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -10,6 +11,7 @@ import AdminAssignments from './views/AdminAssignments';
 import AdminHierarchy from './views/AdminHierarchy'; 
 import AdminDatabase from './views/AdminDatabase';
 import AdminReferents from './views/AdminReferents';
+import AdminGantt from './views/AdminGantt';
 import Reports from './views/Reports'; 
 import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
@@ -66,6 +68,12 @@ const App: React.FC = () => {
                                         path="/admin/reports" 
                                         element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessReports)) 
                                             ? <Reports user={user} /> 
+                                            : <Navigate to="/" />} 
+                                    />
+                                    <Route 
+                                        path="/admin/gantt" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessGantt)) 
+                                            ? <AdminGantt user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
 
