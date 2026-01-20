@@ -6,7 +6,7 @@ import { STATE_CONFIG } from '../constants';
 import { 
     CalendarRange, Filter, Search, ChevronLeft, ChevronRight, 
     Loader2, Clock, AlertTriangle, CheckCircle2, User as UserIcon,
-    Calendar, Layers, Briefcase, Info, TrendingUp, Save, X, ArrowRight, FileSpreadsheet, Download
+    Calendar, Layers, Briefcase, Info, TrendingUp, Save, X, ArrowRight, FileSpreadsheet, Download, CheckCircle
 } from 'lucide-react';
 
 interface Props {
@@ -45,7 +45,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                 HierarchyService.getFullHierarchy()
             ]);
 
-            // Mapeamos documentos reales para búsqueda rápida
             const realDocMap = new Map<string, Document>();
             docs.forEach(doc => {
                 if (doc.project && (doc.microprocess || doc.title)) {
@@ -60,7 +59,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                 }
             });
 
-            // Reconstruimos la lista unificada basada en la jerarquía oficial
             const unifiedList: Document[] = [];
             Object.keys(fullHierarchy).forEach(proj => {
                 Object.keys(fullHierarchy[proj]).forEach(macro => {
@@ -71,12 +69,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                             // FILTRO PARA ANALISTAS: Solo microprocesos donde esté asignado
                             if (isAnalyst && !node.assignees?.includes(user.id)) return;
                             
-                            // Determinamos qué tipos son requeridos para este microproceso
                             const requiredTypes = node.requiredTypes?.length > 0 
                                 ? node.requiredTypes 
                                 : ['AS IS', 'FCE', 'PM', 'TO BE'];
 
-                            // Iteramos en el orden solicitado pero solo si es requerido
                             DOC_TYPE_ORDER.forEach(type => {
                                 if (!requiredTypes.includes(type)) return;
 
@@ -85,7 +81,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                 if (realDocMap.has(key)) {
                                     unifiedList.push({ ...realDocMap.get(key)!, project: proj, microprocess: node.name, assignees: node.assignees });
                                 } else {
-                                    // Documento virtual no iniciado (solo si es requerido)
                                     unifiedList.push({
                                         id: `virtual-${key}`,
                                         title: `${node.name} - ${type}`,
@@ -141,10 +136,13 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     const handleExportExcel = () => {
         if (documents.length === 0) return;
         
-        const headers = ['PROYECTO', 'MICROPROCESO', 'ENTREGABLE', 'ESTADO', 'AVANCE', 'FECHA INICIO', 'FECHA META', 'SITUACION'];
+        const headers = ['PROYECTO', 'MICROPROCESO', 'ENTREGABLE', 'ESTADO', 'AVANCE', 'FECHA INICIO', 'FECHA META/FINALIZACION', 'SITUACION'];
         const rows = documents.map(doc => {
             const statusInfo = getStatusInfo(doc);
-            const deadline = doc.expectedEndDate ? new Date(doc.expectedEndDate) : new Date(DEFAULT_EXECUTIVE_DEADLINE);
+            const deadline = doc.state === DocState.APPROVED 
+                ? new Date(doc.updatedAt) 
+                : (doc.expectedEndDate ? new Date(doc.expectedEndDate) : new Date(DEFAULT_EXECUTIVE_DEADLINE));
+            
             return [
                 doc.project || '-',
                 doc.microprocess || '-',
@@ -264,10 +262,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                 </div>
 
                 <div className="flex items-center gap-6 px-6 py-1 border-l border-slate-100 hidden lg:flex">
+                    <LegendItem color="bg-emerald-500" label="Terminado" />
                     <LegendItem color="bg-indigo-500" label="En Plazo" />
                     <LegendItem color="bg-rose-500" label="Atrasado" />
                     <LegendItem color="bg-amber-500" label="En Riesgo" />
-                    <LegendItem color="bg-slate-300" label="Pendiente" />
                 </div>
             </div>
 
@@ -280,7 +278,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                 <th className="px-8 py-5">Microproceso / Entregables</th>
                                 <th className="px-8 py-5 w-48">Estado Operativo</th>
                                 <th className="px-8 py-5 w-80">Cronograma (Avance vs Meta)</th>
-                                <th className={`px-8 py-5 text-right w-24 ${!canEditDates ? 'opacity-0 pointer-events-none' : ''}`}>Acciones</th>
+                                <th className={`px-8 py-5 text-right w-24 ${(!canEditDates || isAnalyst) ? 'opacity-0 pointer-events-none' : ''}`}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -300,6 +298,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                             {groupedData[project][micro].map((doc, dIdx) => {
                                                 const statusInfo = getStatusInfo(doc);
                                                 const isFirstInMicro = dIdx === 0;
+                                                const isApproved = doc.state === DocState.APPROVED;
 
                                                 return (
                                                     <tr key={doc.id} className="hover:bg-slate-50/60 transition-all group">
@@ -318,8 +317,8 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                 </div>
                                                             )}
                                                             <div className={`flex items-center gap-4 pl-4 border-l-2 py-1 ${doc.state === DocState.NOT_STARTED ? 'border-slate-200' : 'border-indigo-500'}`}>
-                                                                <div className={`p-1.5 rounded-lg ${doc.state === DocState.NOT_STARTED ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-600 shadow-sm'}`}>
-                                                                    <Layers size={14} />
+                                                                <div className={`p-1.5 rounded-lg ${doc.state === DocState.NOT_STARTED ? 'bg-slate-100 text-slate-400' : isApproved ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600 shadow-sm'}`}>
+                                                                    {isApproved ? <CheckCircle size={14} /> : <Layers size={14} />}
                                                                 </div>
                                                                 <div className="flex flex-col">
                                                                     <span className={`text-[11px] font-black uppercase tracking-wide ${doc.state === DocState.NOT_STARTED ? 'text-slate-400' : 'text-slate-800'}`}>
@@ -340,7 +339,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                 <div className="flex items-center gap-2">
                                                                     <div className="w-24 bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200">
                                                                         <div 
-                                                                            className={`h-full transition-all duration-1000 ${doc.state === DocState.APPROVED ? 'bg-emerald-500' : 'bg-slate-900'}`} 
+                                                                            className={`h-full transition-all duration-1000 ${isApproved ? 'bg-emerald-500' : 'bg-slate-900'}`} 
                                                                             style={{ width: `${doc.progress}%` }}
                                                                         ></div>
                                                                     </div>
@@ -353,30 +352,37 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                             <div className="space-y-2 mt-1">
                                                                 <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider">
                                                                     <span className="text-slate-400">Inicio: {new Date(doc.createdAt).toLocaleDateString()}</span>
-                                                                    <span className={statusInfo.status === 'OVERDUE' ? 'text-rose-600 font-black' : 'text-slate-800 font-black'}>
-                                                                        Meta: {new Date(doc.expectedEndDate || DEFAULT_EXECUTIVE_DEADLINE).toLocaleDateString()}
-                                                                    </span>
+                                                                    {isApproved ? (
+                                                                        <span className="text-emerald-600 font-black flex items-center gap-1">
+                                                                            <CheckCircle size={10} /> Finalizado: {new Date(doc.updatedAt).toLocaleDateString()}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className={statusInfo.status === 'OVERDUE' ? 'text-rose-600 font-black' : 'text-slate-800 font-black'}>
+                                                                            Meta: {new Date(doc.expectedEndDate || DEFAULT_EXECUTIVE_DEADLINE).toLocaleDateString()}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <div className="relative h-6 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden shadow-inner p-1">
                                                                     <div 
                                                                         className={`h-full rounded-lg transition-all duration-1000 ${statusInfo.color} flex items-center justify-end px-2 shadow-sm`}
-                                                                        style={{ width: `${doc.progress > 5 ? doc.progress : 5}%` }}
+                                                                        style={{ width: `${isApproved ? 100 : (doc.progress > 5 ? doc.progress : 5)}%` }}
                                                                     >
-                                                                        {doc.progress > 15 && <TrendingUp size={12} className="text-white opacity-40" />}
+                                                                        {doc.progress > 15 && !isApproved && <TrendingUp size={12} className="text-white opacity-40" />}
+                                                                        {isApproved && <CheckCircle size={12} className="text-white opacity-60" />}
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </td>
 
                                                         <td className="px-8 py-5 align-top text-right">
-                                                            {canEditDates && (
+                                                            {(canEditDates && !isAnalyst) && (
                                                                 <button 
-                                                                    disabled={doc.id.startsWith('virtual-')}
+                                                                    disabled={doc.id.startsWith('virtual-') || isApproved}
                                                                     onClick={() => {
                                                                         setEditModalDoc(doc);
                                                                         setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]);
                                                                     }}
-                                                                    className={`p-2.5 rounded-xl border transition-all active:scale-90 ${doc.id.startsWith('virtual-') ? 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md'}`}
+                                                                    className={`p-2.5 rounded-xl border transition-all active:scale-90 ${(doc.id.startsWith('virtual-') || isApproved) ? 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md'}`}
                                                                 >
                                                                     <Calendar size={18} />
                                                                 </button>
@@ -403,13 +409,13 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                     <p className="text-white font-black uppercase tracking-widest mb-1">Nota de Gestión</p>
                     <p>
                         {isAnalyst 
-                          ? "Solo se visualizan los microprocesos y entregables bajo su asignación directa. Los plazos son de carácter informativo."
-                          : "Solo se visualizan los entregables requeridos según la matriz de procesos institucional. Los plazos meta asumen el 30 de Junio de 2026 como fecha de término corporativa global, a menos que el Administrador defina un plazo específico."}
+                          ? "Solo se visualizan los microprocesos y entregables bajo su asignación directa. Las fechas meta son referenciales para el cumplimiento de hitos."
+                          : "Solo se visualizan los entregables requeridos según la matriz de procesos institucional. Los plazos meta (Junio 2026 por defecto) solo aplican a entregables pendientes de aprobación."}
                     </p>
                 </div>
             </div>
 
-            {canEditDates && editModalDoc && (
+            {canEditDates && !isAnalyst && editModalDoc && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
                         <div className="p-8 border-b border-slate-100 bg-slate-50/50">
@@ -422,7 +428,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                 </button>
                             </div>
                             <h3 className="text-xl font-black text-slate-900 tracking-tight">Redefinir Plazo Meta</h3>
-                            <p className="text-slate-500 text-sm mt-1 font-medium">Ajuste de cronograma para informe estratégico.</p>
+                            <p className="text-slate-500 text-sm mt-1 font-medium">Ajuste de cronograma para entregables no terminados.</p>
                         </div>
 
                         <div className="p-8 space-y-6">
