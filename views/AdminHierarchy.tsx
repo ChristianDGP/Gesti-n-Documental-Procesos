@@ -31,7 +31,7 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
   const [newItemName, setNewItemName] = useState('');
   
   // Rename State
-  const [renameMode, setRenameMode] = useState<{ level: string, oldName: string } | null>(null);
+  const [renameMode, setRenameMode] = useState<{ level: string, oldName: string, docId?: string } | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
   // Move Modal State
@@ -157,18 +157,28 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
       }
   };
 
-  const handleRenameStart = (level: 'PROJECT' | 'MACRO' | 'PROCESS', oldName: string) => {
-      setRenameMode({ level, oldName });
+  const handleRenameStart = (level: 'PROJECT' | 'MACRO' | 'PROCESS' | 'MICRO', oldName: string, docId?: string) => {
+      setRenameMode({ level, oldName, docId });
       setRenameValue(oldName);
   };
 
   const handleRenameSubmit = async () => {
       if (!renameMode || !renameValue.trim() || renameValue === renameMode.oldName) { setRenameMode(null); return; }
-      if (!window.confirm(`¿Renombrar "${renameMode.oldName}" a "${renameValue}"?`)) return;
+      
+      const confirmMsg = renameMode.level === 'MICRO' 
+        ? `¿Renombrar microproceso "${renameMode.oldName}" a "${renameValue}"?\n\nEsto actualizará el nombre en la matriz y en TODOS los documentos vinculados para mantener la trazabilidad.`
+        : `¿Renombrar "${renameMode.oldName}" a "${renameValue}"?`;
+
+      if (!window.confirm(confirmMsg)) return;
 
       try {
           setLoading(true);
-          const parentContext = { project: selectedProject || undefined, macro: selectedMacro || undefined };
+          const parentContext = { 
+              project: selectedProject || undefined, 
+              macro: selectedMacro || undefined, 
+              process: selectedProcess || undefined,
+              docId: renameMode.docId 
+          };
           await HierarchyService.updateHierarchyNode(renameMode.level as any, renameMode.oldName, renameValue, parentContext);
           
           if (renameMode.level === 'PROJECT' && selectedProject === renameMode.oldName) setSelectedProject(renameValue);
@@ -270,6 +280,7 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
                                   <td className="px-4 py-3 font-medium text-slate-800">{item.micro.name}</td>
                                   <td className="px-4 py-3">{item.micro.active !== false ? <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">Activo</span> : <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">Inactivo</span>}</td>
                                   <td className="px-4 py-3 text-right flex justify-end gap-1">
+                                      <button onClick={() => handleRenameStart('MICRO', item.micro.name, item.micro.docId)} className="p-1.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Renombrar Microproceso"><Edit size={16} /></button>
                                       <button onClick={(e) => handleToggleStatus(item.micro.docId, item.micro.name, item.micro.active !== false, e)} className={`p-1.5 rounded transition-colors ${item.micro.active !== false ? 'text-slate-400 hover:text-red-500 hover:bg-red-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`} title={item.micro.active !== false ? "Inactivar" : "Reactivar"}><Power size={16} /></button>
                                       {canManage && <button onClick={(e) => handleHardDeleteMicro(item.micro.docId, item.micro.name, e)} className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Eliminar Definitivamente"><Trash2 size={16} /></button>}
                                   </td>
@@ -337,6 +348,7 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
                           <div key={micro.docId} className={`flex items-center justify-between p-2 rounded-lg text-sm bg-white border group transition-all ${micro.active === false ? 'border-slate-100 bg-slate-50 text-slate-400 italic' : 'border-slate-100 hover:border-slate-300'}`}>
                               <div className="flex items-center gap-2 truncate"><FileText size={14} className={micro.active === false ? 'text-slate-300' : 'text-slate-400'} /><span className="truncate font-medium">{micro.name}</span></div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => handleRenameStart('MICRO', micro.name, micro.docId)} className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded" title="Renombrar Microproceso"><Edit size={14}/></button>
                                   <button onClick={(e) => handleMoveStart(micro, e)} className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded" title="Reubicar (Mover)"><FolderInput size={14} /></button>
                                   <button onClick={(e) => handleToggleStatus(micro.docId, micro.name, micro.active !== false, e)} className={`p-1 rounded transition-colors ${micro.active === false ? 'text-slate-300 hover:text-green-600 hover:bg-green-50' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`} title={micro.active === false ? "Reactivar" : "Inactivar"}><Power size={14}/></button>
                                   {canManage && <button onClick={(e) => handleHardDeleteMicro(micro.docId, micro.name, e)} className="p-1 rounded text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors" title="Eliminar Definitivamente"><Trash2 size={14}/></button>}
@@ -358,6 +370,25 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
                     <input autoFocus type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder={`Ingrese nombre para nuevo ${addLevel.toLowerCase()}...`} />
                     <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded text-sm">Cancelar</button><button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700">Crear</button></div>
                 </form>
+            </div>
+          </div>
+      )}
+
+      {renameMode && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-800">Renombrar {renameMode.level}</h3><button onClick={() => setRenameMode(null)}><X size={20} className="text-slate-400 hover:text-slate-600"/></button></div>
+                <div className="p-6">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Nuevo nombre para "{renameMode.oldName}"</label>
+                    <input autoFocus type="text" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" />
+                    {renameMode.level === 'MICRO' && (
+                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-xs text-amber-800">
+                            <AlertTriangle size={16} className="text-amber-500 flex-shrink-0" />
+                            <p><b>Nota de trazabilidad:</b> Esta acción actualizará el nombre en el Dashboard y Reportes para todos los documentos cargados previamente bajo este microproceso.</p>
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={() => setRenameMode(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded text-sm">Cancelar</button><button onClick={handleRenameSubmit} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700">Guardar Cambios</button></div>
+                </div>
             </div>
           </div>
       )}

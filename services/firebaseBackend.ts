@@ -501,20 +501,36 @@ export const HierarchyService = {
       snapshot.docs.forEach(d => batch.delete(d.ref));
       await batch.commit();
   },
-  updateHierarchyNode: async (level: 'PROJECT' | 'MACRO' | 'PROCESS', oldName: string, newName: string, context: { project?: string, macro?: string }) => {
-      let q;
-      if (level === 'PROJECT') q = query(collection(db, "process_matrix"), where("project", "==", oldName));
-      else if (level === 'MACRO') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", oldName));
-      else q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", oldName));
-      const snapshot = await getDocs(q);
+  updateHierarchyNode: async (level: 'PROJECT' | 'MACRO' | 'PROCESS' | 'MICRO', oldName: string, newName: string, context: { project?: string, macro?: string, process?: string, docId?: string }) => {
       const batch = writeBatch(db);
-      snapshot.docs.forEach(d => {
-          const update: any = {};
-          if (level === 'PROJECT') update.project = newName;
-          else if (level === 'MACRO') update.macroprocess = newName;
-          else update.process = newName;
-          batch.update(d.ref, update);
-      });
+      
+      if (level === 'MICRO' && context.docId) {
+          // Actualizar Matriz
+          const matrixRef = doc(db, "process_matrix", context.docId);
+          batch.update(matrixRef, { name: newName });
+          
+          // Actualizar Documentos vinculados para mantener trazabilidad visual en Dashboard/Reportes
+          const docsQ = query(collection(db, "documents"), where("project", "==", context.project), where("microprocess", "==", oldName));
+          const docsSnap = await getDocs(docsQ);
+          docsSnap.docs.forEach(d => {
+              batch.update(d.ref, { microprocess: newName, title: d.data().title.replace(oldName, newName) });
+          });
+      } else {
+          let q;
+          if (level === 'PROJECT') q = query(collection(db, "process_matrix"), where("project", "==", oldName));
+          else if (level === 'MACRO') q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", oldName));
+          else q = query(collection(db, "process_matrix"), where("project", "==", context.project), where("macroprocess", "==", context.macro), where("process", "==", oldName));
+          
+          const snapshot = await getDocs(q);
+          snapshot.docs.forEach(d => {
+              const update: any = {};
+              if (level === 'PROJECT') update.project = newName;
+              else if (level === 'MACRO') update.macroprocess = newName;
+              else if (level === 'PROCESS') update.process = newName;
+              batch.update(d.ref, update);
+          });
+      }
+      
       await batch.commit();
   },
   moveMicroprocess: async (docId: string, targetProject: string, targetMacro: string, targetProcess: string) => {
