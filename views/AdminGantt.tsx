@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { DocumentService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
 import { Document, User, DocState, UserRole, DocType } from '../types';
@@ -223,19 +222,18 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
 
     const formatGanttVersion = (v: string) => {
         if (!v || v === '-') return '-';
-        // Limpiamos cualquier v o V inicial existente para evitar vvv o vV
         const cleanV = v.replace(/^[vV]+/g, '');
         return `vv${cleanV}`;
     };
 
     const handleExportExcel = () => {
         if (filteredDocuments.length === 0) return;
-        const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'TIPO', 'VERSION', 'ESTADO', 'INICIO', 'META', 'SITUACION'];
+        const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'TIPO', 'ESTADO ACTUAL', 'ESTADO OPERATIVO', 'INICIO', 'META', 'SITUACION'];
         const rows = filteredDocuments.map(doc => {
             const status = getStatusInfo(doc);
             const deadline = doc.expectedEndDate ? new Date(doc.expectedEndDate) : new Date(DEFAULT_EXECUTIVE_DEADLINE);
             return [
-                doc.project, doc.macroprocess, doc.process, doc.microprocess, doc.docType, formatGanttVersion(doc.version),
+                doc.project, doc.macroprocess, doc.process, doc.microprocess, doc.docType, `${STATE_CONFIG[doc.state].label.split('(')[0].trim()} (${doc.progress}%)`, 
                 STATE_CONFIG[doc.state].label.split('(')[0], 
                 new Date(doc.createdAt).toLocaleDateString(), deadline.toLocaleDateString(), status.label
             ];
@@ -259,9 +257,9 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         <div className="p-2 bg-slate-900 rounded-xl text-white shadow-lg">
                             <CalendarRange size={24} />
                         </div>
-                        Control Estratégico de Plazos
+                        Diagrama Gantt
                     </h1>
-                    <p className="text-slate-500 text-sm mt-1 font-medium italic">Cronograma Táctico Institucional.</p>
+                    <p className="text-slate-500 text-sm mt-1 font-medium italic">Cronograma Táctico Institucional y Control de Plazos.</p>
                 </div>
                 <div className="flex gap-2">
                     <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
@@ -335,8 +333,8 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         <thead className="bg-slate-900 text-[10px] text-slate-400 font-black uppercase tracking-[0.15em] border-b border-slate-800">
                             <tr>
                                 <th className="px-6 py-5 w-32">Proyecto</th>
-                                <th className="px-6 py-5 w-72">Microproceso / Tipo</th>
-                                <th className="px-6 py-5 w-24">Versión</th>
+                                <th className="px-6 py-5 w-64">Microproceso / Tipo</th>
+                                <th className="px-6 py-5 w-48">Estado Actual</th>
                                 <th className="px-6 py-5 w-48">Estado Operativo</th>
                                 <th className="px-6 py-5">
                                     <div className="flex items-center justify-between mb-2">
@@ -376,7 +374,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
 
                                                 const startPos = getPositionInGantt(barStart);
                                                 const endPos = getPositionInGantt(barEnd);
-                                                // Aseguramos que la barra tenga precisión exacta basada en fechas
                                                 const duration = Math.max(1.5, endPos - startPos);
 
                                                 return (
@@ -395,17 +392,20 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 align-top">
-                                                            {doc.state !== DocState.NOT_STARTED ? (
-                                                                <span className="text-[10px] font-mono font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                                                                    {formatGanttVersion(doc.version)}
-                                                                </span>
-                                                            ) : <span className="text-slate-300">-</span>}
+                                                            <div className="flex flex-col gap-1">
+                                                                <div className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black border self-start ${doc.state === DocState.NOT_STARTED ? 'bg-slate-50 text-slate-400 border-slate-200' : STATE_CONFIG[doc.state].color}`}>
+                                                                    {STATE_CONFIG[doc.state].label.split('(')[0].trim()}
+                                                                </div>
+                                                                <div className="text-[10px] font-mono font-bold text-slate-400">
+                                                                    {doc.progress}% Completado
+                                                                </div>
+                                                            </div>
                                                         </td>
                                                         <td className="px-6 py-4 align-top">
                                                             <div className="flex items-center gap-2">
                                                                 <div className={`w-2 h-2 rounded-full ${statusInfo.color}`}></div>
                                                                 <span className="text-[10px] font-black text-slate-700 uppercase tracking-tighter">
-                                                                    {STATE_CONFIG[doc.state].label.split('(')[0].trim()}
+                                                                    {statusInfo.label}
                                                                 </span>
                                                             </div>
                                                         </td>
