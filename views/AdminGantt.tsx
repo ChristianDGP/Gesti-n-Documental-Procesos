@@ -13,7 +13,6 @@ interface Props {
 }
 
 const DEFAULT_EXECUTIVE_DEADLINE = '2026-06-30T23:59:59Z';
-const FINISHED_START_DATE = '2023-11-29T00:00:00Z'; // Hito histórico solicitado
 const DOC_TYPE_ORDER: DocType[] = ['AS IS', 'FCE', 'PM', 'TO BE'];
 
 type ViewScale = 'YEARS' | 'MONTHS';
@@ -220,12 +219,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
         }
     };
 
-    const formatGanttVersion = (v: string) => {
-        if (!v || v === '-') return '-';
-        const cleanV = v.replace(/^[vV]+/g, '');
-        return `vv${cleanV}`;
-    };
-
     const handleExportExcel = () => {
         if (filteredDocuments.length === 0) return;
         const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'TIPO', 'ESTADO ACTUAL', 'ESTADO OPERATIVO', 'INICIO', 'META', 'SITUACION'];
@@ -366,10 +359,8 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                 const isFirstInMicro = dIdx === 0;
                                                 const isApproved = doc.state === DocState.APPROVED;
                                                 
-                                                // Lógica de Barras:
-                                                // Terminado -> 29/11/2023 hasta aprobación.
-                                                // No terminado -> Inicio creación hasta Meta.
-                                                const barStart = isApproved ? FINISHED_START_DATE : doc.createdAt;
+                                                // Lógica de Barras: El inicio es siempre la fecha de creación/migración (última actividad al momento de carga inicial).
+                                                const barStart = doc.createdAt;
                                                 const barEnd = isApproved ? doc.updatedAt : (doc.expectedEndDate || DEFAULT_EXECUTIVE_DEADLINE);
 
                                                 const startPos = getPositionInGantt(barStart);
