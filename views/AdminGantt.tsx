@@ -5,7 +5,8 @@ import { STATE_CONFIG } from '../constants';
 import { 
     CalendarRange, Search, Loader2, Clock, 
     Calendar, Layers, TrendingUp, Save, X, ArrowRight, 
-    FileSpreadsheet, CheckCircle, ZoomIn, ZoomOut, Activity, Target
+    FileSpreadsheet, CheckCircle, ZoomIn, ZoomOut, Activity, Target,
+    ChevronRight, ChevronDown, Maximize2, Minimize2
 } from 'lucide-react';
 
 interface Props {
@@ -23,6 +24,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+    // Estado de Expansión
+    const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+    const [expandedMicros, setExpandedMicros] = useState<Record<string, boolean>>({});
 
     // Filtros
     const [filterProject, setFilterProject] = useState('');
@@ -73,7 +78,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             });
 
             const unifiedList: Document[] = [];
+            const initialProjects: Record<string, boolean> = {};
+            
             Object.keys(fullHierarchy).forEach(proj => {
+                initialProjects[proj] = true; // Por defecto expandidos
                 Object.keys(fullHierarchy[proj]).forEach(macro => {
                     Object.keys(fullHierarchy[proj][macro]).forEach(proc => {
                         fullHierarchy[proj][macro][proc].forEach(node => {
@@ -125,6 +133,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             });
 
             setDocuments(unifiedList);
+            setExpandedProjects(initialProjects);
         } catch (e) {
             console.error("Error loading Gantt data", e);
         } finally {
@@ -180,7 +189,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     const availableMacros = useMemo(() => Array.from(new Set(documents.filter(d => !filterProject || d.project === filterProject).map(d => d.macroprocess).filter(Boolean))).sort(), [documents, filterProject]);
     const availableProcesses = useMemo(() => Array.from(new Set(documents.filter(d => (!filterProject || d.project === filterProject) && (!filterMacro || d.macroprocess === filterMacro)).map(d => d.process).filter(Boolean))).sort(), [documents, filterProject, filterMacro]);
 
-    // Timeline Configuration (Solo Años y Meses)
+    // Timeline Configuration
     const timelineHeaders = useMemo(() => {
         if (viewScale === 'MONTHS') return ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         return ['2023', '2024', '2025'];
@@ -188,7 +197,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
 
     const getPositionInGantt = (dateStr: string) => {
         const date = new Date(dateStr).getTime();
-
         if (viewScale === 'MONTHS') {
             const startOfYear = new Date(currentYear, 0, 1).getTime();
             const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59).getTime();
@@ -196,7 +204,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             if (date >= endOfYear) return 100;
             return ((date - startOfYear) / (endOfYear - startOfYear)) * 100;
         } else {
-            // Escala Histórica 2023-2025
             const startRange = new Date(2023, 0, 1).getTime();
             const endRange = new Date(2025, 11, 31, 23, 59, 59).getTime();
             if (date <= startRange) return 0;
@@ -239,6 +246,33 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
         link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
+    const toggleProject = (proj: string) => {
+        setExpandedProjects(prev => ({ ...prev, [proj]: !prev[proj] }));
+    };
+
+    const toggleMicro = (proj: string, micro: string) => {
+        const key = `${proj}-${micro}`;
+        setExpandedMicros(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const expandAll = () => {
+        const allP: Record<string, boolean> = {};
+        const allM: Record<string, boolean> = {};
+        Object.keys(groupedData).forEach(p => {
+            allP[p] = true;
+            Object.keys(groupedData[p]).forEach(m => {
+                allM[`${p}-${m}`] = true;
+            });
+        });
+        setExpandedProjects(allP);
+        setExpandedMicros(allM);
+    };
+
+    const collapseAll = () => {
+        setExpandedProjects({});
+        setExpandedMicros({});
+    };
+
     const todayPos = useMemo(() => getPositionInGantt(new Date().toISOString()), [viewScale]);
 
     return (
@@ -254,8 +288,12 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                     </h1>
                     <p className="text-slate-500 text-sm mt-1 font-medium italic">Cronograma Táctico Institucional y Control de Plazos.</p>
                 </div>
-                <div className="flex gap-2">
-                    <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex flex-wrap gap-2">
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm mr-2">
+                        <button onClick={expandAll} className="p-2 hover:bg-slate-50 text-slate-600 rounded-lg" title="Expandir Todo"><Maximize2 size={16} /></button>
+                        <button onClick={collapseAll} className="p-2 hover:bg-slate-50 text-slate-600 rounded-lg" title="Contraer Todo"><Minimize2 size={16} /></button>
+                    </div>
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm mr-2">
                         <button onClick={() => setViewScale('YEARS')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${viewScale === 'YEARS' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Años</button>
                         <button onClick={() => setViewScale('MONTHS')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${viewScale === 'MONTHS' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Meses</button>
                     </div>
@@ -307,33 +345,22 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            {/* LEYENDA INTERACTIVA */}
-            <div className="flex flex-wrap items-center justify-center gap-4 py-2 px-6 bg-slate-50 border border-slate-100 rounded-2xl shadow-inner">
-                <FilterableLegend color="bg-emerald-500" label="Terminado" active={statusFilter === 'DONE'} onClick={() => setStatusFilter(statusFilter === 'DONE' ? 'ALL' : 'DONE')} />
-                <FilterableLegend color="bg-indigo-500" label="En Plazo" active={statusFilter === 'ON_TRACK'} onClick={() => setStatusFilter(statusFilter === 'ON_TRACK' ? 'ALL' : 'ON_TRACK')} />
-                <FilterableLegend color="bg-amber-500" label="En Riesgo" active={statusFilter === 'RISK'} onClick={() => setStatusFilter(statusFilter === 'RISK' ? 'ALL' : 'RISK')} />
-                <FilterableLegend color="bg-rose-500" label="Atrasado" active={statusFilter === 'OVERDUE'} onClick={() => setStatusFilter(statusFilter === 'OVERDUE' ? 'ALL' : 'OVERDUE')} />
-                <FilterableLegend color="bg-slate-300" label="No Iniciado" active={statusFilter === 'PENDING'} onClick={() => setStatusFilter(statusFilter === 'PENDING' ? 'ALL' : 'PENDING')} />
-                {statusFilter !== 'ALL' && (
-                    <button onClick={() => setStatusFilter('ALL')} className="text-[9px] font-black text-indigo-600 uppercase border-b border-indigo-600 hover:text-indigo-800 transition-colors ml-4">Ver Todos</button>
-                )}
-            </div>
-
-            {/* TABLA GANTT */}
+            {/* TABLA GANTT JERÁRQUICA */}
             <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[1300px]">
                         <thead className="bg-slate-900 text-[10px] text-slate-400 font-black uppercase tracking-[0.15em] border-b border-slate-800">
                             <tr>
-                                <th className="px-6 py-5 w-32">Proyecto</th>
-                                <th className="px-6 py-5 w-64">Microproceso / Tipo</th>
-                                <th className="px-6 py-5 w-48">Estado Actual</th>
-                                <th className="px-6 py-5 w-48">Estado Operativo</th>
+                                <th className="px-6 py-5 w-64">Jerarquía Organizacional</th>
+                                <th className="px-6 py-5 w-48">Tipo / Estado</th>
+                                <th className="px-6 py-5 w-40 text-center">Progreso</th>
                                 <th className="px-6 py-5">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span>Cronograma ({viewScale === 'MONTHS' ? currentYear : '2023-2025'})</span>
-                                        <div className="flex gap-1 text-[8px] font-bold opacity-60">
-                                            <span>Inicio</span> <ArrowRight size={8} /> <span>Meta</span>
+                                        <span>Cronograma Táctico</span>
+                                        <div className="flex gap-4 text-[8px] font-bold opacity-60">
+                                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-rose-500 rounded-full"></div> Atrasado</div>
+                                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-indigo-500 rounded-full"></div> En Plazo</div>
+                                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-full"></div> Terminado</div>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-12 gap-0 border-t border-slate-800/50 mt-2">
@@ -349,114 +376,141 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {Object.keys(groupedData).length === 0 ? (
-                                <tr><td colSpan={6} className="py-24 text-center opacity-30 italic">No se encontraron registros.</td></tr>
-                            ) : Object.keys(groupedData).map(project => (
-                                <React.Fragment key={project}>
-                                    {Object.keys(groupedData[project]).map((micro, mIdx) => (
-                                        <React.Fragment key={`${project}-${micro}`}>
-                                            {groupedData[project][micro].map((doc, dIdx) => {
-                                                const statusInfo = getStatusInfo(doc);
-                                                const isFirstInMicro = dIdx === 0;
-                                                const isApproved = doc.state === DocState.APPROVED;
-                                                
-                                                // Lógica de Barras: El inicio es siempre la fecha de creación/migración (última actividad al momento de carga inicial).
-                                                const barStart = doc.createdAt;
-                                                const barEnd = isApproved ? doc.updatedAt : (doc.expectedEndDate || DEFAULT_EXECUTIVE_DEADLINE);
+                                <tr><td colSpan={5} className="py-24 text-center opacity-30 italic">No se encontraron registros.</td></tr>
+                            ) : Object.keys(groupedData).map(project => {
+                                const isProjectExpanded = expandedProjects[project];
+                                // Fix: Explicitly cast flattened array to Document[] and type reduce parameters to resolve unknown property access and arithmetic errors
+                                const projectDocs = Object.values(groupedData[project]).flat() as Document[];
+                                const projectAverageProgress = projectDocs.length > 0 
+                                    ? Math.round(projectDocs.reduce((acc: number, d: Document) => acc + d.progress, 0) / projectDocs.length)
+                                    : 0;
 
-                                                const startPos = getPositionInGantt(barStart);
-                                                const endPos = getPositionInGantt(barEnd);
-                                                const duration = Math.max(1.5, endPos - startPos);
+                                return (
+                                    <React.Fragment key={project}>
+                                        {/* HEADER DE PROYECTO */}
+                                        <tr onClick={() => toggleProject(project)} className="bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors group">
+                                            <td className="px-6 py-4 font-black text-slate-800 flex items-center gap-2">
+                                                {isProjectExpanded ? <ChevronDown size={18} className="text-indigo-600" /> : <ChevronRight size={18} className="text-slate-400" />}
+                                                <span className="bg-slate-900 text-white px-2 py-0.5 rounded text-[10px] tracking-widest">{project}</span>
+                                                <span className="text-xs ml-2 text-slate-500 font-medium">({Object.keys(groupedData[project]).length} microprocesos)</span>
+                                            </td>
+                                            <td className="px-6 py-4"></td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="text-[10px] font-black text-indigo-600">{projectAverageProgress}% AVG</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {!isProjectExpanded && (
+                                                    <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-indigo-500 transition-all duration-700" style={{ width: `${projectAverageProgress}%` }}></div>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4"></td>
+                                        </tr>
 
-                                                return (
-                                                    <tr key={doc.id} className="hover:bg-slate-50/60 transition-all group">
-                                                        <td className="px-6 py-4 align-top">
-                                                            {isFirstInMicro && (
-                                                                <span className="inline-block px-2 py-0.5 bg-slate-900 text-white rounded-md text-[9px] font-black tracking-widest uppercase">
-                                                                    {project}
-                                                                </span>
+                                        {isProjectExpanded && Object.keys(groupedData[project]).map((micro) => {
+                                            const microKey = `${project}-${micro}`;
+                                            const isMicroExpanded = expandedMicros[microKey];
+                                            const microDocs = groupedData[project][micro];
+                                            const microAverageProgress = Math.round(microDocs.reduce((acc, d) => acc + d.progress, 0) / microDocs.length);
+
+                                            return (
+                                                <React.Fragment key={microKey}>
+                                                    {/* HEADER DE MICROPROCESO */}
+                                                    <tr onClick={() => toggleMicro(project, micro)} className="bg-white cursor-pointer hover:bg-slate-50/80 transition-colors border-l-4 border-indigo-500">
+                                                        <td className="px-10 py-3 font-bold text-slate-700 flex items-center gap-2">
+                                                            {isMicroExpanded ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-300" />}
+                                                            <span className="text-xs uppercase tracking-tight truncate max-w-[300px]">{micro}</span>
+                                                        </td>
+                                                        <td className="px-6 py-3">
+                                                            {!isMicroExpanded && (
+                                                                <div className="flex gap-1">
+                                                                    {microDocs.map(d => (
+                                                                        <div key={d.id} className={`w-2 h-2 rounded-full ${getStatusInfo(d).color}`} title={d.docType}></div>
+                                                                    ))}
+                                                                </div>
                                                             )}
                                                         </td>
-                                                        <td className="px-6 py-4 align-top">
-                                                            {isFirstInMicro && <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-tighter mb-2 line-clamp-1" title={micro}>{micro}</h4>}
-                                                            <div className={`flex items-center gap-2 pl-3 border-l-2 py-0.5 ${doc.state === DocState.NOT_STARTED ? 'border-slate-200' : 'border-indigo-500'}`}>
-                                                                <span className={`text-[10px] font-black ${doc.state === DocState.NOT_STARTED ? 'text-slate-400' : 'text-slate-800'}`}>{doc.docType}</span>
-                                                            </div>
+                                                        <td className="px-6 py-3 text-center">
+                                                            <span className="text-[10px] font-bold text-slate-500">{microAverageProgress}%</span>
                                                         </td>
-                                                        <td className="px-6 py-4 align-top">
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black border self-start ${doc.state === DocState.NOT_STARTED ? 'bg-slate-50 text-slate-400 border-slate-200' : STATE_CONFIG[doc.state].color}`}>
-                                                                    {STATE_CONFIG[doc.state].label.split('(')[0].trim()}
+                                                        <td className="px-6 py-3">
+                                                            {!isMicroExpanded && (
+                                                                <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-indigo-400" style={{ width: `${microAverageProgress}%` }}></div>
                                                                 </div>
-                                                                <div className="text-[10px] font-mono font-bold text-slate-400">
-                                                                    {doc.progress}% Completado
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 align-top">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className={`w-2 h-2 rounded-full ${statusInfo.color}`}></div>
-                                                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-tighter">
-                                                                    {statusInfo.label}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 align-top">
-                                                            <div className="relative h-12 flex items-center">
-                                                                {/* Grid Background */}
-                                                                <div className="absolute inset-0 grid grid-cols-12 pointer-events-none opacity-5">
-                                                                    {timelineHeaders.map((_, i) => <div key={i} className={`border-r border-slate-900 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-4'}`}></div>)}
-                                                                </div>
-                                                                
-                                                                {/* Indicador de HOY (solo en vista mensual) */}
-                                                                {viewScale === 'MONTHS' && todayPos > 0 && todayPos < 100 && (
-                                                                    <div className="absolute top-0 bottom-0 w-px bg-rose-500/30 z-10" style={{ left: `${todayPos}%` }}>
-                                                                        <div className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-rose-500"></div>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Main Bar */}
-                                                                <div 
-                                                                    className={`absolute h-7 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shadow-sm transition-all group-hover:scale-[1.01] cursor-help`}
-                                                                    style={{ left: `${startPos}%`, width: `${duration}%` }}
-                                                                    title={`Periodo: ${new Date(barStart).toLocaleDateString()} al ${new Date(barEnd).toLocaleDateString()}`}
-                                                                >
-                                                                    {/* Progress Fill */}
-                                                                    <div 
-                                                                        className={`h-full ${statusInfo.color} flex items-center px-3 transition-all duration-1000 ease-out`}
-                                                                        style={{ width: `${isApproved ? 100 : doc.progress}%` }}
-                                                                    >
-                                                                        <div className="flex items-center gap-2 overflow-hidden">
-                                                                            {isApproved ? <CheckCircle size={10} className="text-white shrink-0" /> : <Activity size={10} className="text-white shrink-0 animate-pulse" />}
-                                                                            <span className="text-[8px] font-black text-white whitespace-nowrap opacity-95 uppercase tracking-tighter">
-                                                                                {isApproved ? 'Cerrado' : `${doc.progress}%`}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                    
-                                                                    {/* Meta Marker */}
-                                                                    {!isApproved && duration > 10 && (
-                                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                                                                            <Target size={10} className="text-slate-300 opacity-40" />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 align-top text-right">
-                                                            {(canEditDates && !isAnalyst && !doc.id.startsWith('virtual-') && !isApproved) && (
-                                                                <button onClick={() => { setEditModalDoc(doc); setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
-                                                                    <Calendar size={14} />
-                                                                </button>
                                                             )}
                                                         </td>
+                                                        <td className="px-6 py-3"></td>
                                                     </tr>
-                                                );
-                                            })}
-                                            <tr><td colSpan={6} className="h-4 bg-slate-50/30"></td></tr>
-                                        </React.Fragment>
-                                    ))}
-                                </React.Fragment>
-                            ))}
+
+                                                    {/* FILAS DE DOCUMENTOS INDIVIDUALES */}
+                                                    {isMicroExpanded && microDocs.map((doc) => {
+                                                        const statusInfo = getStatusInfo(doc);
+                                                        const isApproved = doc.state === DocState.APPROVED;
+                                                        const barStart = doc.createdAt;
+                                                        const barEnd = isApproved ? doc.updatedAt : (doc.expectedEndDate || DEFAULT_EXECUTIVE_DEADLINE);
+                                                        const startPos = getPositionInGantt(barStart);
+                                                        const endPos = getPositionInGantt(barEnd);
+                                                        const duration = Math.max(1.5, endPos - startPos);
+
+                                                        return (
+                                                            <tr key={doc.id} className="hover:bg-indigo-50/30 transition-all group bg-slate-50/20">
+                                                                <td className="px-16 py-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-200"></div>
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase">{doc.docType}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3">
+                                                                    <div className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-black border ${doc.state === DocState.NOT_STARTED ? 'bg-white text-slate-300 border-slate-100' : STATE_CONFIG[doc.state].color}`}>
+                                                                        {STATE_CONFIG[doc.state].label.split('(')[0].trim()}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-center">
+                                                                    <span className="text-[9px] font-mono text-slate-400 font-bold">{doc.progress}%</span>
+                                                                </td>
+                                                                <td className="px-6 py-3">
+                                                                    <div className="relative h-8 flex items-center">
+                                                                        {/* Grid Background */}
+                                                                        <div className="absolute inset-0 grid grid-cols-12 pointer-events-none opacity-[0.03]">
+                                                                            {timelineHeaders.map((_, i) => <div key={i} className={`border-r border-slate-900 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-4'}`}></div>)}
+                                                                        </div>
+                                                                        
+                                                                        {/* Indicador de HOY */}
+                                                                        {viewScale === 'MONTHS' && todayPos > 0 && todayPos < 100 && (
+                                                                            <div className="absolute top-0 bottom-0 w-px bg-rose-500/20 z-10" style={{ left: `${todayPos}%` }}></div>
+                                                                        )}
+
+                                                                        {/* Main Bar */}
+                                                                        <div 
+                                                                            className="absolute h-4 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shadow-sm transition-all group-hover:scale-[1.01] cursor-help"
+                                                                            style={{ left: `${startPos}%`, width: `${duration}%` }}
+                                                                            title={`Plazo: ${new Date(barStart).toLocaleDateString()} al ${new Date(barEnd).toLocaleDateString()}`}
+                                                                        >
+                                                                            <div 
+                                                                                className={`h-full ${statusInfo.color} transition-all duration-1000 ease-out`}
+                                                                                style={{ width: `${isApproved ? 100 : doc.progress}%` }}
+                                                                            ></div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-right">
+                                                                    {(canEditDates && !isAnalyst && !doc.id.startsWith('virtual-') && !isApproved) && (
+                                                                        <button onClick={() => { setEditModalDoc(doc); setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]); }} className="p-1 text-slate-300 hover:text-indigo-600 transition-colors">
+                                                                            <Calendar size={12} />
+                                                                        </button>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
