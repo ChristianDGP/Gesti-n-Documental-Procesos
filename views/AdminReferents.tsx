@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ReferentService, HierarchyService } from '../services/firebaseBackend';
 import { Referent, FullHierarchy, ProcessNode, User, UserRole, UserHierarchy } from '../types';
-/* Added missing Info import */
 import { 
     UserPlus, Search, Edit, Trash2, X, Save, Building, Mail, Briefcase, 
     Loader2, AlertTriangle, FolderTree, Layers, Network, CheckSquare, Square, ChevronRight, Lock, CheckCircle2, Info
@@ -98,9 +97,9 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
                         if (node.referentIds?.includes(r.id)) {
                             // ¿Tengo permiso sobre este microproceso?
                             const hasPermission = !isAnalyst || (
-                                userHierarchy?.[proj] && 
+                                (userHierarchy?.[proj] && 
                                 userHierarchy[proj][macro] && 
-                                userHierarchy[proj][macro][proc]?.includes(node.name)
+                                userHierarchy[proj][macro][proc]?.includes(node.name)) ?? false
                             );
 
                             if (hasPermission) {
@@ -175,9 +174,9 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
                         if (matchesSearch) {
                             // Determinar si el usuario actual puede editar este nodo
                             const canEdit = !isAnalyst || (
-                                userHierarchy?.[proj] && 
+                                (userHierarchy?.[proj] && 
                                 userHierarchy[proj][macro] && 
-                                userHierarchy[proj][macro][proc]?.includes(node.name)
+                                userHierarchy[proj][macro][proc]?.includes(node.name)) ?? false
                             );
 
                             list.push({ project: proj, macro, process: proc, node, canEdit });
