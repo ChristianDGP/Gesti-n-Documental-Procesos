@@ -282,7 +282,6 @@ export const DocumentService = {
     const allUsers = await UserService.getAll();
     const recipientIds = new Set<string>();
     
-    // 1. Managers (Case-insensitive)
     allUsers.forEach(u => {
         const role = String(u.role || '').toUpperCase();
         if (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') {
@@ -290,12 +289,10 @@ export const DocumentService = {
         }
     });
 
-    // 2. Analistas Asignados al microproceso
     if (finalDocData.assignees) {
         finalDocData.assignees.forEach(uid => recipientIds.add(uid));
     }
     
-    // 3. Excluir al que subió el archivo
     recipientIds.delete(author.id);
     
     const displayVersion = formatVersionForDisplay(version);
@@ -357,7 +354,7 @@ export const DocumentService = {
       
       const actionLabels: Record<string, string> = { 
           'APPROVE': 'Aprobación', 'REJECT': 'Rechazo', 'COMMENT': 'Observación', 
-          'REQUEST_APPROVAL': 'Solicitud de Revisión', 'ADVANCE': 'Avance de Flujo' 
+          'ADVANCE': 'Avance de Flujo' 
       };
       const displayAction = actionLabels[action] || action;
       
@@ -369,12 +366,6 @@ export const DocumentService = {
       
       if (action === 'APPROVE') hasPending = false;
       else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
-      else if (action === 'REQUEST_APPROVAL') {
-          hasPending = true;
-          if (newState === DocState.INITIATED || newState === DocState.IN_PROCESS || newState === DocState.REJECTED) {
-              newState = DocState.INTERNAL_REVIEW;
-          }
-      }
       
       const { progress: newProgress } = determineStateFromVersion(newVersion);
       await updateDoc(docRef, { 
@@ -386,11 +377,9 @@ export const DocumentService = {
       });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
-      // --- CENTRALIZACIÓN DE NOTIFICACIONES ROBUSTAS ---
       const allUsers = await UserService.getAll();
       const finalRecipientIds = new Set<string>();
       
-      // 1. Añadir Managers (Case-insensitive)
       allUsers.forEach(u => {
           const role = String(u.role || '').toUpperCase();
           if (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') {
@@ -398,29 +387,25 @@ export const DocumentService = {
           }
       });
       
-      // 2. Añadir Autor original
       if (currentDoc.authorId) {
           finalRecipientIds.add(currentDoc.authorId);
       }
 
-      // 3. Añadir TODOS los Analistas Asignados (Assignees)
       if (currentDoc.assignees) {
           currentDoc.assignees.forEach(uid => finalRecipientIds.add(uid));
       }
       
-      // 4. EXCLUIR AL ACTOR de la acción actual
       finalRecipientIds.delete(user.id);
       
       const typeMapping: Record<string, Notification['type']> = {
           'APPROVE': 'APPROVAL', 'REJECT': 'REJECTION', 
-          'COMMENT': 'COMMENT', 'REQUEST_APPROVAL': 'COMMENT'
+          'COMMENT': 'COMMENT'
       };
       const type = typeMapping[action] || 'COMMENT';
       const displayVersion = formatVersionForDisplay(newVersion);
       const title = `${displayAction}: ${currentDoc.microprocess}`;
       const msg = `${user.name} ha realizado una ${displayAction.toLowerCase()} en "${currentDoc.title}" (${displayVersion}).`;
       
-      // Enviar una única notificación por ID válido
       const notificationPromises = Array.from(finalRecipientIds)
           .filter(uid => uid && uid.trim() !== '')
           .map(uid => NotificationService.create(uid, docId, type, title, msg, user.name));
@@ -509,11 +494,9 @@ export const HierarchyService = {
       const batch = writeBatch(db);
       
       if (level === 'MICRO' && context.docId) {
-          // Actualizar Matriz
           const matrixRef = doc(db, "process_matrix", context.docId);
           batch.update(matrixRef, { name: newName });
           
-          // Actualizar Documentos vinculados para mantener trazabilidad visual en Dashboard/Reportes
           const docsQ = query(collection(db, "documents"), where("project", "==", context.project), where("microprocess", "==", oldName));
           const docsSnap = await getDocs(docsQ);
           docsSnap.docs.forEach(d => {
@@ -552,9 +535,6 @@ export const HierarchyService = {
   }
 };
 
-/**
- * Service to manage system backups, migrations and bulk imports.
- */
 export const DatabaseService = {
   exportData: async (): Promise<string> => {
     const collections = ["users", "documents", "history", "process_matrix", "notifications", "referents"];
@@ -597,7 +577,6 @@ export const DatabaseService = {
 
     onProgress(20, "Procesando matriz de procesos...");
     const rulesRows = rulesCsv.split(/\r?\n/).filter(line => line.trim().length > 0);
-    // Header check (skip first row)
     const dataRows = rulesRows.slice(1);
     
     let createdCount = 0;

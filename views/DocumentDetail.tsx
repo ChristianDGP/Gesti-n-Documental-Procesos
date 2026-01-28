@@ -215,14 +215,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
-  const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT' | 'REQUEST_APPROVAL', e?: React.MouseEvent) => {
+  const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT', e?: React.MouseEvent) => {
       if (e) { e.preventDefault(); e.stopPropagation(); }
 
-      // 1. GUARDIA DE TIEMPO (Debounce Atómico de 3 segundos)
       const now = Date.now();
       if (now - lastExecutionTime.current < 3000) return;
       
-      // 2. BLOQUEO SÍNCRONO DE REFERENCIA (Atomic Lock)
       if (!doc || isProcessing.current) return;
       isProcessing.current = true;
       lastExecutionTime.current = now;
@@ -236,14 +234,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           }
           
           setActionLoading(true);
-          setComment(''); // LIMPIEZA INMEDIATA PARA EVITAR DOBLE ENVÍO
+          setComment(''); 
           
           try {
               await DocumentService.transitionState(doc.id, user, 'COMMENT', currentComment);
               await loadData(doc.id);
           } catch (err: any) {
               alert('Error al guardar: ' + err.message);
-              setComment(currentComment); // Restauramos solo en error real
+              setComment(currentComment);
           } finally {
               isProcessing.current = false;
               setActionLoading(false);
@@ -263,20 +261,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           return; 
       }
       
-      if (action === 'REQUEST_APPROVAL') { 
-          setActionLoading(true);
-          const currentComment = comment || 'Solicitud formal de revisión.';
-          setComment(''); // LIMPIEZA INMEDIATA
-          try {
-              await DocumentService.transitionState(doc.id, user, 'REQUEST_APPROVAL', currentComment);
-              await loadData(doc.id);
-          } finally {
-              isProcessing.current = false;
-              setActionLoading(false);
-          }
-          return; 
-      }
-      
       if (action === 'APPROVE' || action === 'REJECT') {
           if (action === 'REJECT' && !comment) { 
               alert('Agrega una observación para el rechazo.'); 
@@ -284,7 +268,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               return; 
           }
           setPendingAction(action); setResponseFile(null); setFileError([]); setIsFileValid(false); setDetectedVersion(''); setShowResponseModal(true);
-          isProcessing.current = false; // Permitimos que el modal abra
+          isProcessing.current = false; 
       }
   };
 
@@ -388,13 +372,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
   const isDocActive = doc.state !== DocState.APPROVED;
 
-  // Inconsistency detection
   const expectedState = determineStateFromVersion(doc.version).state;
   const isInconsistent = !doc.id.startsWith('virtual-') && doc.state !== expectedState;
 
-  // Flow advancing logic for Analyst
-  const canRequestReview = isAnalystAssigned && [DocState.INITIATED, DocState.IN_PROCESS, DocState.REJECTED].includes(doc.state);
-  // Flow management for Coordinator
   const canReview = isCoordinatorOrAdmin && [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(doc.state);
 
   return (
@@ -488,7 +468,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
-            {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && !doc.hasPendingRequest && (
+            {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && (
                  <div className="flex justify-start">
                     <button type="button" onClick={handleNewRequestPrefilled} disabled={actionLoading} className="flex items-center text-white px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-95 text-[11px] font-black uppercase tracking-widest disabled:opacity-50">
                         <FilePlus size={16} className="mr-2" /> NUEVA SOLICITUD / CARGA
@@ -522,17 +502,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         >
                             <MessageSquare size={18} className="mr-2" /> {actionLoading ? 'Guardando...' : 'Guardar Observación'}
                         </button>
-
-                        {canRequestReview && isDocActive && (
-                             <button 
-                                type="button"
-                                onClick={(e) => handleActionClick('REQUEST_APPROVAL', e)} 
-                                disabled={actionLoading} 
-                                className="flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-bold shadow-md shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                <Send size={18} className="mr-2" /> Solicitar Revisión
-                            </button>
-                        )}
 
                         {isCoordinatorOrAdmin && (
                             <button type="button" onClick={handleNotifyAnalyst} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
