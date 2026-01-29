@@ -6,7 +6,7 @@ import {
     CalendarRange, Search, Loader2, Clock, 
     Calendar, Layers, TrendingUp, Save, X, ArrowRight, 
     FileSpreadsheet, CheckCircle, ZoomIn, ZoomOut, Activity, Target,
-    ChevronRight, ChevronDown, Maximize2, Minimize2
+    ChevronRight, ChevronDown, Maximize2, Minimize2, Filter
 } from 'lucide-react';
 
 interface Props {
@@ -192,7 +192,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     // Timeline Configuration
     const timelineHeaders = useMemo(() => {
         if (viewScale === 'MONTHS') return ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-        return ['2023', '2024', '2025'];
+        return ['2023', '2024', '2025', '2026'];
     }, [viewScale]);
 
     const getPositionInGantt = (dateStr: string) => {
@@ -204,8 +204,9 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             if (date >= endOfYear) return 100;
             return ((date - startOfYear) / (endOfYear - startOfYear)) * 100;
         } else {
+            // Rango ampliado a 2026 para cubrir la meta institucional
             const startRange = new Date(2023, 0, 1).getTime();
-            const endRange = new Date(2025, 11, 31, 23, 59, 59).getTime();
+            const endRange = new Date(2026, 11, 31, 23, 59, 59).getTime();
             if (date <= startRange) return 0;
             if (date >= endRange) return 100;
             return ((date - startRange) / (endRange - startRange)) * 100;
@@ -273,6 +274,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
         setExpandedMicros({});
     };
 
+    const toggleStatusFilter = (status: StatusFilter) => {
+        setStatusFilter(prev => prev === status ? 'ALL' : status);
+    };
+
     const todayPos = useMemo(() => getPositionInGantt(new Date().toISOString()), [viewScale]);
 
     return (
@@ -303,45 +308,93 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                 </div>
             </div>
 
-            {/* FILTROS */}
-            <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proyecto</label>
-                    <select value={filterProject} onChange={(e) => { setFilterProject(e.target.value); setFilterMacro(''); setFilterProcess(''); }} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
-                        <option value="">TODOS</option>
-                        <option value="HPC">HPC</option>
-                        <option value="HSR">HSR</option>
-                    </select>
-                </div>
-                <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Macroproceso</label>
-                    <select value={filterMacro} onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
-                        <option value="">TODOS</option>
-                        {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                </div>
-                <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proceso</label>
-                    <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
-                        <option value="">TODOS</option>
-                        {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                </div>
-                {!isAnalyst && (
+            {/* FILTROS Y DRILL DOWN */}
+            <div className="space-y-4">
+                <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Analista</label>
-                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proyecto</label>
+                        <select value={filterProject} onChange={(e) => { setFilterProject(e.target.value); setFilterMacro(''); setFilterProcess(''); }} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
                             <option value="">TODOS</option>
-                            {allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            <option value="HPC">HPC</option>
+                            <option value="HSR">HSR</option>
                         </select>
                     </div>
-                )}
-                <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Buscar Microproceso</label>
-                    <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ej: Admisión..." className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Macroproceso</label>
+                        <select value={filterMacro} onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            <option value="">TODOS</option>
+                            {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
                     </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proceso</label>
+                        <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            <option value="">TODOS</option>
+                            {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                    </div>
+                    {!isAnalyst && (
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Analista</label>
+                            <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                <option value="">TODOS</option>
+                                {allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Buscar Microproceso</label>
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ej: Admisión..." className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* LEYENDA INTERACTIVA (DRILL DOWN) */}
+                <div className="flex flex-wrap items-center gap-3 px-2">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">
+                        <Filter size={14} className="text-slate-300" />
+                        Drill Down:
+                    </div>
+                    <FilterableLegend 
+                        color="bg-rose-500" 
+                        label="Atrasado" 
+                        active={statusFilter === 'OVERDUE'} 
+                        onClick={() => toggleStatusFilter('OVERDUE')} 
+                    />
+                    <FilterableLegend 
+                        color="bg-amber-500" 
+                        label="En Riesgo" 
+                        active={statusFilter === 'RISK'} 
+                        onClick={() => toggleStatusFilter('RISK')} 
+                    />
+                    <FilterableLegend 
+                        color="bg-indigo-500" 
+                        label="En Plazo" 
+                        active={statusFilter === 'ON_TRACK'} 
+                        onClick={() => toggleStatusFilter('ON_TRACK')} 
+                    />
+                    <FilterableLegend 
+                        color="bg-emerald-500" 
+                        label="Terminado" 
+                        active={statusFilter === 'DONE'} 
+                        onClick={() => toggleStatusFilter('DONE')} 
+                    />
+                    <FilterableLegend 
+                        color="bg-slate-300" 
+                        label="No Iniciado" 
+                        active={statusFilter === 'PENDING'} 
+                        onClick={() => toggleStatusFilter('PENDING')} 
+                    />
+                    {statusFilter !== 'ALL' && (
+                        <button 
+                            onClick={() => setStatusFilter('ALL')}
+                            className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-tighter ml-4 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100"
+                        >
+                            <X size={12} /> Limpiar Filtro de Estado
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -357,15 +410,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                 <th className="px-6 py-5">
                                     <div className="flex items-center justify-between mb-2">
                                         <span>Cronograma Táctico</span>
-                                        <div className="flex gap-4 text-[8px] font-bold opacity-60">
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-rose-500 rounded-full"></div> Atrasado</div>
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-indigo-500 rounded-full"></div> En Plazo</div>
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500 rounded-full"></div> Terminado</div>
-                                        </div>
                                     </div>
                                     <div className="grid grid-cols-12 gap-0 border-t border-slate-800/50 mt-2">
                                         {timelineHeaders.map((h, i) => (
-                                            <div key={i} className={`text-center py-2 border-r border-slate-800/20 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-4'}`}>
+                                            <div key={i} className={`text-center py-2 border-r border-slate-800/20 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-3'}`}>
                                                 {h}
                                             </div>
                                         ))}
@@ -376,10 +424,9 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {Object.keys(groupedData).length === 0 ? (
-                                <tr><td colSpan={5} className="py-24 text-center opacity-30 italic">No se encontraron registros.</td></tr>
+                                <tr><td colSpan={5} className="py-24 text-center opacity-30 italic">No se encontraron registros {statusFilter !== 'ALL' ? `con estado "${statusFilter}"` : ''}.</td></tr>
                             ) : Object.keys(groupedData).map(project => {
                                 const isProjectExpanded = expandedProjects[project];
-                                // Fix: Explicitly cast flattened array to Document[] and type reduce parameters to resolve unknown property access and arithmetic errors
                                 const projectDocs = Object.values(groupedData[project]).flat() as Document[];
                                 const projectAverageProgress = projectDocs.length > 0 
                                     ? Math.round(projectDocs.reduce((acc: number, d: Document) => acc + d.progress, 0) / projectDocs.length)
@@ -474,7 +521,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                     <div className="relative h-8 flex items-center">
                                                                         {/* Grid Background */}
                                                                         <div className="absolute inset-0 grid grid-cols-12 pointer-events-none opacity-[0.03]">
-                                                                            {timelineHeaders.map((_, i) => <div key={i} className={`border-r border-slate-900 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-4'}`}></div>)}
+                                                                            {timelineHeaders.map((_, i) => <div key={i} className={`border-r border-slate-900 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-3'}`}></div>)}
                                                                         </div>
                                                                         
                                                                         {/* Indicador de HOY */}
