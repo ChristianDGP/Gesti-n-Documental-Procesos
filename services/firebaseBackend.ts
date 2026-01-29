@@ -336,9 +336,28 @@ export const DocumentService = {
       if(!docSnap.exists()) return;
       const data = docSnap.data() as Document;
       const { state, progress } = determineStateFromVersion(data.version);
-      if (data.state !== state || data.progress !== progress) {
-          await updateDoc(docRef, { state, progress, updatedAt: new Date().toISOString() });
-          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección automática: ${state} / ${progress}%`, data.version);
+      
+      // Calculate correct pending status based on state
+      const shouldHavePending = [
+          DocState.INTERNAL_REVIEW, 
+          DocState.SENT_TO_REFERENT, 
+          DocState.REFERENT_REVIEW, 
+          DocState.SENT_TO_CONTROL, 
+          DocState.CONTROL_REVIEW
+      ].includes(state);
+
+      const needsUpdate = data.state !== state || 
+                          data.progress !== progress || 
+                          data.hasPendingRequest !== shouldHavePending;
+
+      if (needsUpdate) {
+          await updateDoc(docRef, { 
+              state, 
+              progress, 
+              hasPendingRequest: shouldHavePending,
+              updatedAt: new Date().toISOString() 
+          });
+          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección automática: ${state} / ${progress}% / Alerta: ${shouldHavePending}`, data.version);
       }
   },
 
@@ -499,7 +518,7 @@ export const HierarchyService = {
           
           const docsQ = query(collection(db, "documents"), where("project", "==", context.project), where("microprocess", "==", oldName));
           const docsSnap = await getDocs(docsQ);
-          docsSnap.docs.forEach(d => {
+          docsSnap.forEach(d => {
               batch.update(d.ref, { microprocess: newName, title: d.data().title.replace(oldName, newName) });
           });
       } else {

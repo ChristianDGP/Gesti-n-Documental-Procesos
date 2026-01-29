@@ -372,8 +372,18 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
   const isDocActive = doc.state !== DocState.APPROVED;
 
-  const expectedState = determineStateFromVersion(doc.version).state;
-  const isInconsistent = !doc.id.startsWith('virtual-') && doc.state !== expectedState;
+  // NUEVA LÓGICA DE DETECCIÓN DE INCONSISTENCIA (INCLUYE PENDING STATUS)
+  const expectedInfo = determineStateFromVersion(doc.version);
+  const expectedState = expectedInfo.state;
+  const expectedPending = [
+      DocState.INTERNAL_REVIEW, 
+      DocState.SENT_TO_REFERENT, 
+      DocState.REFERENT_REVIEW, 
+      DocState.SENT_TO_CONTROL, 
+      DocState.CONTROL_REVIEW
+  ].includes(expectedState);
+  
+  const isInconsistent = !doc.id.startsWith('virtual-') && (doc.state !== expectedState || doc.hasPendingRequest !== expectedPending);
 
   const canReview = isCoordinatorOrAdmin && [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(doc.state);
 
@@ -421,7 +431,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                   <AlertTriangle className="text-amber-500 shrink-0" size={24} />
                   <div>
                       <p className="text-sm font-black text-amber-900 uppercase tracking-tighter">Inconsistencia Detectada en Metadatos</p>
-                      <p className="text-xs text-amber-800 font-medium">La versión "{formatVersionForDisplay(doc.version)}" corresponde a "{STATE_CONFIG[expectedState].label.split('(')[0]}", pero el documento figura como "{STATE_CONFIG[doc.state].label.split('(')[0]}".</p>
+                      <p className="text-xs text-amber-800 font-medium">
+                          La versión "{formatVersionForDisplay(doc.version)}" no coincide con el estado o la alerta de gestión actual.
+                      </p>
                   </div>
               </div>
               <button 
