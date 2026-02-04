@@ -66,13 +66,13 @@ const App: React.FC = () => {
                                     />
                                     <Route 
                                         path="/admin/reports" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessReports)) 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || ((user.role === UserRole.ANALYST || user.role === UserRole.GUEST) && user.canAccessReports)) 
                                             ? <Reports user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
                                     <Route 
                                         path="/admin/gantt" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessGantt)) 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || ((user.role === UserRole.ANALYST || user.role === UserRole.GUEST) && user.canAccessGantt)) 
                                             ? <AdminGantt user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
