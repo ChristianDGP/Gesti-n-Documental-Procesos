@@ -272,7 +272,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return sortedDocs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [sortedDocs, currentPage]);
 
-  // Robust pagination window calculation
   const visiblePageNumbers = useMemo(() => {
       const pages = [];
       const maxVisible = 5;
@@ -321,6 +320,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Actualizando dashboard...</div>;
 
+  const isGuest = user.role === UserRole.GUEST;
+
   if (isSystemEmpty) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-xl shadow-sm border border-slate-200">
@@ -339,7 +340,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   return (
     <div className="space-y-8 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div><h1 className="text-2xl font-bold text-slate-900">Dashboard</h1><p className="text-slate-500">Vista general de avance institucional</p></div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-slate-500">Vista general de avance institucional {isGuest && '(Modo Lectura)'}</p>
+        </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 flex items-center justify-center shadow-sm font-medium transition-colors">
                 <FileSpreadsheet size={18} className="mr-2 text-green-600"/> <span className="hidden md:inline">Exportar Excel</span><span className="md:hidden">Excel</span>
@@ -402,10 +406,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             <option value="">ESTADO</option>
                             {Object.entries(STATE_CONFIG).map(([key, cfg]) => <option key={key} value={key}>{cfg.label.split('(')[0]}</option>)}
                         </select>
-                        <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-[11px] p-2 border border-slate-300 rounded-md bg-slate-50 text-slate-600 outline-none w-32">
-                            <option value="">ANALISTA</option>
-                            {allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
+                        {!isGuest && (
+                          <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="text-[11px] p-2 border border-slate-300 rounded-md bg-slate-50 text-slate-600 outline-none w-32">
+                              <option value="">ANALISTA</option>
+                              {allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
+                        )}
                     </div>
                 )}
             </div>

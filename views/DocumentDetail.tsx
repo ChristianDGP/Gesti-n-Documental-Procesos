@@ -5,7 +5,7 @@ import { DocumentService, HistoryService, UserService, HierarchyService, Referen
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus, RefreshCw, ChevronRight } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus, RefreshCw, ChevronRight, UserCheck, Eye } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -141,6 +141,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                }
                if (node) break;
            }
+           
+           // Si encontramos el nodo en la matriz, usamos sus referentes vinculados
            if (node?.assignees && (resolvedAssigneeIds.length === 0 || d.authorName.includes('Sistema'))) resolvedAssigneeIds = node.assignees;
            if (node?.referentIds && node.referentIds.length > 0) {
                const matches = allReferents.filter(r => node.referentIds.includes(r.id));
@@ -365,11 +367,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   if (!doc) return <div className="p-12 text-center text-slate-500">No se encontró el documento.</div>;
 
   const config = STATE_CONFIG[doc.state];
+  const isGuest = user.role === UserRole.GUEST;
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
-  const canEdit = isAnalystAssigned || isCoordinatorOrAdmin;
+  const canEdit = !isGuest && (isAnalystAssigned || isCoordinatorOrAdmin);
   const isDocActive = doc.state !== DocState.APPROVED;
 
   // NUEVA LÓGICA DE DETECCIÓN DE INCONSISTENCIA (INCLUYE PENDING STATUS)
@@ -425,7 +428,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       )}
 
       {/* INCONSISTENCY ALERT */}
-      {isInconsistent && (
+      {isInconsistent && isCoordinatorOrAdmin && (
           <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4 animate-fadeIn shadow-sm">
               <div className="flex items-center gap-3">
                   <AlertTriangle className="text-amber-500 shrink-0" size={24} />
@@ -462,11 +465,38 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 <Activity size={14} className="mr-2" />{config.label}
             </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-[11px] border-t border-slate-100 pt-5">
-            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Analistas</p>{assigneeNames.length > 0 ? assigneeNames.map((name, i) => <p key={i} className="font-bold text-slate-700">{name}</p>) : <p className="font-bold text-slate-700">{doc.authorName || 'Sin Asignar'}</p>}</div>
-            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Versión Actual</p><p className="font-mono text-slate-800 font-black text-xs">{formatVersionForDisplay(doc.version)}</p></div>
+        
+        {/* GRILLA DE METADATOS ACTUALIZADA CON REFERENTES */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 text-[11px] border-t border-slate-100 pt-5">
             <div>
-                <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Progreso</p>
+                <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5 flex items-center gap-1">
+                    <UserIcon size={12} /> Analistas
+                </p>
+                {assigneeNames.length > 0 ? assigneeNames.map((name, i) => <p key={i} className="font-bold text-slate-700">{name}</p>) : <p className="font-bold text-slate-700">{doc.authorName || 'Sin Asignar'}</p>}
+            </div>
+            
+            <div>
+                <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5 flex items-center gap-1">
+                    <UserCheck size={12} /> Referentes
+                </p>
+                {referentNames.length > 0 ? (
+                    referentNames.map((name, i) => <p key={i} className="font-bold text-indigo-700">{name}</p>)
+                ) : (
+                    <p className="font-medium text-slate-400 italic">No asignados</p>
+                )}
+            </div>
+
+            <div>
+                <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5 flex items-center gap-1">
+                    <Layers size={12} /> Versión Actual
+                </p>
+                <p className="font-mono text-slate-800 font-black text-xs">{formatVersionForDisplay(doc.version)}</p>
+            </div>
+            
+            <div>
+                <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5 flex items-center gap-1">
+                    <Activity size={12} /> Progreso
+                </p>
                 <div className="flex items-center gap-2">
                     <div className="flex-1 bg-slate-100 rounded-full h-2 min-w-[80px] overflow-hidden border border-slate-200">
                         <div className="bg-indigo-600 h-full rounded-full shadow-[0_0_8px_rgba(79,70,229,0.3)] transition-all duration-500" style={{ width: `${config.progress}%` }}></div>
@@ -474,13 +504,19 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     <span className="font-black text-slate-800">{config.progress}%</span>
                 </div>
             </div>
-            <div><p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5">Actualizado</p><p className="font-bold text-slate-700">{doc.updatedAt && doc.updatedAt !== new Date(0).toISOString() ? new Date(doc.updatedAt).toLocaleDateString('es-CL') : 'Sin actividad'}</p></div>
+            
+            <div>
+                <p className="text-slate-400 uppercase font-bold tracking-widest mb-1.5 flex items-center gap-1">
+                    <Clock size={12} /> Actualizado
+                </p>
+                <p className="font-bold text-slate-700">{doc.updatedAt && doc.updatedAt !== new Date(0).toISOString() ? new Date(doc.updatedAt).toLocaleDateString('es-CL') : 'Sin actividad'}</p>
+            </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
-            {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && (
+            {(isAnalystAssigned || isCoordinatorOrAdmin) && isDocActive && !isGuest && (
                  <div className="flex justify-start">
                     <button type="button" onClick={handleNewRequestPrefilled} disabled={actionLoading} className="flex items-center text-white px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all active:scale-95 text-[11px] font-black uppercase tracking-widest disabled:opacity-50">
                         <FilePlus size={16} className="mr-2" /> NUEVA SOLICITUD / CARGA
@@ -488,7 +524,14 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 </div>
             )}
 
-            {!canEdit && <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium"><Lock size={18} className="text-amber-500" /> Vista de solo lectura. No tiene permisos de gestión en este documento.</div>}
+            {isGuest && (
+              <div className="bg-slate-100 border-l-4 border-slate-400 p-4 flex gap-3 text-xs text-slate-600 font-bold items-center shadow-sm">
+                <Eye size={20} className="text-slate-500" />
+                Modo Consulta: Usted tiene permisos de solo lectura. No puede realizar gestiones sobre este documento.
+              </div>
+            )}
+
+            {!canEdit && !isGuest && <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium"><Lock size={18} className="text-amber-500" /> Vista de solo lectura. No tiene permisos de gestión en este documento.</div>}
             
             {canEdit && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">

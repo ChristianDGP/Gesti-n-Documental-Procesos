@@ -23,7 +23,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     
     // Establishing reliable real-time connection for notification badge
     const unsubscribeBadge = NotificationService.subscribeToUnreadCount(user.id, (count) => {
-        console.debug(`Badge update for user ${user.id}: ${count} unread.`);
         setInboxCount(count);
     });
     
@@ -53,10 +52,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     </Link>
   );
 
+  const isGuest = user.role === UserRole.GUEST;
   const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
-  const canAccessReports = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReports);
+  
+  const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessReports);
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
-  const canAccessGantt = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessGantt);
+  const canAccessGantt = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessGantt);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -68,22 +69,27 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           <div className="p-6 border-b border-slate-800 flex justify-between items-center flex-shrink-0 bg-slate-950/30">
             <div>
                 <h1 className="text-xl font-bold tracking-tight text-white">SGD</h1>
-                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Gestión Documental</p>
+                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">{isGuest ? 'Visor Institucional' : 'Gestión Documental'}</p>
             </div>
             <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
                 <X size={24} />
             </button>
           </div>
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-            <div className="pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Gestión Principal</div>
+            <div className="pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Exploración</div>
             <NavItem to="/" icon={BarChart2} label="Dashboard" />
-            <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
-            <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
-            <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
+            
+            {!isGuest && (
+              <>
+                <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
+                <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
+                <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
+              </>
+            )}
             
             {(canAccessReports || canAccessReferents || canAccessGantt || isAdminOrCoord) && (
               <>
-                <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Administración</div>
+                <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Visualización y Análisis</div>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 {canAccessGantt && <NavItem to="/admin/gantt" icon={CalendarRange} label="Diagrama Gantt" />}
                 {isAdminOrCoord && (
@@ -101,8 +107,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 )}
               </>
             )}
-            <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Ayuda y Soporte</div>
-            <NavItem to="/manual" icon={BookOpen} label="Manual de Usuario" />
+            <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Mi Cuenta</div>
+            {!isGuest && <NavItem to="/manual" icon={BookOpen} label="Manual de Usuario" />}
             <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
           </nav>
           <div className="p-4 border-t border-slate-800 flex-shrink-0 bg-slate-950/20">
@@ -117,8 +123,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between md:hidden flex-shrink-0 shadow-sm">
             <button onClick={() => setIsSidebarOpen(true)} className="text-slate-600 hover:bg-slate-50 p-1 rounded-md"><Menu size={24} /></button>
             <div className="flex flex-col items-center">
-              <span className="font-bold text-slate-900 text-sm">SGD Mobile</span>
-              <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">Bandeja {inboxCount > 0 ? `(${inboxCount})` : ''}</span>
+              <span className="font-bold text-slate-900 text-sm">SGD Visor</span>
+              <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">Acceso Lectura</span>
             </div>
             <div className="w-6" />
         </header>
