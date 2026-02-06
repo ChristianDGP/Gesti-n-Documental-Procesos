@@ -12,6 +12,7 @@ import AdminHierarchy from './views/AdminHierarchy';
 import AdminDatabase from './views/AdminDatabase';
 import AdminReferents from './views/AdminReferents';
 import AdminGantt from './views/AdminGantt';
+import AdminEventLog from './views/AdminEventLog';
 import Reports from './views/Reports'; 
 import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
@@ -88,6 +89,7 @@ const App: React.FC = () => {
                                         <>
                                             <Route path="/admin/users" element={<AdminUsers />} />
                                             <Route path="/admin/database" element={<AdminDatabase />} />
+                                            <Route path="/admin/events" element={<AdminEventLog user={user} />} />
                                         </>
                                     )}
                                     <Route path="*" element={<Navigate to="/" />} />

@@ -248,9 +248,13 @@ export const DocumentService = {
     const docRef = doc(db, "documents", docId);
     await updateDoc(docRef, { expectedEndDate });
   },
+  ignoreInconsistency: async (docId: string, version: string, state: string) => {
+      const docRef = doc(db, "documents", docId);
+      await updateDoc(docRef, { ignoredInconsistency: `${version}|${state}` });
+  },
   create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any, existingId?: string): Promise<Document> => {
     const state = initialState || DocState.INITIATED;
-    const isSubmission = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(state);
+    const isSubmission = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(state);
     const version = initialVersion || '0.0';
     const info = determineStateFromVersion(version);
     const progress = initialProgress !== undefined ? initialProgress : info.progress;
@@ -263,7 +267,7 @@ export const DocumentService = {
         const docRef = doc(db, "documents", existingId);
         const oldSnap = await getDoc(docRef);
         const oldData = oldSnap.data() as Document;
-        const updateData: Partial<Document> = { state, version, progress, description, hasPendingRequest: isSubmission, updatedAt: new Date().toISOString() };
+        const updateData: Partial<Document> = { state, version, progress, description, hasPendingRequest: isSubmission, updatedAt: new Date().toISOString(), ignoredInconsistency: null as any };
         await updateDoc(docRef, updateData);
         await HistoryService.log(existingId, author, 'Nueva Versión (Carga)', oldData.state, state, `Carga de archivo versión ${version}`, version);
         finalDocData = { ...oldData, ...updateData, id: existingId } as Document;
@@ -325,19 +329,29 @@ export const DocumentService = {
       const docRef = doc(db, "documents", docId);
       const restoredVersion = previousAction.version || '0.0';
       const info = determineStateFromVersion(restoredVersion);
-      await updateDoc(docRef, { state: previousAction.newState, version: restoredVersion, progress: info.progress, updatedAt: previousAction.timestamp, hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(previousAction.newState) });
+      await updateDoc(docRef, { state: previousAction.newState, version: restoredVersion, progress: info.progress, updatedAt: previousAction.timestamp, hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(previousAction.newState), ignoredInconsistency: null as any });
       await deleteDoc(lastAction._ref);
       return false;
   },
 
-  syncMetadata: async (docId: string, user: User): Promise<void> => {
+  syncMetadata: async (docId: string, user: User, forcedState?: DocState): Promise<void> => {
       const docRef = doc(db, "documents", docId);
       const docSnap = await getDoc(docRef);
       if(!docSnap.exists()) return;
       const data = docSnap.data() as Document;
-      const { state, progress } = determineStateFromVersion(data.version);
       
-      // Calculate correct pending status based on state
+      let state: DocState;
+      let progress: number;
+
+      if (forcedState) {
+          state = forcedState;
+          progress = STATE_CONFIG[forcedState].progress;
+      } else {
+          const autoInfo = determineStateFromVersion(data.version);
+          state = autoInfo.state;
+          progress = autoInfo.progress;
+      }
+      
       const shouldHavePending = [
           DocState.INTERNAL_REVIEW, 
           DocState.SENT_TO_REFERENT, 
@@ -355,9 +369,10 @@ export const DocumentService = {
               state, 
               progress, 
               hasPendingRequest: shouldHavePending,
-              updatedAt: new Date().toISOString() 
+              updatedAt: new Date().toISOString(),
+              ignoredInconsistency: null as any
           });
-          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección automática: ${state} / ${progress}% / Alerta: ${shouldHavePending}`, data.version);
+          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección ${forcedState ? 'manual' : 'automática'}: ${state} / ${progress}% / Alerta: ${shouldHavePending}`, data.version);
       }
   },
 
@@ -392,7 +407,8 @@ export const DocumentService = {
           version: newVersion, 
           progress: newProgress, 
           hasPendingRequest: hasPending, 
-          updatedAt: new Date().toISOString() 
+          updatedAt: new Date().toISOString(),
+          ignoredInconsistency: null as any 
       });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 

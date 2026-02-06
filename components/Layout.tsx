@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History } from 'lucide-react';
 import { User, UserRole, DocState, Document } from '../types';
 import { NotificationService } from '../services/firebaseBackend';
 
@@ -92,6 +92,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Visualización y Análisis</div>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 {canAccessGantt && <NavItem to="/admin/gantt" icon={CalendarRange} label="Diagrama Gantt" />}
+                {user.role === UserRole.ADMIN && <NavItem to="/admin/events" icon={History} label="Log de Eventos" />}
                 {isAdminOrCoord && (
                     <>
                         <NavItem to="/admin/structure" icon={Network} label="Estructura" />

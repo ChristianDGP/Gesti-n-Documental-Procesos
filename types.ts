@@ -100,6 +100,7 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
   expectedEndDate?: string;
+  ignoredInconsistency?: string;
 }
 
 export interface ProcessNode {

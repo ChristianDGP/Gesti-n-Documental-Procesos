@@ -372,6 +372,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAuthor = doc.authorId === user.id;
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+  const isAdmin = user.role === UserRole.ADMIN;
   const canEdit = !isGuest && (isAnalystAssigned || isCoordinatorOrAdmin);
   const isDocActive = doc.state !== DocState.APPROVED;
 
@@ -427,8 +428,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           </div>
       )}
 
-      {/* INCONSISTENCY ALERT */}
-      {isInconsistent && isCoordinatorOrAdmin && (
+      {/* INCONSISTENCY ALERT - SOLO PARA ADMIN */}
+      {isInconsistent && isAdmin && (
           <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4 animate-fadeIn shadow-sm">
               <div className="flex items-center gap-3">
                   <AlertTriangle className="text-amber-500 shrink-0" size={24} />
