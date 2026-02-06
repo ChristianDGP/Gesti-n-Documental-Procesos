@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
-import { DocumentService, UserService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
+import { DocumentService, UserService, HierarchyService, normalizeHeader, formatVersionForDisplay } from '../services/firebaseBackend';
 import { Document, User, DocState, UserRole, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
@@ -229,12 +230,12 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
 
     const handleExportExcel = () => {
         if (filteredDocuments.length === 0) return;
-        const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'TIPO', 'ESTADO ACTUAL', 'ESTADO OPERATIVO', 'INICIO', 'META', 'SITUACION'];
+        const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'TIPO', 'VERSION', 'ESTADO ACTUAL', 'ESTADO OPERATIVO', 'INICIO', 'META', 'SITUACION'];
         const rows = filteredDocuments.map(doc => {
             const status = getStatusInfo(doc);
             const deadline = doc.expectedEndDate ? new Date(doc.expectedEndDate) : new Date(DEFAULT_EXECUTIVE_DEADLINE);
             return [
-                doc.project, doc.macroprocess, doc.process, doc.microprocess, doc.docType, `${STATE_CONFIG[doc.state].label.split('(')[0].trim()} (${doc.progress}%)`, 
+                doc.project, doc.macroprocess, doc.process, doc.microprocess, doc.docType, doc.version, `${STATE_CONFIG[doc.state].label.split('(')[0].trim()} (${doc.progress}%)`, 
                 STATE_CONFIG[doc.state].label.split('(')[0], 
                 new Date(doc.createdAt).toLocaleDateString(), deadline.toLocaleDateString(), status.label
             ];
@@ -406,6 +407,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                             <tr>
                                 <th className="px-6 py-5 w-64">Jerarquía Organizacional</th>
                                 <th className="px-6 py-5 w-48">Tipo / Estado</th>
+                                <th className="px-6 py-5 w-24 text-center">Versión</th>
                                 <th className="px-6 py-5 w-40 text-center">Progreso</th>
                                 <th className="px-6 py-5">
                                     <div className="flex items-center justify-between mb-2">
@@ -424,7 +426,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {Object.keys(groupedData).length === 0 ? (
-                                <tr><td colSpan={5} className="py-24 text-center opacity-30 italic">No se encontraron registros {statusFilter !== 'ALL' ? `con estado "${statusFilter}"` : ''}.</td></tr>
+                                <tr><td colSpan={6} className="py-24 text-center opacity-30 italic">No se encontraron registros {statusFilter !== 'ALL' ? `con estado "${statusFilter}"` : ''}.</td></tr>
                             ) : Object.keys(groupedData).map(project => {
                                 const isProjectExpanded = expandedProjects[project];
                                 const projectDocs = Object.values(groupedData[project]).flat() as Document[];
@@ -441,6 +443,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                 <span className="bg-slate-900 text-white px-2 py-0.5 rounded text-[10px] tracking-widest">{project}</span>
                                                 <span className="text-xs ml-2 text-slate-500 font-medium">({Object.keys(groupedData[project]).length} microprocesos)</span>
                                             </td>
+                                            <td className="px-6 py-4"></td>
                                             <td className="px-6 py-4"></td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="text-[10px] font-black text-indigo-600">{projectAverageProgress}% AVG</div>
@@ -478,6 +481,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                 </div>
                                                             )}
                                                         </td>
+                                                        <td className="px-6 py-3"></td>
                                                         <td className="px-6 py-3 text-center">
                                                             <span className="text-[10px] font-bold text-slate-500">{microAverageProgress}%</span>
                                                         </td>
@@ -513,6 +517,11 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                     <div className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-black border ${doc.state === DocState.NOT_STARTED ? 'bg-white text-slate-300 border-slate-100' : STATE_CONFIG[doc.state].color}`}>
                                                                         {STATE_CONFIG[doc.state].label.split('(')[0].trim()}
                                                                     </div>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-center">
+                                                                    <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                                                        {formatVersionForDisplay(doc.version)}
+                                                                    </span>
                                                                 </td>
                                                                 <td className="px-6 py-3 text-center">
                                                                     <span className="text-[9px] font-mono text-slate-400 font-bold">{doc.progress}%</span>
