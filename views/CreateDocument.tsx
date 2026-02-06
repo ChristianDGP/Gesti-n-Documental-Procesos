@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
@@ -421,7 +420,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
                         <div className={`mb-4 p-3 rounded border flex items-start gap-2 ${existingDoc ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-blue-50 border-blue-100 text-blue-800'}`}>
                             <Info size={18} className="mt-0.5 flex-shrink-0" />
                             <div className="text-sm">
-                                <p className="font-semibold">Nomenclatura Requerida:</p>
+                                <p className="font-semibold">Nomenclatura Priorizada:</p>
                                 <p className="font-mono mt-1 text-xs md:text-sm font-bold">
                                     {selectedProject} - {selectedMicro} - {selectedDocType.replace(' ', '')} - [Versión]
                                 </p>

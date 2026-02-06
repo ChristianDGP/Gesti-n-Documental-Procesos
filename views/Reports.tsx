@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
@@ -360,7 +359,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                 stats[uid].assigned++; if (d.state === DocState.APPROVED) stats[uid].approved++; else if (d.state !== DocState.NOT_STARTED) stats[uid].inProgress++;
             });
         });
-        return Object.keys(stats).map(uid => { const u = users.find(user => user.id === uid); return { name: u ? (u.nickname || u.name.split(' ')[0]) : 'Desc.', Requeridos: stats[uid].assigned, EnProceso: stats[uid].inProgress, Terminados: stats[uid].approved }; }).sort((a, b) => b.Requeridos - a.Requeridos).slice(0, 10);
+        return Object.keys(stats).map(uid => { const u = users.find(user => user.id === uid); return { name: u ? (u.nickname || u.name.split(' ')[0]) : 'Desc.', Priorizados: stats[uid].assigned, EnProceso: stats[uid].inProgress, Terminados: stats[uid].approved }; }).sort((a, b) => b.Priorizados - a.Priorizados).slice(0, 10);
     }, [filteredDocs, users]);
 
     const typeComplianceData = useMemo(() => {
@@ -472,7 +471,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Microprocesos (Jerarquía Agregada)</span>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                                <KPICard title="MicroProc. Requeridos" value={microStats.total.length} icon={Layers} color="slate" sub="Universo Total" onClick={() => setMicroDrillDown({title: "Microprocesos Requeridos", color: "slate", items: microStats.total})} canClick={microStats.total.length > 0} />
+                                <KPICard title="MicroProc. Priorizados" value={microStats.total.length} icon={Layers} color="slate" sub="Universo Total" onClick={() => setMicroDrillDown({title: "Microprocesos Priorizados", color: "slate", items: microStats.total})} canClick={microStats.total.length > 0} />
                                 <KPICard title="No Iniciado" value={microStats.notStarted.length} icon={Clock} color="slate" sub="0% avance docs." onClick={() => setMicroDrillDown({title: "Microprocesos No Iniciados", color: "slate", items: microStats.notStarted})} canClick={microStats.notStarted.length > 0} />
                                 <KPICard title="En Proceso" value={microStats.inProcess.length} icon={Activity} color="indigo" sub="Docs. en elaboración" onClick={() => setMicroDrillDown({title: "Microprocesos En Proceso", color: "indigo", items: microStats.inProcess})} canClick={microStats.inProcess.length > 0} />
                                 <KPICard title="Referente" value={microStats.referent.length} icon={Users} color="amber" sub="En validación experta" onClick={() => setMicroDrillDown({title: "Microprocesos en Referente", color: "amber", items: microStats.referent})} canClick={microStats.referent.length > 0} />
@@ -532,7 +531,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                             <h3 className="text-sm font-bold text-slate-700 uppercase mb-1 flex items-center gap-2"><Target size={16} /> Cumplimiento por Tipo de Documento</h3>
-                            <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total requerido.</p>
+                            <p className="text-xs text-slate-500 mb-8">Efectividad de entrega sobre el universo total priorizado.</p>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                 {typeComplianceData.map((item) => (
                                     <div key={item.type} className="flex flex-col items-center">
@@ -580,7 +579,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 <YAxis allowDecimals={false} tick={{fontSize: 10}} />
                                                 <Tooltip />
                                                 <Legend />
-                                                <Bar dataKey="Requeridos" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="Priorizados" fill="#94a3b8" radius={[4, 4, 0, 0]} />
                                                 <Bar dataKey="EnProceso" name="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                                                 <Bar dataKey="Terminados" fill="#22c55e" radius={[4, 4, 0, 0]} />
                                             </BarChart>

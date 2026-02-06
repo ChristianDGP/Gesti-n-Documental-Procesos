@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, normalizeHeader, formatVersionForDisplay } from '../services/firebaseBackend';
@@ -359,7 +358,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <span className="text-[10px] font-bold uppercase tracking-wider">Estado de Documentos (Filtrable)</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatCard title="Doc. Requeridos" value={docStats.total} icon={BookOpen} color="bg-slate-50 text-slate-600" onClick={() => handleQuickFilter('ALL')} isActive={quickFilter === 'ALL'}/>
+            <StatCard title="Doc. Priorizados" value={docStats.total} icon={BookOpen} color="bg-slate-50 text-slate-600" onClick={() => handleQuickFilter('ALL')} isActive={quickFilter === 'ALL'}/>
             <StatCard title="No Iniciado" value={docStats.notStarted} icon={Clock} color="bg-white text-slate-600" onClick={() => handleQuickFilter('NOT_STARTED')} isActive={quickFilter === 'NOT_STARTED'}/>
             <StatCard title="En Proceso" value={docStats.inProcess} icon={Activity} color="bg-blue-50 text-blue-600" onClick={() => handleQuickFilter('IN_PROCESS')} isActive={quickFilter === 'IN_PROCESS'}/>
             <StatCard title="Referente" value={docStats.referent} icon={Users} color="bg-purple-50 text-purple-600" onClick={() => handleQuickFilter('REFERENT')} isActive={quickFilter === 'REFERENT'}/>
@@ -398,11 +397,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                             <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input type="text" value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="BUSCAR..." className="w-full text-[11px] pl-7 p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none" />
                         </div>
-                        <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
+                        <select value={filterDocType} onChange={(e) => setFilterDocType(e.target.value)} className="text-[11px] p-2 border border-slate-300 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
                             <option value="">DOC</option>
                             <option value="AS IS">AS IS</option><option value="FCE">FCE</option><option value="PM">PM</option><option value="TO BE">TO BE</option>
                         </select>
-                        <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="text-[11px] p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
+                        <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="text-[11px] p-2 border border-slate-300 rounded-md bg-slate-50 text-slate-600 outline-none w-24">
                             <option value="">ESTADO</option>
                             {Object.entries(STATE_CONFIG).map(([key, cfg]) => <option key={key} value={key}>{cfg.label.split('(')[0]}</option>)}
                         </select>
@@ -489,7 +488,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
         <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 min-h-[250px] flex flex-col items-center justify-center">
-                <h3 className="font-bold text-center mb-2 text-slate-700 text-xs uppercase">Estado Universo Requerido</h3>
+                <h3 className="font-bold text-center mb-2 text-slate-700 text-xs uppercase">Estado Universo Priorizado</h3>
                 {chartData.length > 0 ? (
                     <div className="h-44 w-full">
                         <ResponsiveContainer width="100%" height="100%">

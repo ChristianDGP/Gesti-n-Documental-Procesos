@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader, determineStateFromVersion, formatVersionForDisplay } from '../services/firebaseBackend';
@@ -663,7 +662,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             <div className="flex items-start gap-3">
                                 <Info size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
                                 <div>
-                                    <p className="text-xs font-black text-blue-800 uppercase mb-1">Carga de Documento Requerida</p>
+                                    <p className="text-xs font-black text-blue-800 uppercase mb-1">Carga de Documento Priorizada</p>
                                     <p className="text-xs text-blue-900 leading-relaxed font-bold">{getCoordinatorRuleHint(doc.state, pendingAction)}</p>
                                 </div>
                             </div>

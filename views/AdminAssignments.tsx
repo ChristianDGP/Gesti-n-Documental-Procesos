@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HierarchyService, UserService, NotificationService } from '../services/firebaseBackend';
 import { User, FullHierarchy, ProcessNode, DocType, UserRole } from '../types';
@@ -122,8 +121,8 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
   const handleEditAssignment = (proj: string, macro: string, proc: string, microObj: ProcessNode) => {
       setModalProject(proj);
-      setModalMacro(macro);
-      setModalProcess(proc);
+      setModalMacro(modalMacro);
+      setModalProcess(modalProcess);
       setModalMicro(microObj.name);
       setMatrixKeyToUpdate(microObj.docId);
       const existing = [...(microObj.assignees || [])];
@@ -207,7 +206,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div><h1 className="text-2xl font-bold text-slate-900">Gestor de Asignaciones</h1><p className="text-slate-500">Administre analistas responsables y requerimientos técnicos.</p></div>
+        <div><h1 className="text-2xl font-bold text-slate-900">Gestor de Asignaciones</h1><p className="text-slate-500">Administre analistas responsables y prioridades técnicas.</p></div>
         {user.role === UserRole.ADMIN && (
             <button onClick={handleSeedDefaults} disabled={seeding} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-slate-900 transition-all">
                 {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Restablecer Matriz

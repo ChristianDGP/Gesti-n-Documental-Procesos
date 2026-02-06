@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DatabaseService } from '../services/firebaseBackend';
@@ -235,7 +234,7 @@ const AdminDatabase: React.FC = () => {
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors">
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-sm font-bold text-slate-700 flex items-center gap-2"><FileSpreadsheet size={16}/> 1. CSV Reglas (Estructura)</span>
-                                {rulesFile ? <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">Cargado</span> : <span className="text-xs text-red-400 font-medium">Requerido</span>}
+                                {rulesFile ? <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded">Cargado</span> : <span className="text-xs text-red-400 font-medium">Priorizado</span>}
                             </div>
                             <div className="text-xs text-slate-500 mb-3">
                                 <p>Macro; Proceso; Micro; Analista; Proyecto;</p>
