@@ -152,6 +152,14 @@ export const NotificationService = {
     markAsRead: async (notifId: string) => {
         await updateDoc(doc(db, "notifications", notifId), { isRead: true });
     },
+    updateMultipleReadStatus: async (notifIds: string[], isRead: boolean) => {
+        if (notifIds.length === 0) return;
+        const batch = writeBatch(db);
+        notifIds.forEach(id => {
+            batch.update(doc(db, "notifications", id), { isRead });
+        });
+        await batch.commit();
+    },
     markAllAsRead: async (userId: string) => {
         const q = query(collection(db, "notifications"), where("userId", "==", userId), where("isRead", "==", false));
         const snapshot = await getDocs(q);
@@ -282,31 +290,8 @@ export const DocumentService = {
         finalDocData = { ...newDocData, id: docRef.id } as Document;
     }
 
-    // --- NOTIFICACIÓN ROBUSTA DE CARGA ---
-    const allUsers = await UserService.getAll();
-    const recipientIds = new Set<string>();
-    
-    allUsers.forEach(u => {
-        const role = String(u.role || '').toUpperCase();
-        if (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') {
-            recipientIds.add(u.id);
-        }
-    });
-
-    if (finalDocData.assignees) {
-        finalDocData.assignees.forEach(uid => recipientIds.add(uid));
-    }
-    
-    recipientIds.delete(author.id);
-    
-    const displayVersion = formatVersionForDisplay(version);
-    const titleNotif = `Actualización: ${finalDocData.microprocess}`;
-    const msgNotif = `${author.name} ha cargado la versión ${displayVersion} del informe ${finalDocData.docType}.`;
-    
-    const promises = Array.from(recipientIds).map(uid => 
-        NotificationService.create(uid, finalDocId, 'UPLOAD', titleNotif, msgNotif, author.name)
-    );
-    await Promise.all(promises);
+    // Regla confirmada: No se generan notificaciones en la carga (Upload). 
+    // Solo se registra en el historial del documento.
 
     return finalDocData;
   },
@@ -412,9 +397,11 @@ export const DocumentService = {
       });
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
+      // --- LÓGICA DE NOTIFICACIÓN PARA TRANSICIONES ---
       const allUsers = await UserService.getAll();
       const finalRecipientIds = new Set<string>();
       
+      // 1. Notificar a Supervisores (Admin y Coordinador)
       allUsers.forEach(u => {
           const role = String(u.role || '').toUpperCase();
           if (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') {
@@ -422,14 +409,17 @@ export const DocumentService = {
           }
       });
       
+      // 2. Notificar al Autor
       if (currentDoc.authorId) {
           finalRecipientIds.add(currentDoc.authorId);
       }
 
+      // 3. Notificar a Analistas Asignados
       if (currentDoc.assignees) {
           currentDoc.assignees.forEach(uid => finalRecipientIds.add(uid));
       }
       
+      // No notificarse a sí mismo
       finalRecipientIds.delete(user.id);
       
       const typeMapping: Record<string, Notification['type']> = {
@@ -699,14 +689,14 @@ export const DatabaseService = {
 
                     const docRef = await addDoc(collection(db, "documents"), newDoc);
                     await HistoryService.log(
-                      docRef.id, 
-                      systemUser, 
-                      'Migración Histórica', 
-                      DocState.NOT_STARTED, 
-                      state, 
-                      'Carga inicial desde archivo histórico', 
-                      version, 
-                      timestamp
+                        docRef.id, 
+                        systemUser, 
+                        'Migración Histórica', 
+                        DocState.NOT_STARTED, 
+                        state, 
+                        'Carga inicial desde archivo histórico', 
+                        version, 
+                        timestamp
                     );
                     historyMatchedCount++;
                 }
