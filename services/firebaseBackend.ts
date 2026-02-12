@@ -1,4 +1,3 @@
-
 import { 
   collection, getDocs, doc, getDoc, setDoc, updateDoc, addDoc, 
   query, where, orderBy, deleteDoc, Timestamp, writeBatch, onSnapshot 
@@ -290,8 +289,24 @@ export const DocumentService = {
         finalDocData = { ...newDocData, id: docRef.id } as Document;
     }
 
-    // Regla confirmada: No se generan notificaciones en la carga (Upload). 
-    // Solo se registra en el historial del documento.
+    // Si es una carga de revisión (como v0.1), notificar a supervisores
+    if (isSubmission) {
+        const allUsers = await UserService.getAll();
+        const supervisors = allUsers.filter(u => {
+            const role = String(u.role || '').toUpperCase();
+            return (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') && u.id !== author.id;
+        });
+
+        const microName = hierarchy?.micro || title.split(' - ')[0];
+        const notifTitle = `Nueva Carga: ${microName}`;
+        const displayVersion = formatVersionForDisplay(version);
+        const notifMsg = `${author.name} ha cargado la versión ${displayVersion} para revisión.`;
+        
+        const notificationPromises = supervisors.map(s => 
+            NotificationService.create(s.id, finalDocId, 'UPLOAD', notifTitle, notifMsg, author.name)
+        );
+        await Promise.all(notificationPromises);
+    }
 
     return finalDocData;
   },
