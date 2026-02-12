@@ -185,17 +185,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const getDocLink = () => `${window.location.origin}/#/doc/${doc?.id}`;
 
-  const handleNotifyAnalyst = () => {
-      if (!doc || assigneeEmails.length === 0) {
-          alert("No hay correos de analistas definidos para este proceso.");
-          return;
-      }
-      const displayVersion = formatVersionForDisplay(doc.version);
-      const subject = encodeURIComponent(`Respuesta Solicitud: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
-      const body = encodeURIComponent(`Estimada/o,\nAdjunto el Informe: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nEstado Actual: ${STATE_CONFIG[doc.state].label}\n\nPuede revisar el detalle y los comentarios en: ${getDocLink()}\n\nSaludos\n${user.name}`);
-      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(assigneeEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
-  };
-
   const handleNotifyReferent = () => {
       if (!doc || referentEmails.length === 0) {
           alert("No hay correos de referentes vinculados a este proceso en la matriz.");
@@ -204,7 +193,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       const displayVersion = formatVersionForDisplay(doc.version);
       const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
       const greeting = referentNames.length > 0 ? `Estimada/o ${referentNames.join(', ')}` : 'Estimados Referentes';
-      const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nQuedamos atentos a sus observaciones.\n\nSaludos\n${user.name}`);
+      const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nQuedamos atentos a sus observaciones.\n\nPuede revisar el detalle en: ${getDocLink()}\n\nSaludos\n${user.name}`);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(referentEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
   };
 
@@ -214,6 +203,31 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     const subject = encodeURIComponent(`Solicitud de Revisión: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
     const body = encodeURIComponent(`Estimado,\nPara su revisión, he cargado el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}",\n\nLink: ${getDocLink()}\n\nSaludos\n${user.name}`);
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
+  };
+
+  const triggerAutoEmail = (oldState: DocState, newState: DocState, newVersionStr: string) => {
+    if (!doc) return;
+    const displayVersion = formatVersionForDisplay(newVersionStr);
+    
+    // CASO A: De Revisión Interna a Referente
+    if (oldState === DocState.INTERNAL_REVIEW && newState === DocState.SENT_TO_REFERENT) {
+        if (referentEmails.length === 0) return;
+        const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
+        const greeting = referentNames.length > 0 ? `Estimada/o ${referentNames.join(', ')}` : 'Estimados Referentes';
+        const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nQuedamos atentos a sus observaciones.\n\nPuede revisar el detalle en: ${getDocLink()}\n\nSaludos\n${user.name}`);
+        window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(referentEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
+        return;
+    }
+
+    // CASO B: De Revisión de Referente a Control de Gestión
+    const isFromReferent = oldState === DocState.SENT_TO_REFERENT || oldState === DocState.REFERENT_REVIEW;
+    if (isFromReferent && newState === DocState.SENT_TO_CONTROL) {
+        const subject = encodeURIComponent(`Envío a Control de Gestión: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
+        const ccList = Array.from(new Set([...referentEmails, ...assigneeEmails])).join(',');
+        const body = encodeURIComponent(`Estimados,\n\nSe informa que el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}" ha pasado a la etapa de Revisión por Control de Gestión.\n\nPuede revisar el avance en: ${getDocLink()}\n\nSaludos\n${user.name}`);
+        window.open(`https://mail.google.com/mail/?view=cm&fs=1&cc=${encodeURIComponent(ccList)}&su=${subject}&body=${body}`, '_blank');
+        return;
+    }
   };
 
   const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT', e?: React.MouseEvent) => {
@@ -296,6 +310,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       setActionLoading(true);
       setShowResponseModal(false); 
       
+      const oldState = doc.state;
+      const newState = determineStateFromVersion(detectedVersion).state;
+
       try {
         await DocumentService.transitionState(
             doc.id, 
@@ -305,6 +322,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             responseFile, 
             detectedVersion
         );
+        
+        // Disparar correo automático si es aprobación y aplica a los casos A o B
+        if (pendingAction === 'APPROVE') {
+            triggerAutoEmail(oldState, newState, detectedVersion);
+        }
+
         setComment('');
         await loadData(doc.id);
       } catch(err: any) {
@@ -390,6 +413,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const canReview = isCoordinatorOrAdmin && [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(doc.state);
 
+  // Determinamos si la descripción es el texto automático generado por el sistema
+  const isAutoDescription = doc.description && doc.description.startsWith('Carga de archivo:');
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
       <div className="flex justify-between items-center">
@@ -459,7 +485,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                     {doc.hasPendingRequest && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-500 text-white animate-pulse tracking-wider">Solicitud Pendiente</span>}
                 </div>
                 <h1 className="text-2xl font-black text-slate-900 leading-tight">{doc.title}</h1>
-                <p className="text-slate-500 text-sm font-medium mt-1">{doc.description}</p>
+                {/* Solo mostramos la descripción si NO es el texto automático */}
+                {!isAutoDescription && doc.description && (
+                  <p className="text-slate-500 text-sm font-medium mt-1">{doc.description}</p>
+                )}
             </div>
             <div className={`px-3 py-2 rounded-lg text-xs font-bold tracking-wide flex items-center self-start border shadow-sm ${config.color}`}>
                 <Activity size={14} className="mr-2" />{config.label}
@@ -557,12 +586,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                         >
                             <MessageSquare size={18} className="mr-2" /> {actionLoading ? 'Guardando...' : 'Guardar Observación'}
                         </button>
-
-                        {isCoordinatorOrAdmin && (
-                            <button type="button" onClick={handleNotifyAnalyst} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
-                                <Mail size={18} className="mr-2 text-indigo-500" /> Notificar Analista
-                            </button>
-                        )}
 
                         {isCoordinatorOrAdmin && referentEmails.length > 0 && [DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(doc.state) && (
                             <button type="button" onClick={handleNotifyReferent} disabled={actionLoading} className="flex items-center px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50">
