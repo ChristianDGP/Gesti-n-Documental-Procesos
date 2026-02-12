@@ -193,7 +193,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       const displayVersion = formatVersionForDisplay(doc.version);
       const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
       const greeting = referentNames.length > 0 ? `Estimada/o ${referentNames.join(', ')}` : 'Estimados Referentes';
-      const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nQuedamos atentos a sus observaciones.\n\nPuede revisar el detalle en: ${getDocLink()}\n\nSaludos\n${user.name}`);
+      const body = encodeURIComponent(`${greeting},\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\nQuedamos atentos a sus observaciones.\n\nSaludos,\n${user.name}`);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(referentEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
   };
 
@@ -201,7 +201,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     if (!doc || !coordinatorEmail) { alert(`Aviso: No se ha detectado correo del coordinador.`); return; }
     const displayVersion = formatVersionForDisplay(doc.version);
     const subject = encodeURIComponent(`Solicitud de Revisión: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
-    const body = encodeURIComponent(`Estimado,\nPara su revisión, he cargado el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}",\n\nLink: ${getDocLink()}\n\nSaludos\n${user.name}`);
+    const body = encodeURIComponent(`Estimado,\nPara su revisión, he cargado el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}".\n\nSaludos,\n${user.name}`);
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
@@ -214,7 +214,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         if (referentEmails.length === 0) return;
         const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
         const greeting = referentNames.length > 0 ? `Estimada/o ${referentNames.join(', ')}` : 'Estimados Referentes';
-        const body = encodeURIComponent(`${greeting},\n\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\n\nQuedamos atentos a sus observaciones.\n\nPuede revisar el detalle en: ${getDocLink()}\n\nSaludos\n${user.name}`);
+        const body = encodeURIComponent(`${greeting},\nSe solicita su validación para el documento: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}\nQuedamos atentos a sus observaciones.\n\nSaludos,\n${user.name}`);
         window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(referentEmails.join(','))}&su=${subject}&body=${body}`, '_blank');
         return;
     }
@@ -224,7 +224,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     if (isFromReferent && newState === DocState.SENT_TO_CONTROL) {
         const subject = encodeURIComponent(`Envío a Control de Gestión: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
         const ccList = Array.from(new Set([...referentEmails, ...assigneeEmails])).join(',');
-        const body = encodeURIComponent(`Estimados,\n\nSe informa que el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}" ha pasado a la etapa de Revisión por Control de Gestión.\n\nPuede revisar el avance en: ${getDocLink()}\n\nSaludos\n${user.name}`);
+        const body = encodeURIComponent(`Estimados,\nSe informa que el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}" ha pasado a la etapa de Revisión por Referente.\n\nSaludos,\n${user.name}`);
         window.open(`https://mail.google.com/mail/?view=cm&fs=1&cc=${encodeURIComponent(ccList)}&su=${subject}&body=${body}`, '_blank');
         return;
     }
