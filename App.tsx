@@ -51,7 +51,15 @@ const App: React.FC = () => {
                         user ? (
                             <Layout user={user} onLogout={handleLogout}>
                                 <Routes>
-                                    <Route path="/" element={<Dashboard user={user} />} />
+                                    {/* Página de entrada inteligente basada en perfil */}
+                                    <Route 
+                                        path="/" 
+                                        element={user.role === UserRole.ANALYST ? <Navigate to="/worklist" replace /> : <Dashboard user={user} />} 
+                                    />
+                                    
+                                    {/* Ruta explícita para el Dashboard */}
+                                    <Route path="/dashboard" element={<Dashboard user={user} />} />
+                                    
                                     <Route path="/inbox" element={<Buffer user={user} />} />
                                     <Route path="/worklist" element={<WorkList user={user} />} />
                                     <Route path="/new" element={<CreateDocument user={user} />} />

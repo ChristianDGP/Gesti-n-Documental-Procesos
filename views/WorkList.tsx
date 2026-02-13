@@ -1,10 +1,14 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService, HierarchyService } from '../services/firebaseBackend';
+import { DocumentService, HierarchyService, formatVersionForDisplay } from '../services/firebaseBackend';
 import { Document, User, DocState, UserRole, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, Search, ArrowUp, ArrowDown, ArrowUpDown, X, AlertTriangle, PlayCircle } from 'lucide-react';
+import { 
+  Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, 
+  Search, ArrowUp, ArrowDown, ArrowUpDown, X, AlertTriangle, 
+  Layers, Network, FolderTree, ChevronDown 
+} from 'lucide-react';
 
 interface Props {
   user: User;
@@ -16,11 +20,14 @@ const WorkList: React.FC<Props> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters & Search State
+  // Filtros de Búsqueda
+  const [filterProject, setFilterProject] = useState('');
+  const [filterMacro, setFilterMacro] = useState('');
+  const [filterProcess, setFilterProcess] = useState('');
   const [filterState, setFilterState] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Sorting State
+  // Ordenamiento
   const [sortConfig, setSortConfig] = useState<{ key: SortOption; direction: 'asc' | 'desc' }>({
     key: 'updatedAt',
     direction: 'desc'
@@ -43,7 +50,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
             HierarchyService.getFullHierarchy()
         ]);
         
-        // 1. Map Real Docs for lookup
         const realDocMap = new Map<string, Document>();
         realDocsData.forEach(doc => {
             if (doc.project && (doc.microprocess || doc.title)) {
@@ -51,7 +57,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
                 const docType = doc.docType || 'AS IS';
                 const key = `${normalize(doc.project)}|${normalize(microName)}|${normalize(docType)}`;
                 
-                // Use latest
                 const existing = realDocMap.get(key);
                 if (!existing || new Date(doc.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
                     realDocMap.set(key, { ...doc, microprocess: microName, docType: docType as DocType });
@@ -59,10 +64,8 @@ const WorkList: React.FC<Props> = ({ user }) => {
             }
         });
 
-        // 2. Build Work List from Hierarchy (Assignments)
         const myWorkList: Document[] = [];
         const hierarchyKeys = Object.keys(hierarchy);
-
         const isCoordOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
         const reviewStates = [
             DocState.INTERNAL_REVIEW, 
@@ -87,10 +90,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
                             const key = `${normalize(proj)}|${normalize(node.name)}|${normalize(type)}`;
                             
                             if (realDocMap.has(key)) {
-                                // Exists in DB
                                 const realDoc = realDocMap.get(key)!;
-                                
-                                // LOGIC: Show if assigned OR if it's pending review and I'm a coordinator
                                 const isAssigned = node.assignees && node.assignees.includes(user.id);
                                 const isPendingReview = isCoordOrAdmin && reviewStates.includes(realDoc.state);
 
@@ -104,8 +104,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
                                     });
                                 }
                             } else {
-                                // Virtual (Not Started)
-                                // Only show not started if explicitly assigned
                                 const isAssigned = node.assignees && node.assignees.includes(user.id);
                                 if (isAssigned) {
                                     myWorkList.push({
@@ -137,21 +135,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
             });
         });
 
-        // 3. Add any "Real" documents that might be assigned but outside hierarchy (Orphans)
-        realDocMap.forEach((doc) => {
-            const isAssigned = doc.assignees && doc.assignees.includes(user.id);
-            const isPendingReview = isCoordOrAdmin && reviewStates.includes(doc.state);
-            
-            if ((isAssigned || isPendingReview) && doc.state !== DocState.APPROVED) {
-                const exists = myWorkList.some(d => d.id === doc.id);
-                if (!exists) {
-                    myWorkList.push(doc);
-                }
-            }
-        });
-
         setDocs(myWorkList);
-
     } catch (error) {
         console.error("Error loading work list:", error);
     } finally {
@@ -159,23 +143,25 @@ const WorkList: React.FC<Props> = ({ user }) => {
     }
   };
 
-  // --- SORT HANDLER ---
-  const handleSort = (key: SortOption) => {
-      let direction: 'asc' | 'desc' = 'asc';
-      if (sortConfig.key === key && sortConfig.direction === 'asc') {
-          direction = 'desc';
-      }
-      setSortConfig({ key, direction });
-  };
+  const availableProjects = useMemo(() => Array.from(new Set(docs.map(d => d.project).filter(Boolean))).sort(), [docs]);
+  const availableMacros = useMemo(() => {
+    let list = docs;
+    if (filterProject) list = list.filter(d => d.project === filterProject);
+    return Array.from(new Set(list.map(d => d.macroprocess).filter(Boolean))).sort();
+  }, [docs, filterProject]);
+  const availableProcesses = useMemo(() => {
+    let list = docs;
+    if (filterProject) list = list.filter(d => d.project === filterProject);
+    if (filterMacro) list = list.filter(d => d.macroprocess === filterMacro);
+    return Array.from(new Set(list.map(d => d.process).filter(Boolean))).sort();
+  }, [docs, filterProject, filterMacro]);
 
-  // --- FILTER & SORT LOGIC ---
   const processedDocs = useMemo(() => {
       let filtered = [...docs];
-
-      if (filterState) {
-          filtered = filtered.filter(d => d.state === filterState);
-      }
-
+      if (filterProject) filtered = filtered.filter(d => d.project === filterProject);
+      if (filterMacro) filtered = filtered.filter(d => d.macroprocess === filterMacro);
+      if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
+      if (filterState) filtered = filtered.filter(d => d.state === filterState);
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
           filtered = filtered.filter(d => 
@@ -184,7 +170,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
               (d.title || '').toLowerCase().includes(lowerTerm)
           );
       }
-
       return filtered.sort((a, b) => {
           const modifier = sortConfig.direction === 'asc' ? 1 : -1;
           switch (sortConfig.key) {
@@ -194,133 +179,190 @@ const WorkList: React.FC<Props> = ({ user }) => {
               default: return 0;
           }
       });
-  }, [docs, filterState, searchTerm, sortConfig]);
+  }, [docs, filterProject, filterMacro, filterProcess, filterState, searchTerm, sortConfig]);
 
-  const SortIcon = ({ column }: { column: SortOption }) => {
-      if (sortConfig.key !== column) return <ArrowUpDown size={14} className="text-slate-300 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />;
-      return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-indigo-600 ml-1" /> : <ArrowDown size={14} className="text-indigo-600 ml-1" />;
+  const handleSort = (key: SortOption) => {
+      let direction: 'asc' | 'desc' = 'asc';
+      if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+      setSortConfig({ key, direction });
   };
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Cargando lista de trabajo...</div>;
+  if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Activity className="animate-spin mb-2" />Cargando lista de trabajo...</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 animate-fadeIn">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <ListTodo className="text-indigo-600" />
+            <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                <ListTodo className="text-indigo-600" size={28} />
                 Lista de Trabajo
             </h1>
-            <p className="text-slate-500">
-                {user.role === UserRole.ANALYST ? 'Mis asignaciones pendientes.' : 'Revisiones y asignaciones pendientes.'}
+            <p className="text-slate-400 font-bold text-xs uppercase tracking-tight">
+                Revisiones y asignaciones pendientes.
             </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                    <Activity size={18} className="text-indigo-600" />
-                    Mis Pendientes
-                </h2>
-                
-                <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
-                    <div className="relative w-full md:w-64">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="Buscar..." 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-8 p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                        {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={14} /></button>
-                        )}
-                    </div>
+      {/* FILTROS DE BÚSQUEDA - Estilo Imagen de Referencia */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-[0.15em] ml-1">
+          <Filter size={14} /> FILTROS DE BÚSQUEDA
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="relative">
+              <FolderTree className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select 
+                value={filterProject} 
+                onChange={(e) => { setFilterProject(e.target.value); setFilterMacro(''); setFilterProcess(''); }}
+                className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
+              >
+                <option value="">PROYECTO</option>
+                {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+            </div>
 
-                    <div className="relative w-full md:w-auto">
-                        <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <select 
-                            value={filterState} 
-                            onChange={(e) => setFilterState(e.target.value)}
-                            className="w-full md:w-auto pl-9 p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white cursor-pointer"
+            <div className="relative">
+              <Layers className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select 
+                value={filterMacro} 
+                onChange={(e) => { setFilterMacro(e.target.value); setFilterProcess(''); }}
+                className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
+              >
+                <option value="">MACROPROCESO</option>
+                {availableMacros.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+            </div>
+
+            <div className="relative">
+              <Network className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select 
+                value={filterProcess} 
+                onChange={(e) => setFilterProcess(e.target.value)}
+                className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
+              >
+                <option value="">PROCESO</option>
+                {availableProcesses.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+            </div>
+
+            <div className="relative">
+              <Activity className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select 
+                value={filterState} 
+                onChange={(e) => setFilterState(e.target.value)}
+                className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
+              >
+                <option value="">ESTADO</option>
+                {Object.keys(STATE_CONFIG).filter(k => k !== DocState.APPROVED).map(key => (
+                    <option key={key} value={key}>{STATE_CONFIG[key as DocState].label.split('(')[0]}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="BUSCAR..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none shadow-sm placeholder:text-slate-300"
+              />
+            </div>
+        </div>
+      </div>
+
+      {/* TABLA - Diseño de nivel único con Estética Dashboard en Columna Estado */}
+      <div className="bg-white rounded-3xl shadow-xl shadow-indigo-100/20 border border-slate-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] border-b border-slate-100">
+                <th className="px-6 py-5">PROYECTO / MACRO</th>
+                <th className="px-6 py-5">MICROPROCESO</th>
+                <th className="px-6 py-5">DOCUMENTO</th>
+                <th className="px-6 py-5">ESTADO ACTUAL</th>
+                <th className="px-6 py-5 cursor-pointer group" onClick={() => handleSort('updatedAt')}>
+                  <div className="flex items-center gap-1">
+                    FECHA 
+                    {sortConfig.key === 'updatedAt' ? (
+                      sortConfig.direction === 'asc' ? <ArrowUp size={10} className="text-indigo-600" /> : <ArrowDown size={10} className="text-indigo-600" />
+                    ) : <ArrowUpDown size={10} className="opacity-0 group-hover:opacity-100" />}
+                  </div>
+                </th>
+                <th className="px-6 py-5 text-right">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {processedDocs.length === 0 ? (
+                <tr><td colSpan={6} className="px-6 py-20 text-center text-slate-300 font-bold italic uppercase tracking-widest">No hay tareas pendientes en este contexto</td></tr>
+              ) : (
+                processedDocs.map((doc, idx) => {
+                  const status = STATE_CONFIG[doc.state];
+                  return (
+                    <tr key={`${doc.id}-${idx}`} className="group hover:bg-slate-50/50 transition-all">
+                      <td className="px-6 py-5">
+                        <div className="text-[11px] font-black text-slate-800 uppercase tracking-tighter mb-0.5">{doc.project}</div>
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tight truncate max-w-[180px]">{doc.macroprocess}</div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
+                          {doc.microprocess || 'General'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                          <FileText size={18} className="text-slate-300" />
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-100 shadow-sm">
+                              {doc.docType || 'AS IS'}
+                            </span>
+                            {doc.hasPendingRequest && (
+                              <span className="flex items-center gap-1 text-[9px] font-black text-red-600 px-2 py-0.5 rounded border border-red-200 bg-red-50 animate-pulse">
+                                <AlertTriangle size={10} /> SOLICITUD
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      {/* ESTADO ACTUAL - Estética Dashboard */}
+                      <td className="px-6 py-5">
+                        <div className="flex flex-col">
+                            <div className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit mb-1 ${status.color}`}>
+                                {status.label.split('(')[0].trim()}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500 font-bold">
+                                {formatVersionForDisplay(doc.version)} ({status.progress}%)
+                            </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-2 text-slate-500 font-bold text-[10px]">
+                          <Calendar size={12} className="text-slate-300" />
+                          <span>{doc.state === DocState.NOT_STARTED ? '-' : new Date(doc.updatedAt).toLocaleDateString('es-CL')}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <Link 
+                          to={`/doc/${doc.id}`} 
+                          state={{ docData: doc }}
+                          className="text-indigo-600 hover:text-indigo-800 text-[10px] font-black uppercase tracking-[0.1em] inline-flex items-center gap-2 group/link transition-all"
                         >
-                            <option value="">Estado (Todos)</option>
-                            {Object.keys(STATE_CONFIG).filter(k => k !== DocState.APPROVED).map(key => (
-                                <option key={key} value={key}>{STATE_CONFIG[key as DocState].label.split('(')[0]}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-slate-500 uppercase bg-slate-50">
-                        <tr>
-                            <th className="px-4 py-3">Proyecto / Macro</th>
-                            <th className="px-4 py-3 cursor-pointer hover:bg-slate-100 group" onClick={() => handleSort('microprocess')}>Microproceso <SortIcon column="microprocess" /></th>
-                            <th className="px-4 py-3">Documento</th>
-                            <th className="px-4 py-3 cursor-pointer hover:bg-slate-100 group" onClick={() => handleSort('state')}>Estado <SortIcon column="state" /></th>
-                            <th className="px-4 py-3 cursor-pointer hover:bg-slate-100 group" onClick={() => handleSort('updatedAt')}>Fecha <SortIcon column="updatedAt" /></th>
-                            <th className="px-4 py-3 text-right">Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {processedDocs.length === 0 ? (
-                            <tr><td colSpan={6} className="p-8 text-center text-slate-400">Todo al día. No hay pendientes.</td></tr>
-                        ) : (
-                            processedDocs.map((doc, idx) => (
-                                <tr key={`${doc.id}-${idx}`} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${doc.hasPendingRequest ? 'bg-indigo-50/30' : ''}`}>
-                                    <td className="px-4 py-3">
-                                        <div className="font-bold text-slate-700">{doc.project}</div>
-                                        <div className="text-xs text-slate-500">{doc.macroprocess}</div>
-                                    </td>
-                                    <td className="px-4 py-3 font-medium text-slate-800">
-                                        {doc.microprocess || 'General'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2">
-                                            <FileText size={16} className="text-indigo-400" />
-                                            {doc.docType ? (
-                                                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-200">
-                                                    {doc.docType}
-                                                </span>
-                                            ) : <span className="text-sm text-slate-600 truncate max-w-[150px]">{doc.title}</span>}
-                                            {doc.hasPendingRequest && (
-                                                <span className="flex items-center text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold animate-pulse" title="Requiere Atención">
-                                                    <AlertTriangle size={10} className="mr-1"/> Solicitud
-                                                </span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATE_CONFIG[doc.state].color}`}>
-                                            {STATE_CONFIG[doc.state].label.split('(')[0]}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-1.5 text-slate-500">
-                                            <Calendar size={14} />
-                                            <span>{doc.state === DocState.NOT_STARTED ? '-' : new Date(doc.updatedAt).toLocaleDateString()}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <Link 
-                                            to={`/doc/${doc.id}`} 
-                                            state={{ docData: doc }}
-                                            className="text-indigo-600 hover:text-indigo-800 text-xs font-bold inline-flex items-center gap-1 hover:underline"
-                                        >
-                                            Ver Detalle <ArrowRight size={12} />
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                          Ver Detalle 
+                          <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

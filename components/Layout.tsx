@@ -76,20 +76,20 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             </button>
           </div>
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-            <div className="pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Exploración</div>
-            <NavItem to="/" icon={BarChart2} label="Dashboard" />
-            
             {!isGuest && (
               <>
+                <div className="pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Operación Diaria</div>
                 <NavItem to="/inbox" icon={Inbox} label="Bandeja de Entrada" badge={inboxCount} />
                 <NavItem to="/worklist" icon={ListTodo} label="Lista de Trabajo" />
                 <NavItem to="/new" icon={PlusCircle} label="Nueva Solicitud" />
               </>
             )}
             
+            <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Visualización y Análisis</div>
+            <NavItem to="/dashboard" icon={BarChart2} label="Dashboard" />
+            
             {(canAccessReports || canAccessReferents || canAccessGantt || isAdminOrCoord) && (
               <>
-                <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Visualización y Análisis</div>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 {canAccessGantt && <NavItem to="/admin/gantt" icon={CalendarRange} label="Diagrama Gantt" />}
                 {user.role === UserRole.ADMIN && <NavItem to="/admin/events" icon={History} label="Log de Eventos" />}
