@@ -1,0 +1,149 @@
+[
+  {
+    "id": 0,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "¿cuál es la estructura (columnas) de los archivos de carga?",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768476504,
+      "nanos": 221000000
+    }
+  },
+  {
+    "id": 1,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Defining Upload File Structure**\n\nI'm currently focused on defining the precise column structure required for the \"Carga Híbrida\" data uploads, based on the user's question. Specifically, I'm working to clarify the expectations of the \"AdminDatabase\" view regarding column definitions. I'm aiming for clarity in describing the structure of the data upload files.\n\n\n**Outlining CSV File Details**\n\nI've just refined the structural details for the \"CSV Reglas\" and \"CSV Histórico\" files. I'm focusing on column headers and expected flag values. The \"Reglas\" file anticipates columns like `PROYECTO`, `MACRO`, `PROCESO`, and flags such as `ASIS` and `FCE`, which can have values of `'1'` to designate a required type. The structure for the \"Histórico\" file is still under development, but I'm looking into that.\n\n\n**Mapping Rule Matrix Details**\n\nNow, I'm defining the column details for the \"Matriz de Reglas.\" It outlines mandatory documents within the organizational structure, using columns like `PROYECTO`, `MACROPROCESO`, `PROCESO`, `MICROPROCESO`, `ANALISTA`, and flags for document status (`AS IS`, `FCE`, `PM`, `TO BE`). I'm also fleshing out the \"Archivo de Histórico,\" detailing document versions and dates. I'm clarifying how this historical information will integrate.\n\n\n**Specifying Flag/Date Columns**\n\nI'm now detailing the structure of flag and date columns for the \"Matriz de Reglas,\" referencing the provided `firebaseBackend.ts` and `AdminDatabase.tsx` to ensure technical accuracy. I'm focusing on defining `VER FCE` / `FECHA FCE`, `VER PM` / `FECHA PM`, and `VER TO BE` / `FECHA TO BE`. Based on the file, the column indexes will be found by searching headers using a consistent pattern. I've detailed the patterns for project, process, macro, analyst, and status flags like AS IS and FCE.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768476504,
+      "nanos": 221000000
+    },
+    "doneTimestamp": {
+      "seconds": 1768476526,
+      "nanos": 498000000
+    }
+  },
+  {
+    "id": 2,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Para realizar una carga masiva exitosa en el **SGD**, el sistema espera dos tipos de archivos CSV (o texto delimitado por punto y coma o coma). Aquí tienes el detalle exacto de las columnas:\n\n### 1. Archivo de Reglas (Estructura y Matriz)\nEste archivo define el árbol de procesos y qué analistas son responsables de cada uno. Es obligatorio para inicializar el sistema.\n\n| Columna | Descripción | Ejemplo |\n| :--- | :--- | :--- |\n| **PROYECTO** | Código del centro | `HPC` o `HSR` |\n| **MACROPROCESO** | Categoría superior | `Admisión y Egreso` |\n| **PROCESO** | Nivel intermedio | `Gestión de Camas` |\n| **MICROPROCESO** | Nivel detalle (Hoja) | `Asignación de Cama Crítica` |\n| **ANALISTA** | Email, Nickname o Nombre | `juan.perez@empresa.com` |\n| **AS IS** | Flag de obligatoriedad | `1` (requerido) o `0` (no) |\n| **FCE** | Flag de obligatoriedad | `1` o `0` |\n| **PM** | Flag de obligatoriedad | `1` o `0` |\n| **TO BE** | Flag de obligatoriedad | `1` o `0` |\n\n---\n\n### 2. Archivo de Histórico (Estado Actual)\nEste archivo se utiliza para vincular el estado de avance actual de cada documento (versión y fecha) si ya se ha trabajado fuera del sistema.\n\n| Columna | Descripción | Ejemplo |\n| :--- | :--- | :--- |\n| **PROYECTO** | Debe coincidir con las Reglas | `HPC` |\n| **MACROPROCESO** | Debe coincidir con las Reglas | `Admisión y Egreso` |\n| **PROCESO** | Debe coincidir con las Reglas | `Gestión de Camas` |\n| **MICROPROCESO** | Debe coincidir con las Reglas | `Asignación de Cama Crítica` |\n| **VER ASIS** | Versión actual del AS IS | `v1.0` o `0.2` |\n| **FECHA ASIS** | Fecha del último hito | `2025-01-15` |\n| **VER FCE** | Versión actual del FCE | `v0.1` |\n| **FECHA FCE** | Fecha del último hito | `2025-01-18` |\n| **VER PM** | Versión actual del PM | `-` (si no hay avance) |\n| **FECHA PM** | Fecha del último hito | `-` |\n| **VER TO BE** | Versión actual del TO BE | `-` |\n| **FECHA TO BE** | Fecha del último hito | `-` |\n\n---\n\n### Consideraciones Técnicas:\n1.  **Delimitador:** El sistema detecta automáticamente tanto coma (`,`) como punto y coma (`;`).\n2.  **Encabezados:** Las columnas pueden variar de orden, ya que el sistema busca las palabras clave en la primera fila (ej: busca que el encabezado contenga \"MICRO\" para identificar la columna del microproceso).\n3.  **Codificación:** Se recomienda guardar los archivos como **CSV (delimitado por comas)** con codificación **UTF-8** o **ISO-8859-1**.\n4.  **Sincronización:** El sistema usará la columna **Versión** para determinar automáticamente el estado del documento (si termina en `ACG` será Aprobado, si empieza con `V0.` será Revisión Interna, etc.).",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768476526,
+      "nanos": 498000000
+    },
+    "doneTimestamp": {
+      "seconds": 1768476526,
+      "nanos": 557000000
+    }
+  },
+  {
+    "id": 3,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "¿entonces no tiene considerada la columna ID?",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768477026,
+      "nanos": 372000000
+    }
+  },
+  {
+    "id": 4,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Clarifying ID Column Presence**\n\nI'm now focusing on the crucial \"ID\" column. The user's question brings up a key point about its presence in the loading CSV structure. I need to figure out how to best handle this. I’m thinking about how the ID column fits into the CSV for mass loads.\n\n\n**Analyzing User CSV Requirement**\n\nI'm now fully immersed in the nuances of the user's CSV. I've confirmed the system doesn't *require* a user-provided ID column. Instead, it internally generates unique IDs based on the project and macro process names. This is a crucial distinction that affects the mass import process and how users prepare their data.\n\n\n**Elaborating on ID Handling**\n\nI'm now fully immersed in how IDs are handled. The user is asking about identifiers, which brought me to clarify how the system operates. We automatically generate IDs based on the process and microprocess names, ensuring consistency and preventing duplicates. I've considered that the system can accommodate an optional \"ID\\_EXTERNO\" if the user wants it. Alternatively, I can clarify the internal key is the combination of fields. The system automatically handles database relations with this, preventing user error.\n\n\n**Clarifying ID Generation Logic**\n\nI've just uncovered a core detail: the `generateMatrixId` function in `firebaseBackend.ts` crafts IDs like `MTX_${p}_${m}`. This confirms the ID is derived from project and microprocess names, meaning it shouldn't be a user input column. My response strategy is solidifying: I'll highlight the \"Natural Key\" approach and offer guidance on importing external IDs, if needed, as a secondary consideration. The underlying design is meant to prevent data conflicts. I think the concept of virtual/computed ID will work well here. I need to make sure the user fully understands the logic.\n\n\n**Confirming ID Source**\n\nI'm now fully focused on the ID source. I've confirmed that the `fullSystemResetAndImport` function generates the ID, and I will offer a small backend service update to clarify this. I've decided to answer the question directly, focusing on the composite/natural key aspect (Project + Micro). This avoids the issues of changing IDs in Excel, or data loss. I'll highlight that the system's hierarchy is the source of truth, and if they really want to force an ID, they can. I'll also clarify how the historical data matches the rules, using text-based matching (Project, Macro, Proceso, Micro). The goal is to provide a simple, human-friendly explanation.\n\n\n**Addressing External IDs**\n\nI'm now honing in on external ID considerations. I've realized users might want to preserve their existing IDs, or have an external ID. To accommodate this, I'm thinking of proposing an \"ID\\_EXTERNO\" column. I will need to clarify how it would map to internal IDs, or if it can. I want to make sure it functions without disrupting the auto-generated system. It's becoming clearer how to address the user's need while maintaining the integrity of the core ID generation.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768477026,
+      "nanos": 372000000
+    },
+    "doneTimestamp": {
+      "seconds": 1768477039,
+      "nanos": 120000000
+    }
+  },
+  {
+    "id": 5,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Exacto, en el diseño actual del **SGD**, la columna \"ID\" **no es requerida en el archivo CSV de carga masiva** por una razón de usabilidad y consistencia de datos:\n\n### El concepto de \"ID Natural\"\nEl sistema está diseñado para que el identificador único sea la **combinación de Proyecto + Microproceso**. \n\n1.  **Evita errores manuales:** Pedirle a un usuario que gestione una columna de IDs numéricos o UUIDs en Excel suele generar errores (IDs duplicados, IDs que se pierden al copiar y pegar, etc.).\n2.  **Vinculación Automática:** El sistema genera internamente un ID técnico (ejemplo: `MTX_HPC_GESTION_DE_CITAS`). Cuando tú subes el archivo de **Histórico**, el sistema busca esa misma combinación de texto para vincular la versión y la fecha al microproceso correspondiente.\n3.  **Sincronización:** Si cambias el nombre de un Microproceso en el archivo de Reglas, el sistema lo detectará como un nodo nuevo, asegurando que la estructura de la base de datos siempre sea un espejo de tu archivo maestro.\n\n### ¿Qué pasa si necesitas usar IDs de otro sistema?\nSi tu institución ya tiene IDs numéricos para los procesos (ej: \"Proceso 1024\"), lo ideal es:\n*   **Concatenarlo al nombre:** \"1024 - Gestión de Camas\".\n*   **O agregarlo como una columna adicional:** El sistema actualmente ignora columnas que no reconoce, pero podríamos mapearla como un metadato si fuera estrictamente necesario para reportes externos.\n\n**En resumen:** Para la carga masiva, solo asegúrate de que el nombre del **Proyecto** y del **Microproceso** escritos en el archivo de *Reglas* sean idénticos a los del archivo de *Histórico*. El sistema se encarga de la \"fontanería\" de los IDs por debajo.",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768477039,
+      "nanos": 121000000
+    },
+    "doneTimestamp": {
+      "seconds": 1768477039,
+      "nanos": 177000000
+    }
+  },
+  {
+    "id": 6,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "puedes corroborar las columnas del archivo de reglas? tengo la duda con la columna proyecto",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768477461,
+      "nanos": 164000000
+    }
+  },
+  {
+    "id": 7,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Analyzing Data Structures**\n\nI'm currently focused on the column structure of the \"Rules\" CSV file for the Document Management System. I need to confirm if there's a \"PROYECTO\" column. This is critical for understanding the data organization within the system. My analysis is geared toward integrating this data into the web platform.\n\n\n**Defining Data Relationships**\n\nI've discovered critical connections between various parts of the codebase. The `types.ts` file establishes the project as a foundational key, echoing the `Document` interface's structure. In addition, the `constants.ts` file uses project codes (HPC/HSR) within the data matrix. Furthermore, the `firebaseBackend.ts` service now explicitly relies on a \"PROYECTO\" column. As such, I confirmed the code expects the first entry in the rows is the institutional code (like \"PROYECTO\"), that should contain the project code.\n\n\n**Confirming Column Specifications**\n\nI am now focusing on the precise column requirements for data import, specifically within the `firebaseBackend.ts` service. I need to verify that the column names are consistent with the expected list, as the `fullSystemResetAndImport` function relies on them. The `PROYECTO` column is the key differentiator for the process tree. My task now is to confirm that the code aligns perfectly with the list: `PROYECTO`, `MACROPROCESO`, `PROCESO`, `MICROPROCESO`, `ANALISTA`, `AS IS`, `FCE`, `PM`, and `TO BE`. This is a crucial check for data integrity.\n\n\n**Specifying Code Alignment**\n\nI'm now diving into the code's flexibility regarding column headers. The code searches for \"PROYECTO\", \"MACRO\", and \"MICRO\", allowing for variations. My goal is to ensure this flexibility aligns with the exact column specifications: `PROYECTO`, `MACROPROCESO`, `PROCESO`, `MICROPROCESO`, `ANALISTA`, `AS IS`, and `FCE`. I want to confirm the code will function robustly, and align with the documentation, even with slight header variations.\n\n\n**Verifying Column Flexibility**\n\nI'm now honing in on the code's adaptability to variations in column headers, particularly in `firebaseBackend.ts`. My key focus is on confirming that the code's current implementation, which searches for partial matches, like using `.includes()`, adequately addresses the specified columns (`PROYECTO`, `MACROPROCESO`, `PROCESO`, `MICROPROCESO`, `ANALISTA`, `AS IS`, `FCE`, `PM`, and `TO BE`). I need to check how robust the system is to header variations, and ensure seamless functionality.\n\n\n**Confirming Exact Column Names**\n\nI'm now zeroing in on the precise column naming for the data import, focusing on `firebaseBackend.ts`. The code's flexibility regarding column headers is the key. The code currently utilizes `.includes()` for partial matches, like with the \"PROYECTO\" column. I am reconfirming the list of expected column names for data integrity and to ensure seamless functionality. The list I have to confirm is: `PROYECTO`, `MACROPROCESO`, `PROCESO`, `MICROPROCESO`, `ANALISTA`, `AS IS`, `FCE`, `PM`, and `TO BE`. This check is crucial.\n\n\n**Evaluating Code Robustness**\n\nI'm now deeply involved in the `firebaseBackend.ts` code, with an emphasis on its robustness in handling column header variations. I'm focusing on the `idxProcess` logic and other similar index lookups. I'm concerned that a slight deviation, such as a trailing space in a header (\"PROCESO \"), could cause a failure. I'm evaluating how to provide more robust code using `.toLowerCase()` and `.trim()`, or just ensure proper input. I might make a code suggestion later.\n\n\n**Verifying Header Normalization**\n\nI've just confirmed the column header normalization process within `firebaseBackend.ts`. The `normalizeHeader` function robustly handles variations by trimming spaces, converting to uppercase, removing accents and quotes. This ensures that the code's header matching is extremely robust, which is what I was hoping for. I can now confirm the list!\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768477461,
+      "nanos": 164000000
+    },
+    "doneTimestamp": {
+      "seconds": 1768477484,
+      "nanos": 687000000
+    }
+  },
+  {
+    "id": 8,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Sí, te confirmo que la columna **PROYECTO** es absolutamente necesaria y es el primer nivel de la jerarquía en el sistema.\n\nEl archivo de **Reglas** debe tener exactamente estas columnas (el orden no es estricto porque el sistema las busca por nombre, pero esta es la estructura recomendada):\n\n1.  **PROYECTO**: Es el código de la institución (ej: `HPC` o `HSR`). El sistema lo usa para separar los árboles de procesos.\n2.  **MACROPROCESO**: El nombre de la agrupación superior (ej: `Gestión de Personas`).\n3.  **PROCESO**: El nombre del proceso intermedio (ej: `Reclutamiento`).\n4.  **MICROPROCESO**: El nombre específico de la tarea (ej: `Publicación de Oferta`). **Este campo actúa como el nombre del documento.**\n5.  **ANALISTA**: El correo electrónico o nombre de usuario del responsable (debe existir en el sistema para que se le asigne automáticamente).\n6.  **AS IS**: `1` si el documento es requerido para este proceso, `0` si no.\n7.  **FCE**: `1` si el documento es requerido, `0` si no.\n8.  **PM**: `1` si el documento es requerido, `0` si no.\n9.  **TO BE**: `1` si el documento es requerido, `0` si no.\n\n### ¿Por qué es importante la columna PROYECTO?\nEn la base de datos (Firestore), los microprocesos se guardan con un ID único generado a partir de la combinación del Proyecto y el Microproceso (ej: `MTX_HPC_GESTION_DE_CITAS`). Si no incluyes la columna **PROYECTO** en el CSV, el sistema no sabrá dónde colgar el microproceso en el Dashboard y la carga fallará o los datos quedarán huérfanos.\n\n**Resumen:** Sí, la columna se llama **PROYECTO** (en mayúsculas, sin tildes preferiblemente, aunque el sistema las normaliza). No se usa \"ID\" porque el sistema construye su propio identificador interno usando el código del proyecto y el nombre del microproceso.",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": {
+      "seconds": 1768477484,
+      "nanos": 687000000
+    },
+    "doneTimestamp": {
+      "seconds": 1768477484,
+      "nanos": 739000000
+    }
+  }
+]

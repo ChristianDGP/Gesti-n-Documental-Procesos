@@ -1,0 +1,36 @@
+[
+  {
+    "id": 0,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "necesito un texto que resuma toda la lógica que considera esta app para hacer una presentación. Este texto lo necesito como un prompt para que una ia realice una infografía. puedes hacer el texto sin afectar o hacer cambios en la app?",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766151009776
+  },
+  {
+    "id": 1,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Conceptualizing the SGD**\n\nI'm currently focused on the SGD application's core logic. The goal is to distill its essence into a prompt suitable for an AI infographic generator. I'm prioritizing clarity for expert audiences. The primary purpose is clear: institutional documents. I'm thinking about the key elements for representing this complex system visually and how to best explain it for an audience with technical understanding.\n\n\n**Outlining the Structure**\n\nNow I'm diving deeper into the specifics of the system's management and approval flows, and version control.  I'm fleshing out the hierarchy: projects feed macroprocesses, which break into processes, then microprocesses, and finally document types.  User roles are critical – Admin, Coordinator, and Analyst. The core logic hinges on strict naming conventions and a detailed version control schema.  The transition workflow is becoming clearer. Visually, a lifecycle flowchart feels most apt.\n\n\n**Detailing the Workflow**\n\nI'm now detailing the specific operational steps: Matrix setup, document submission, validation, approval/feedback, and final repository. The naming parser is core to the flow. Different roles – Analyst, Coordinator, and Referent – have specific permissions and duties. Versioning will go from 0.0 to v1.nACG. The ultimate goal is real-time dashboards and compliance reports, and to explain all this, in Spanish, while highlighting the strict naming.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766151009776,
+    "doneTimestamp": 1766151036678
+  },
+  {
+    "id": 2,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Como ingeniero senior, entiendo perfectamente la necesidad de sintetizar sistemas complejos para presentaciones ejecutivas. A continuación, te presento un **prompt estructurado** diseñado específicamente para que una IA generadora de imágenes o de diagramas (como Midjourney, DALL-E 3 o herramientas de infografías como Canva Magic Design/Napkin AI) cree una representación visual de la lógica de tu aplicación **SGD (Sistema de Gestión Documental)**.\n\nEste texto resume el flujo técnico, la jerarquía y el ciclo de vida del documento sin tocar una sola línea de código.\n\n---\n\n### Prompt para IA: Infografía de Lógica de Negocio SGD\n\n**Título de la Infografía:** Ecosistema de Gestión Documental Institucional (SGD)\n\n**Descripción del Estilo Visual:** Estilo corporativo moderno, limpio, \"flat design\" o \"3D isométrico\", paleta de colores azul oscuro, índigo y verde esmeralda. Tipografía sans-serif legible. Uso de iconos minimalistas (Lucide-React style).\n\n**Contenido Estructurado para la IA:**\n\n1.  **Capa 1: La Matriz de Control (Configuración):**\n    *   Visualizar una base de datos central o \"Matriz de Requisitos\".\n    *   **Lógica:** Definición de la jerarquía de procesos: `Proyecto (HPC/HSR) > Macroproceso > Proceso > Microproceso`.\n    *   **Regla:** Cada microproceso tiene asignados tipos de documentos obligatorios (`AS IS`, `FCE`, `PM`, `TO BE`) y analistas responsables.\n\n2.  **Capa 2: El Motor de Validación (Naming Convention):**\n    *   Visualizar un documento pasando a través de un escáner o filtro.\n    *   **Lógica:** Parser estricto de nomenclatura. Solo se aceptan archivos con el formato: `PROYECTO - Microproceso - TIPO - Versión`.\n    *   **Validación:** El sistema verifica en tiempo real si la versión del archivo coincide con la etapa del flujo solicitada.\n\n3.  **Capa 3: El Ciclo de Vida del Documento (Workflow):**\n    *   Representar una línea de tiempo circular o un flujo de izquierda a derecha:\n        *   **Inicio (0.0):** Creación por el Analista.\n        *   **Gestión (0.n):** Documento en proceso de elaboración.\n        *   **Revisión Interna (v0.n):** El Coordinador valida o rechaza (versiones impares para entrega, pares para rechazo).\n        *   **Revisión Externa (v1.n.i):** Envío a Referentes Técnicos y Control de Gestión (AR).\n        *   **Aprobación Final (v1.nACG):** El documento alcanza el 100% de progreso y se archiva como versión oficial.\n\n4.  **Capa 4: Roles y Permisos (Seguridad):**\n    *   Iconos de personas con diferentes niveles de acceso:\n        *   **Analista:** Carga documentos y gestiona sus procesos asignados.\n        *   **Coordinador:** Aprueba/Rechaza cambios, gestiona versiones y notifica a externos.\n        *   **Administrador:** Control total de usuarios, estructura jerárquica y backups de base de datos.\n\n5.  **Capa 5: Monitoreo y Auditoría (Dashboard):**\n    *   Visualizar gráficos de barras y tortas (Charts).\n    *   **Lógica:** Seguimiento de documentos \"Stalled\" (estancados por más de 30 días), cumplimiento por proyecto y rendimiento de analistas.\n\n**Nota al pie para la IA:** Resaltar la integración con Firebase para tiempo real y notificaciones automáticas por correo electrónico para cada cambio de estado.\n\n---\n\n### ¿Cómo usar este texto?\n1.  **Si usas ChatGPT/Claude (para generar ideas de diseño):** \"Utiliza este resumen de lógica para proponerme 3 layouts de infografía que expliquen este sistema a directivos\".\n2.  **Si usas Midjourney/DALL-E:** \"Crea una infografía de flujo de trabajo tecnológico sobre gestión documental, mostrando una progresión desde la carga de archivos (versión 0.0) hasta la aprobación final (v1.0), estilo isométrico, colores azul y verde, texto en español, alta resolución\".\n3.  **Si usas Napkin AI o Canva:** Pega el texto por secciones para que sus motores de diseño generen los diagramas automáticamente.\n\nEste resumen captura toda la complejidad técnica que hemos construido (especialmente el sistema de versionamiento par/impar y la validación por nombre) de una forma visualmente atractiva.",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766151036678,
+    "doneTimestamp": 1766151036744
+  }
+]
