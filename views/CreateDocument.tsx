@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, HierarchyService, normalizeHeader } from '../services/firebaseBackend';
+import { DocumentService, HierarchyService, normalizeHeader, UserService, formatVersionForDisplay } from '../services/firebaseBackend';
 import { User, DocState, DocType, UserHierarchy, UserRole, Document, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename } from '../utils/filenameParser';
@@ -53,6 +53,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [selectedMicro, setSelectedMicro] = useState<string>('');
   const [selectedDocType, setSelectedDocType] = useState<DocType | ''>('');
+  const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
   
   const [requestType, setRequestType] = useState<RequestType | ''>('');
 
@@ -111,15 +112,19 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
 
   const loadData = async () => {
       try {
-          const [reqMap, full, docs] = await Promise.all([
+          const [reqMap, full, docs, allUsers] = await Promise.all([
               HierarchyService.getRequiredTypesMap(),
               HierarchyService.getFullHierarchy(),
-              DocumentService.getAll()
+              DocumentService.getAll(),
+              UserService.getAll()
           ]);
 
           setRequirementsMap(reqMap);
           setAllDocsCache(docs);
           setFullHierarchyCache(full);
+
+          const coord = allUsers.find(u => ['COORDINATOR', 'COORDINADOR', 'ADMIN'].includes((u.role || '').toString().toUpperCase()));
+          if (coord) setCoordinatorEmail(coord.email);
 
           let currentHierarchy: UserHierarchy = {};
           if (user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) {
@@ -266,6 +271,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
     setLoading(true);
     try {
       const matrixAssignees = getAssigneesForSelection();
+      const isUpdate = !!existingDoc;
+
       const updatedDoc = await DocumentService.create(
           title, 
           description, 
@@ -284,6 +291,14 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           },
           existingDoc?.id 
       );
+
+      // Si es una actualización (Consolidar Historial), ejecutamos automáticamente la notificación al coordinador
+      if (isUpdate && coordinatorEmail) {
+          const displayVersion = formatVersionForDisplay(updatedDoc.version);
+          const subject = encodeURIComponent(`Solicitud de Revisión: ${updatedDoc.project} - ${updatedDoc.microprocess} - ${updatedDoc.docType || ''} - ${displayVersion}`);
+          const body = encodeURIComponent(`Estimado,\nPara su revisión, he cargado el documento "${updatedDoc.project} - ${updatedDoc.microprocess} - ${updatedDoc.docType || ''} - ${displayVersion}".\n\nSaludos,\n${user.name}`);
+          window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
+      }
 
       navigate(`/doc/${updatedDoc.id}`);
     } catch (error: any) {
