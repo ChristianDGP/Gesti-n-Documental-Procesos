@@ -293,7 +293,8 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
       );
 
       // Si es una actualización (Consolidar Historial), ejecutamos automáticamente la notificación al coordinador
-      if (isUpdate && coordinatorEmail) {
+      // Solo si el estado resultante es Revisión Interna o superior (según solicitud de usuario)
+      if (isUpdate && coordinatorEmail && updatedDoc.state !== DocState.INITIATED && updatedDoc.state !== DocState.IN_PROCESS) {
           const displayVersion = formatVersionForDisplay(updatedDoc.version);
           const subject = encodeURIComponent(`Solicitud de Revisión: ${updatedDoc.project} - ${updatedDoc.microprocess} - ${updatedDoc.docType || ''} - ${displayVersion}`);
           const body = encodeURIComponent(`Estimado,\nPara su revisión, he cargado el documento "${updatedDoc.project} - ${updatedDoc.microprocess} - ${updatedDoc.docType || ''} - ${displayVersion}".\n\nSaludos,\n${user.name}`);

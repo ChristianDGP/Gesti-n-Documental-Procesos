@@ -207,6 +207,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const triggerAutoEmail = (action: 'APPROVE' | 'REJECT', oldState: DocState, newState: DocState, newVersionStr: string, responseComment: string) => {
     if (!doc || !authorEmail) return;
+    
+    // Omitir si el estado resultante es Iniciado o En Proceso (según solicitud de usuario)
+    if (newState === DocState.INITIATED || newState === DocState.IN_PROCESS) return;
+
     const displayVersion = formatVersionForDisplay(newVersionStr);
     
     // CASO ESPECIAL A: De Revisión Interna a Referente (Mantiene lógica anterior pero unificada)
