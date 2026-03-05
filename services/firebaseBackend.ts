@@ -509,6 +509,9 @@ export const HierarchyService = {
       await setDoc(doc(db, "process_matrix", id), { project, macroprocess: macro, process, name, assignees, referentIds: [], requiredTypes, active: true });
   },
   deleteMicroprocess: async (docId: string) => { await deleteDoc(doc(db, "process_matrix", docId)); },
+  updateMicroprocessReferents: async (docId: string, referentIds: string[]) => {
+      await updateDoc(doc(db, "process_matrix", docId), { referentIds });
+  },
   getRequiredTypesMap: async (): Promise<Record<string, DocType[]>> => {
       const q = query(collection(db, "process_matrix"));
       const snapshot = await getDocs(q);
