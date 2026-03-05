@@ -205,12 +205,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${coordinatorEmail}&su=${subject}&body=${body}`, '_blank');
   };
 
-  const triggerAutoEmail = (oldState: DocState, newState: DocState, newVersionStr: string) => {
-    if (!doc) return;
+  const triggerAutoEmail = (action: 'APPROVE' | 'REJECT', oldState: DocState, newState: DocState, newVersionStr: string, responseComment: string) => {
+    if (!doc || !authorEmail) return;
     const displayVersion = formatVersionForDisplay(newVersionStr);
     
-    // CASO A: De Revisión Interna a Referente
-    if (oldState === DocState.INTERNAL_REVIEW && newState === DocState.SENT_TO_REFERENT) {
+    // CASO ESPECIAL A: De Revisión Interna a Referente (Mantiene lógica anterior pero unificada)
+    if (action === 'APPROVE' && oldState === DocState.INTERNAL_REVIEW && newState === DocState.SENT_TO_REFERENT) {
         if (referentEmails.length === 0) return;
         const subject = encodeURIComponent(`Revisión Técnica: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
         const greeting = referentNames.length > 0 ? `Estimada/o ${referentNames.join(', ')}` : 'Estimados Referentes';
@@ -219,15 +219,24 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         return;
     }
 
-    // CASO B: De Revisión de Referente a Control de Gestión
-    const isFromReferent = oldState === DocState.SENT_TO_REFERENT || oldState === DocState.REFERENT_REVIEW;
-    if (isFromReferent && newState === DocState.SENT_TO_CONTROL) {
-        const subject = encodeURIComponent(`Envío a Control de Gestión: ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
-        const ccList = Array.from(new Set([...referentEmails, ...assigneeEmails])).join(',');
-        const body = encodeURIComponent(`Estimados,\nSe informa que el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}" ha pasado a la etapa de Revisión por Referente.\n\nSaludos,\n${user.name}`);
-        window.open(`https://mail.google.com/mail/?view=cm&fs=1&cc=${encodeURIComponent(ccList)}&su=${subject}&body=${body}`, '_blank');
-        return;
+    // CASO GENERAL: Notificar al Analista (Autor) sobre el resultado de la revisión
+    const actionLabel = action === 'APPROVE' ? 'APROBADO' : 'RECHAZADO';
+    const subject = encodeURIComponent(`Resultado de Revisión: ${actionLabel} - ${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}`);
+    
+    let bodyText = `Estimado/a,\n\nSe informa que el documento "${doc.project} - ${doc.microprocess} - ${doc.docType || ''} - ${displayVersion}" ha sido ${actionLabel}.\n\n`;
+    
+    if (responseComment) {
+        bodyText += `Observaciones del Coordinador:\n"${responseComment}"\n\n`;
     }
+    
+    bodyText += `Estado actual: ${STATE_CONFIG[newState].label}\n`;
+    bodyText += `Puede revisar el detalle aquí: ${getDocLink()}\n\n`;
+    bodyText += `Saludos,\n${user.name}`;
+
+    const body = encodeURIComponent(bodyText);
+    const ccList = assigneeEmails.filter(e => e !== authorEmail).join(',');
+    
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${authorEmail}${ccList ? `&cc=${ccList}` : ''}&su=${subject}&body=${body}`, '_blank');
   };
 
   const handleActionClick = async (action: 'ADVANCE' | 'APPROVE' | 'REJECT' | 'COMMENT', e?: React.MouseEvent) => {
@@ -323,10 +332,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
             detectedVersion
         );
         
-        // Disparar correo automático si es aprobación y aplica a los casos A o B
-        if (pendingAction === 'APPROVE') {
-            triggerAutoEmail(oldState, newState, detectedVersion);
-        }
+        // Levantar pantalla de Gmail para notificar el resultado (Aprobación o Rechazo)
+        triggerAutoEmail(pendingAction, oldState, newState, detectedVersion, comment);
 
         setComment('');
         await loadData(doc.id);
