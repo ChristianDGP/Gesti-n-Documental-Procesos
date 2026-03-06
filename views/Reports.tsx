@@ -51,9 +51,30 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     
-    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE'>('REPORTS');
+    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE'>(() => {
+        if (user.canAccessReportGestion !== false) return 'REPORTS';
+        if (user.canAccessReportContinuity !== false) return 'SUMMARY';
+        if (user.canAccessReportMonthly !== false) return 'CLOSURE';
+        return 'REPORTS';
+    });
     const [chartScale, setChartScale] = useState<ChartScale>('MONTHLY');
     const [cfdRange, setCfdRange] = useState<3 | 6 | 12>(6);
+
+    // Redirección si no tiene acceso a la pestaña activa (por si acaso)
+    useEffect(() => {
+        if (activeTab === 'REPORTS' && user.canAccessReportGestion === false) {
+             if (user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+             else if (user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+        }
+        if (activeTab === 'SUMMARY' && user.canAccessReportContinuity === false) {
+             if (user.canAccessReportGestion !== false) setActiveTab('REPORTS');
+             else if (user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+        }
+        if (activeTab === 'CLOSURE' && user.canAccessReportMonthly === false) {
+             if (user.canAccessReportGestion !== false) setActiveTab('REPORTS');
+             else if (user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+        }
+    }, [user, activeTab]);
 
     const [filterProject, setFilterProject] = useState('');
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
@@ -457,9 +478,15 @@ const Reports: React.FC<Props> = ({ user }) => {
             </div>
 
             <div className="flex flex-col sm:flex-row bg-slate-100 p-1 rounded-xl w-fit gap-1">
-                <button onClick={() => setActiveTab('REPORTS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'REPORTS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart2 size={18} /> 1. Reportes de Gestión</button>
-                <button onClick={() => setActiveTab('SUMMARY')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'SUMMARY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><ShieldAlert size={18} /> 2. Monitor de Continuidad</button>
-                <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> 3. Cierre Mensual</button>
+                {user.canAccessReportGestion !== false && (
+                    <button onClick={() => setActiveTab('REPORTS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'REPORTS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart2 size={18} /> 1. Reportes de Gestión</button>
+                )}
+                {user.canAccessReportContinuity !== false && (
+                    <button onClick={() => setActiveTab('SUMMARY')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'SUMMARY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><ShieldAlert size={18} /> 2. Monitor de Continuidad</button>
+                )}
+                {user.canAccessReportMonthly !== false && (
+                    <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> 3. Cierre Mensual</button>
+                )}
             </div>
 
             <div className="animate-fadeIn">

@@ -17,6 +17,9 @@ export interface User {
   password?: string;
   active?: boolean;
   canAccessReports?: boolean;
+  canAccessReportGestion?: boolean;
+  canAccessReportContinuity?: boolean;
+  canAccessReportMonthly?: boolean;
   canAccessReferents?: boolean;
   canAccessGantt?: boolean;
 }
