@@ -268,6 +268,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
             const endOfMonthISO = endOfMonth.toISOString();
             
+            const ids = { 'No Iniciado': [] as string[], 'En Proceso': [] as string[], 'Referente': [] as string[], 'Control': [] as string[], 'Terminados': [] as string[] };
             let noIniciado = 0, enProceso = 0, referente = 0, control = 0, terminado = 0;
             
             filteredDocs.forEach(doc => {
@@ -287,11 +288,11 @@ const Reports: React.FC<Props> = ({ user }) => {
                     }
                 }
                 
-                if (stateToCount === DocState.APPROVED) terminado++;
-                else if ([DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(stateToCount)) control++;
-                else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(stateToCount)) referente++;
-                else if (stateToCount === DocState.NOT_STARTED) noIniciado++;
-                else enProceso++; // Incluye Iniciado, En Proceso y Revisión Interna para simplificar a 5 estados
+                if (stateToCount === DocState.APPROVED) { terminado++; ids.Terminados.push(doc.id); }
+                else if ([DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(stateToCount)) { control++; ids.Control.push(doc.id); }
+                else if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(stateToCount)) { referente++; ids.Referente.push(doc.id); }
+                else if (stateToCount === DocState.NOT_STARTED) { noIniciado++; ids['No Iniciado'].push(doc.id); }
+                else { enProceso++; ids['En Proceso'].push(doc.id); }
             });
             
             data.push({ 
@@ -300,7 +301,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                 'En Proceso': enProceso, 
                 'Referente': referente, 
                 'Control': control, 
-                'Terminados': terminado 
+                'Terminados': terminado,
+                ids
             });
         }
         return data;
@@ -373,14 +375,27 @@ const Reports: React.FC<Props> = ({ user }) => {
     }, [filteredDocs]);
 
     const analystData = useMemo(() => {
-        const stats: Record<string, { assigned: number, approved: number, inProgress: number }> = {};
+        const stats: Record<string, { assigned: string[], approved: string[], inProgress: string[] }> = {};
         filteredDocs.forEach(d => {
             d.assignees?.forEach(uid => {
-                if (!stats[uid]) stats[uid] = { assigned: 0, approved: 0, inProgress: 0 };
-                stats[uid].assigned++; if (d.state === DocState.APPROVED) stats[uid].approved++; else if (d.state !== DocState.NOT_STARTED) stats[uid].inProgress++;
+                if (!stats[uid]) stats[uid] = { assigned: [], approved: [], inProgress: [] };
+                stats[uid].assigned.push(d.id); 
+                if (d.state === DocState.APPROVED) stats[uid].approved.push(d.id); 
+                else if (d.state !== DocState.NOT_STARTED) stats[uid].inProgress.push(d.id);
             });
         });
-        return Object.keys(stats).map(uid => { const u = users.find(user => user.id === uid); return { name: u ? (u.nickname || u.name.split(' ')[0]) : 'Desc.', Priorizados: stats[uid].assigned, EnProceso: stats[uid].inProgress, Terminados: stats[uid].approved }; }).sort((a, b) => b.Priorizados - a.Priorizados).slice(0, 10);
+        return Object.keys(stats).map(uid => { 
+            const u = users.find(user => user.id === uid); 
+            return { 
+                name: u ? (u.nickname || u.name.split(' ')[0]) : 'Desc.', 
+                Priorizados: stats[uid].assigned.length, 
+                EnProceso: stats[uid].inProgress.length, 
+                Terminados: stats[uid].approved.length,
+                priorizadosIds: stats[uid].assigned,
+                enProcesoIds: stats[uid].inProgress,
+                terminadosIds: stats[uid].approved
+            }; 
+        }).sort((a, b) => b.Priorizados - a.Priorizados).slice(0, 10);
     }, [filteredDocs, users]);
 
     const typeComplianceData = useMemo(() => {
@@ -389,7 +404,16 @@ const Reports: React.FC<Props> = ({ user }) => {
             const docsOfType = filteredDocs.filter(d => d.docType === type);
             const finishedDocs = docsOfType.filter(d => d.state === DocState.APPROVED);
             const percent = docsOfType.length > 0 ? Math.round((finishedDocs.length / docsOfType.length) * 100) : 0;
-            return { type, total: docsOfType.length, finished: finishedDocs.length, percent, color: TYPE_COLORS[type], finishedIds: finishedDocs.map(d => d.id), pendingIds: docsOfType.filter(d => d.state !== DocState.APPROVED).map(d => d.id) };
+            return { 
+                type, 
+                total: docsOfType.length, 
+                finished: finishedDocs.length, 
+                percent, 
+                color: TYPE_COLORS[type], 
+                finishedIds: finishedDocs.map(d => d.id), 
+                pendingIds: docsOfType.filter(d => d.state !== DocState.APPROVED).map(d => d.id),
+                totalIds: docsOfType.map(d => d.id)
+            };
         });
     }, [filteredDocs]);
 
@@ -397,13 +421,18 @@ const Reports: React.FC<Props> = ({ user }) => {
         const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
         const now = new Date();
         const periods: any[] = [];
-        if (chartScale === 'ANNUAL') { for (let i = 4; i >= 0; i--) { const year = now.getFullYear() - i; periods.push({ key: year.toString(), label: year.toString(), 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 }); } } 
-        else if (chartScale === 'MONTHLY') { for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); const label = `${monthsNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`; const yearMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; periods.push({ key: yearMonthKey, label: label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 }); } } 
-        else if (chartScale === 'WEEKLY') { for (let i = 7; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - (i * 7)); const weekNum = Math.ceil(d.getDate() / 7); const label = `S${weekNum}-${monthsNames[d.getMonth()]}`; const firstDayOfYear = new Date(d.getFullYear(), 0, 1); const pastDaysOfYear = (d.getTime() - firstDayOfYear.getTime()) / 86400000; const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7); const key = `${d.getFullYear()}-W${weekOfYear}`; periods.push({ key, label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0 }); } }
+        if (chartScale === 'ANNUAL') { for (let i = 4; i >= 0; i--) { const year = now.getFullYear() - i; periods.push({ key: year.toString(), label: year.toString(), 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0, ids: { 'AS IS': [], 'FCE': [], 'PM': [], 'TO BE': [] } }); } } 
+        else if (chartScale === 'MONTHLY') { for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); const label = `${monthsNames[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`; const yearMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; periods.push({ key: yearMonthKey, label: label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0, ids: { 'AS IS': [], 'FCE': [], 'PM': [], 'TO BE': [] } }); } } 
+        else if (chartScale === 'WEEKLY') { for (let i = 7; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - (i * 7)); const weekNum = Math.ceil(d.getDate() / 7); const label = `S${weekNum}-${monthsNames[d.getMonth()]}`; const firstDayOfYear = new Date(d.getFullYear(), 0, 1); const pastDaysOfYear = (d.getTime() - firstDayOfYear.getTime()) / 86400000; const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7); const key = `${d.getFullYear()}-W${weekOfYear}`; periods.push({ key, label, 'AS IS': 0, 'FCE': 0, 'PM': 0, 'TO BE': 0, ids: { 'AS IS': [], 'FCE': [], 'PM': [], 'TO BE': [] } }); } }
+        
         filteredDocs.filter(d => d.state === DocState.APPROVED).forEach(d => {
             const date = new Date(d.updatedAt); if (isNaN(date.getTime())) return;
             let docKey = ''; if (chartScale === 'ANNUAL') { docKey = date.getFullYear().toString(); } else if (chartScale === 'MONTHLY') { docKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; } else if (chartScale === 'WEEKLY') { const firstDayOfYear = new Date(date.getFullYear(), 0, 1); const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000; const weekOfYear = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7); docKey = `${date.getFullYear()}-W${weekOfYear}`; }
-            const period = periods.find(p => p.key === docKey); if (period && d.docType) period[d.docType]++;
+            const period = periods.find(p => p.key === docKey); 
+            if (period && d.docType) {
+                period[d.docType]++;
+                (period.ids as any)[d.docType].push(d.id);
+            }
         });
         return periods;
     }, [filteredDocs, chartScale]);
@@ -599,18 +628,18 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-2">
                                     <h3 className="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2"><Users size={16} /> Productividad por Analista</h3>
                                     <div className="h-[250px]">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={analystData}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                <XAxis dataKey="name" tick={{fontSize: 10}} />
-                                                <YAxis allowDecimals={false} tick={{fontSize: 10}} />
-                                                <Tooltip />
-                                                <Legend />
-                                                <Bar dataKey="Priorizados" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                                                <Bar dataKey="EnProceso" name="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                                <Bar dataKey="Terminados" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={analystData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis dataKey="name" tick={{fontSize: 10}} />
+                                            <YAxis allowDecimals={false} tick={{fontSize: 10}} />
+                                            <Tooltip cursor={{fill: '#f8fafc'}} />
+                                            <Legend />
+                                            <Bar dataKey="Priorizados" fill="#94a3b8" radius={[4, 4, 0, 0]} onClick={(data: any) => { if (data && data.priorizadosIds) goToDashboard(data.priorizadosIds); }} className="cursor-pointer" />
+                                            <Bar dataKey="EnProceso" name="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} onClick={(data: any) => { if (data && data.enProcesoIds) goToDashboard(data.enProcesoIds); }} className="cursor-pointer" />
+                                            <Bar dataKey="Terminados" fill="#22c55e" radius={[4, 4, 0, 0]} onClick={(data: any) => { if (data && data.terminadosIds) goToDashboard(data.terminadosIds); }} className="cursor-pointer" />
+                                        </BarChart>
+                                    </ResponsiveContainer>
                                     </div>
                                 </div>
                             )}
@@ -637,7 +666,25 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <YAxis allowDecimals={false} domain={[0, 'dataMax']} tick={{fontSize: 11, fill: '#64748b'}} axisLine={{stroke: '#e2e8f0'}} tickLine={false} />
                                         <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                                         <Legend verticalAlign="top" height={40} iconType="circle" onClick={(o) => { const { dataKey } = o; setActiveType(activeType === dataKey ? null : dataKey as string); }} wrapperStyle={{ cursor: 'pointer' }} />
-                                        {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => ( <Area key={type} type="monotone" dataKey={type} stroke={TYPE_COLORS[type]} fill={`url(#grad-${type.replace(' ', '')})`} strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} hide={activeType !== null && activeType !== type} /> ))}
+                                        {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => ( 
+                                            <Area 
+                                                key={type} 
+                                                type="monotone" 
+                                                dataKey={type} 
+                                                stroke={TYPE_COLORS[type]} 
+                                                fill={`url(#grad-${type.replace(' ', '')})`} 
+                                                strokeWidth={2} 
+                                                dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
+                                                activeDot={{ r: 6 }} 
+                                                hide={activeType !== null && activeType !== type} 
+                                                onClick={(data: any) => { 
+                                                    if (data && data.payload && data.payload.ids && data.payload.ids[type]) {
+                                                        goToDashboard(data.payload.ids[type]);
+                                                    }
+                                                }}
+                                                className="cursor-pointer"
+                                            /> 
+                                        ))}
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -675,11 +722,11 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <Tooltip />
                                         <Legend verticalAlign="top" align="right" iconType="circle" />
                                         {/* Definimos las áreas en el orden exacto solicitado para que la leyenda sea correcta */}
-                                        <Area type="monotone" dataKey="No Iniciado" stackId="1" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="En Proceso" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Referente" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Control" stackId="1" stroke="#f97316" fill="#f97316" fillOpacity={0.4} />
-                                        <Area type="monotone" dataKey="Terminados" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} />
+                                        <Area type="monotone" dataKey="No Iniciado" stackId="1" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.4} onClick={(data: any) => { if (data && data.payload && data.payload.ids) goToDashboard(data.payload.ids['No Iniciado']); }} className="cursor-pointer" />
+                                        <Area type="monotone" dataKey="En Proceso" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.4} onClick={(data: any) => { if (data && data.payload && data.payload.ids) goToDashboard(data.payload.ids['En Proceso']); }} className="cursor-pointer" />
+                                        <Area type="monotone" dataKey="Referente" stackId="1" stroke="#a855f7" fill="#a855f7" fillOpacity={0.4} onClick={(data: any) => { if (data && data.payload && data.payload.ids) goToDashboard(data.payload.ids['Referente']); }} className="cursor-pointer" />
+                                        <Area type="monotone" dataKey="Control" stackId="1" stroke="#f97316" fill="#f97316" fillOpacity={0.4} onClick={(data: any) => { if (data && data.payload && data.payload.ids) goToDashboard(data.payload.ids['Control']); }} className="cursor-pointer" />
+                                        <Area type="monotone" dataKey="Terminados" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} onClick={(data: any) => { if (data && data.payload && data.payload.ids) goToDashboard(data.payload.ids['Terminados']); }} className="cursor-pointer" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>

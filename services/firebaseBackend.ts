@@ -297,8 +297,10 @@ export const DocumentService = {
             return (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') && u.id !== author.id;
         });
 
+        const projectName = hierarchy?.project || '';
+        const docType = hierarchy?.docType || '';
         const microName = hierarchy?.micro || title.split(' - ')[0];
-        const notifTitle = `Nueva Carga: ${microName}`;
+        const notifTitle = `Nueva Carga: ${projectName ? projectName + ' - ' : ''}${microName}${docType ? ' - ' : ''}${docType}`;
         const displayVersion = formatVersionForDisplay(version);
         const notifMsg = `${author.name} ha cargado la versión ${displayVersion} para revisión.`;
         
@@ -443,7 +445,7 @@ export const DocumentService = {
       };
       const type = typeMapping[action] || 'COMMENT';
       const displayVersion = formatVersionForDisplay(newVersion);
-      const title = `${displayAction}: ${currentDoc.microprocess}`;
+      const title = `${displayAction}: ${currentDoc.project ? currentDoc.project + ' - ' : ''}${currentDoc.microprocess}${currentDoc.docType ? ' - ' : ''}${currentDoc.docType}`;
       const msg = `${user.name} ha realizado una ${displayAction.toLowerCase()} en "${currentDoc.title}" (${displayVersion}).`;
       
       const notificationPromises = Array.from(finalRecipientIds)

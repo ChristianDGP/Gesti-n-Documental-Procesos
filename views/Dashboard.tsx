@@ -222,11 +222,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const chartData = useMemo(() => {
     return [
-      { name: 'No Iniciado', value: docStats.notStarted, color: '#94a3b8' },
-      { name: 'En Proceso', value: docStats.inProcess, color: '#3b82f6' },
-      { name: 'Referente', value: docStats.referent, color: '#a855f7' },
-      { name: 'Control', value: docStats.control, color: '#f97316' },
-      { name: 'Terminados', value: docStats.finished, color: '#22c55e' }
+      { name: 'No Iniciado', value: docStats.notStarted, color: '#94a3b8', type: 'NOT_STARTED' as QuickFilterType },
+      { name: 'En Proceso', value: docStats.inProcess, color: '#3b82f6', type: 'IN_PROCESS' as QuickFilterType },
+      { name: 'Referente', value: docStats.referent, color: '#a855f7', type: 'REFERENT' as QuickFilterType },
+      { name: 'Control', value: docStats.control, color: '#f97316', type: 'CONTROL' as QuickFilterType },
+      { name: 'Terminados', value: docStats.finished, color: '#22c55e', type: 'FINISHED' as QuickFilterType }
     ].filter(d => d.value > 0);
   }, [docStats]);
 
@@ -493,8 +493,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     <div className="h-44 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie data={chartData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={2} dataKey="value">
-                                    {chartData.map((e, i) => <Cell key={i} fill={e.color}/>)}
+                                <Pie 
+                                    data={chartData} 
+                                    cx="50%" 
+                                    cy="50%" 
+                                    innerRadius={45} 
+                                    outerRadius={65} 
+                                    paddingAngle={2} 
+                                    dataKey="value"
+                                    onClick={(data) => {
+                                        if (data && data.type) handleQuickFilter(data.type);
+                                    }}
+                                >
+                                    {chartData.map((e, i) => <Cell key={i} fill={e.color} className="cursor-pointer outline-none" />)}
                                 </Pie>
                                 <Tooltip contentStyle={{fontSize: '11px', borderRadius: '8px'}}/>
                             </PieChart>

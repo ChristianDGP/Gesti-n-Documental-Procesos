@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NotificationService } from '../services/firebaseBackend';
 import { User, Notification } from '../types';
-import { Inbox, CheckCircle, Mail, User as UserIcon, MessageSquare, AlertTriangle, CheckSquare, ArrowRight, Search, ChevronLeft, ChevronRight, Filter, Upload, Square, Loader2, RotateCcw } from 'lucide-react';
+import { Inbox, CheckCircle, Mail, User as UserIcon, MessageSquare, AlertTriangle, CheckSquare, ArrowRight, Search, ChevronLeft, ChevronRight, Filter, Upload, Square, Loader2, RotateCcw, ArrowUpDown } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -21,6 +21,7 @@ const Buffer: React.FC<Props> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY'>('PENDING');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
 
   useEffect(() => {
     setLoading(true);
@@ -32,9 +33,9 @@ const Buffer: React.FC<Props> = ({ user }) => {
     return () => unsubscribe();
   }, [user.id]);
 
-  // Filtrado de notificaciones basado en la pestaña activa
+  // Filtrado y ordenado de notificaciones basado en la pestaña activa
   const filteredNotifications = useMemo(() => {
-      return notifications.filter(n => {
+      let result = notifications.filter(n => {
           // Si estamos en PENDING, mostramos solo los NO leídos
           if (activeTab === 'PENDING' && n.isRead) return false;
           // Si estamos en HISTORY, mostramos solo los SI leídos
@@ -50,7 +51,16 @@ const Buffer: React.FC<Props> = ({ user }) => {
           }
           return true;
       });
-  }, [notifications, activeTab, searchTerm]);
+
+      // Ordenar por fecha
+      result.sort((a, b) => {
+          const dateA = new Date(a.timestamp).getTime();
+          const dateB = new Date(b.timestamp).getTime();
+          return sortOrder === 'DESC' ? dateB - dateA : dateA - dateB;
+      });
+
+      return result;
+  }, [notifications, activeTab, searchTerm, sortOrder]);
 
   const totalPages = Math.ceil(filteredNotifications.length / ITEMS_PER_PAGE);
   
@@ -197,6 +207,16 @@ const Buffer: React.FC<Props> = ({ user }) => {
                           Historial
                       </button>
                   </div>
+
+                  {/* ORDENAR POR FECHA */}
+                  <button 
+                    onClick={() => setSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-all text-xs font-black uppercase tracking-widest group"
+                    title={sortOrder === 'DESC' ? 'Más recientes primero' : 'Más antiguos primero'}
+                  >
+                    <ArrowUpDown size={14} className={`transition-transform duration-300 ${sortOrder === 'ASC' ? 'rotate-180' : ''}`} />
+                    {sortOrder === 'DESC' ? 'Recientes' : 'Antiguos'}
+                  </button>
               </div>
 
               <div className="relative w-full lg:w-80">

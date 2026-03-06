@@ -148,7 +148,8 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
           const addedAssignees = currentAssignees.filter(id => !originalAssignees.includes(id));
           if (addedAssignees.length > 0) {
               await Promise.all(addedAssignees.map(async (targetId) => {
-                  await NotificationService.create(targetId, matrixKeyToUpdate!, 'ASSIGNMENT', 'Nueva Asignación de Proceso', `Se le ha asignado el proceso: ${modalMicro} (${modalProject})`, user.name);
+                  const notifTitle = `Asignación: ${modalProject} - ${modalMicro}`;
+                  await NotificationService.create(targetId, matrixKeyToUpdate!, 'ASSIGNMENT', notifTitle, `Se le ha asignado el proceso: ${modalMicro} (${modalProject})`, user.name);
               }));
           }
           setShowEditModal(false);
