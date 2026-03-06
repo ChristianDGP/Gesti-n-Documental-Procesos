@@ -531,6 +531,7 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
                                         <option value="">Seleccionar...</option>
                                         <option value="HPC">HPC</option>
                                         <option value="HSR">HSR</option>
+                                        <option value="REU">REU</option>
                                         <option value="GENERAL">GENERAL</option>
                                     </select>
                                 </div>

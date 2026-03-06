@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History, Link as LinkIcon } from 'lucide-react';
 import { User, UserRole, DocState, Document } from '../types';
 import { NotificationService } from '../services/firebaseBackend';
 
@@ -58,6 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessReports);
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
   const canAccessGantt = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessGantt);
+  const canAccessReuseMatrix = user.role === UserRole.ADMIN || user.canAccessReuseMatrix;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -97,6 +98,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                     <>
                         <NavItem to="/admin/structure" icon={Network} label="Estructura" />
                         <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
+                        {canAccessReuseMatrix && <NavItem to="/admin/reuse" icon={LinkIcon} label="Matriz Reutilizables" />}
                     </>
                 )}
                 {canAccessReferents && <NavItem to="/admin/referents" icon={UserCheck} label="Referentes" />}

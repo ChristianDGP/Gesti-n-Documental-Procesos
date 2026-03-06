@@ -22,6 +22,7 @@ export interface User {
   canAccessReportMonthly?: boolean;
   canAccessReferents?: boolean;
   canAccessGantt?: boolean;
+  canAccessReuseMatrix?: boolean;
 }
 
 export interface Referent {
@@ -112,6 +113,7 @@ export interface ProcessNode {
   assignees: string[];
   referentIds?: string[];
   requiredTypes: DocType[];
+  reusableLinks?: string[];
   active?: boolean;
 }
 
@@ -134,7 +136,7 @@ export interface UserHierarchy {
 export interface ParsedFilenameResult {
   valido: boolean;
   errores: string[];
-  proyecto?: 'HPC' | 'HSR';
+  proyecto?: string;
   microproceso?: string;
   tipo?: string;
   nomenclatura?: string;

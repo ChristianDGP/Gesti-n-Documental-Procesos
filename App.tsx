@@ -13,6 +13,7 @@ import AdminDatabase from './views/AdminDatabase';
 import AdminReferents from './views/AdminReferents';
 import AdminGantt from './views/AdminGantt';
 import AdminEventLog from './views/AdminEventLog';
+import AdminReuseMatrix from './views/AdminReuseMatrix';
 import Reports from './views/Reports'; 
 import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
@@ -90,6 +91,7 @@ const App: React.FC = () => {
                                       <>
                                         <Route path="/admin/structure" element={<AdminHierarchy user={user} />} />
                                         <Route path="/admin/assignments" element={<AdminAssignments user={user} />} />
+                                        <Route path="/admin/reuse" element={<AdminReuseMatrix user={user} />} />
                                       </>
                                     )}
 

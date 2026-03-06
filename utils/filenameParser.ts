@@ -33,12 +33,12 @@ export const parseDocumentFilename = (
   const tipoCodigo = parts[parts.length - 2].toUpperCase();
   const microproceso = parts.slice(1, parts.length - 2).join(' - ');
 
-  if (proyecto !== 'HPC' && proyecto !== 'HSR') {
+  if (proyecto !== 'HPC' && proyecto !== 'HSR' && proyecto !== 'REU') {
     result.errores.push(`Proyecto inválido: ${proyecto}.`);
   } else if (expectedProject && proyecto !== expectedProject.toUpperCase()) {
     result.errores.push(`Proyecto no coincide con la solicitud.`);
   }
-  result.proyecto = proyecto as 'HPC' | 'HSR';
+  result.proyecto = proyecto;
 
   if (!microproceso || microproceso.trim() === '') {
     result.errores.push('Microproceso vacío.');

@@ -4,7 +4,7 @@ import { DocumentService, HistoryService, UserService, HierarchyService, Referen
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
-import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus, RefreshCw, ChevronRight, UserCheck, Eye } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, XCircle, Activity, Paperclip, Mail, MessageSquare, Send, FileCheck, FileX, Info, ListFilter, Trash2, Lock, Save, PlusCircle, Calendar, Upload, ExternalLink, Clock, User as UserIcon, Users, ArrowRight, History as HistoryIcon, Layers, AlertTriangle, FilePlus, RefreshCw, ChevronRight, UserCheck, Eye, Link as LinkIcon } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -21,6 +21,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [assigneeEmails, setAssigneeEmails] = useState<string[]>([]);
   const [referentEmails, setReferentEmails] = useState<string[]>([]);
   const [referentNames, setReferentNames] = useState<string[]>([]);
+  const [reusableLinks, setReusableLinks] = useState<{ id: string, name: string, latestDocId?: string }[]>([]);
   const [coordinatorEmail, setCoordinatorEmail] = useState<string>('');
   const [authorEmail, setAuthorEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -105,6 +106,21 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           const matrix = resolveMatrixData(currentDoc, hierarchy, allReferents);
           setReferentEmails(matrix.referentEmails);
           setReferentNames(matrix.referentNames);
+          
+          if (matrix.reusableLinks && matrix.reusableLinks.length > 0) {
+              const links = matrix.reusableLinks.map(id => {
+                  const reuNode = Object.values(hierarchy['REU'] || {}).flatMap(m => Object.values(m)).flatMap(p => p).find(n => n.docId === id);
+                  const latestReuDoc = allDocs.filter(d => d.project === 'REU' && normalizeHeader(d.microprocess || '') === normalizeHeader(reuNode?.name || '')).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+                  return {
+                      id,
+                      name: reuNode?.name || 'Desconocido',
+                      latestDocId: latestReuDoc?.id
+                  };
+              });
+              setReusableLinks(links);
+          } else {
+              setReusableLinks([]);
+          }
 
           if (matrix.assignees.length > 0) {
               const names = matrix.assignees.map(aid => allUsers.find(u => u.id === aid)?.name).filter(n => n) as string[];
@@ -123,6 +139,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       let resolvedAssigneeIds = d.assignees || [];
       let resolvedReferentEmails: string[] = [];
       let resolvedReferentNames: string[] = [];
+      let resolvedReusableLinks: string[] = [];
 
       if (d.project && d.microprocess) {
            const targetMicro = normalizeHeader(d.microprocess);
@@ -148,8 +165,16 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                resolvedReferentEmails = matches.map(r => r.email);
                resolvedReferentNames = matches.map(r => r.name);
            }
+           if (node?.reusableLinks) {
+               resolvedReusableLinks = node.reusableLinks;
+           }
       }
-      return { assignees: resolvedAssigneeIds, referentEmails: resolvedReferentEmails, referentNames: resolvedReferentNames };
+      return { 
+          assignees: resolvedAssigneeIds, 
+          referentEmails: resolvedReferentEmails, 
+          referentNames: resolvedReferentNames,
+          reusableLinks: resolvedReusableLinks
+      };
   };
 
   const loadData = async (docId: string) => {
@@ -573,6 +598,41 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
             {!canEdit && !isGuest && <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium"><Lock size={18} className="text-amber-500" /> Vista de solo lectura. No tiene permisos de gestión en este documento.</div>}
             
+            {/* DOCUMENTOS REUTILIZABLES VINCULADOS */}
+            {reusableLinks.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2 uppercase text-[11px] tracking-widest">
+                        <LinkIcon size={14} className="text-indigo-600" /> Componentes Reutilizables (REU)
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {reusableLinks.map(link => (
+                            <div key={link.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-indigo-200 transition-all group">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-slate-200 text-indigo-500 shadow-sm group-hover:shadow-md transition-all">
+                                        <FileText size={20} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-700">{link.name}</p>
+                                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">Proyecto REU</p>
+                                    </div>
+                                </div>
+                                {link.latestDocId ? (
+                                    <Link 
+                                        to={`/doc/${link.latestDocId}`} 
+                                        className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all shadow-sm"
+                                        title="Ver Documento"
+                                    >
+                                        <ExternalLink size={16} />
+                                    </Link>
+                                ) : (
+                                    <span className="text-[10px] font-bold text-slate-400 italic px-2 py-1 bg-slate-100 rounded border border-slate-200">Sin Archivo</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {canEdit && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                      <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2 uppercase text-[11px] tracking-widest">

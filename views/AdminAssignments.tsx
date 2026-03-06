@@ -26,7 +26,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [filterMicro, setFilterMicro] = useState(''); 
   const [filterAnalyst, setFilterAnalyst] = useState('');
 
-  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({ 'HPC': true, 'HSR': true });
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({ 'HPC': true, 'HSR': true, 'REU': true });
 
   // Edit Assignment Modal State
   const [showEditModal, setShowEditModal] = useState(false);

@@ -352,6 +352,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                             <option value="">TODOS</option>
                             <option value="HPC">HPC</option>
                             <option value="HSR">HSR</option>
+                            <option value="REU">REU</option>
                         </select>
                     </div>
                     <div className="space-y-1.5">

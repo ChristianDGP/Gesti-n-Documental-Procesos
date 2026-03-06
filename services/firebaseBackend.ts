@@ -463,7 +463,15 @@ export const HierarchyService = {
     const hierarchy: FullHierarchy = {};
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      const node: ProcessNode = { name: data.name, docId: doc.id, assignees: data.assignees || [], referentIds: data.referentIds || [], requiredTypes: data.requiredTypes || [], active: data.active !== false };
+      const node: ProcessNode = { 
+        name: data.name, 
+        docId: doc.id, 
+        assignees: data.assignees || [], 
+        referentIds: data.referentIds || [], 
+        requiredTypes: data.requiredTypes || [], 
+        reusableLinks: data.reusableLinks || [],
+        active: data.active !== false 
+      };
       if (!hierarchy[data.project]) hierarchy[data.project] = {};
       if (!hierarchy[data.project][data.macroprocess || 'Sin Macro']) hierarchy[data.project][data.macroprocess || 'Sin Macro'] = {};
       if (!hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process]) hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process] = [];
@@ -513,6 +521,9 @@ export const HierarchyService = {
   deleteMicroprocess: async (docId: string) => { await deleteDoc(doc(db, "process_matrix", docId)); },
   updateMicroprocessReferents: async (docId: string, referentIds: string[]) => {
       await updateDoc(doc(db, "process_matrix", docId), { referentIds });
+  },
+  updateReusableLinks: async (docId: string, reusableLinks: string[]) => {
+      await updateDoc(doc(db, "process_matrix", docId), { reusableLinks });
   },
   getRequiredTypesMap: async (): Promise<Record<string, DocType[]>> => {
       const q = query(collection(db, "process_matrix"));

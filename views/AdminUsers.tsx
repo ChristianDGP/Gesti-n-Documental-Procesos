@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
-import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange, Link as LinkIcon } from 'lucide-react';
 
 const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -24,6 +24,7 @@ const AdminUsers: React.FC = () => {
   const [canAccessReportMonthly, setCanAccessReportMonthly] = useState(false);
   const [canAccessReferents, setCanAccessReferents] = useState(false);
   const [canAccessGantt, setCanAccessGantt] = useState(false);
+  const [canAccessReuseMatrix, setCanAccessReuseMatrix] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -36,7 +37,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       
@@ -99,6 +100,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportMonthly(user.canAccessReportMonthly || false);
       setCanAccessReferents(user.canAccessReferents || false);
       setCanAccessGantt(user.canAccessGantt || false);
+      setCanAccessReuseMatrix(user.canAccessReuseMatrix || false);
       setShowForm(true);
   };
 
@@ -131,12 +133,13 @@ const AdminUsers: React.FC = () => {
                 nickname: nickname || undefined,
                 role,
                 organization,
-                canAccessReports: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReports : true,
-                canAccessReportGestion: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReportGestion : true,
-                canAccessReportContinuity: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReportContinuity : true,
-                canAccessReportMonthly: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReportMonthly : true,
-                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : (role === UserRole.GUEST ? false : true),
-                canAccessGantt: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessGantt : true
+                canAccessReports: role === UserRole.ADMIN ? true : canAccessReports,
+                canAccessReportGestion: role === UserRole.ADMIN ? true : canAccessReportGestion,
+                canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
+                canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
+                canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
+                canAccessGantt: role === UserRole.ADMIN ? true : canAccessGantt,
+                canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix
             };
             if (password) {
                 updatePayload.password = password;
@@ -152,12 +155,13 @@ const AdminUsers: React.FC = () => {
                 organization,
                 password: password || undefined,
                 active: true,
-                canAccessReports: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReports : false,
-                canAccessReportGestion: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReportGestion : false,
-                canAccessReportContinuity: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReportContinuity : false,
-                canAccessReportMonthly: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessReportMonthly : false,
-                canAccessReferents: role === UserRole.ANALYST ? canAccessReferents : false,
-                canAccessGantt: (role === UserRole.ANALYST || role === UserRole.GUEST) ? canAccessGantt : false
+                canAccessReports: role === UserRole.ADMIN ? true : canAccessReports,
+                canAccessReportGestion: role === UserRole.ADMIN ? true : canAccessReportGestion,
+                canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
+                canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
+                canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
+                canAccessGantt: role === UserRole.ADMIN ? true : canAccessGantt,
+                canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix
             } as User);
         }
         
@@ -183,6 +187,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportMonthly(false);
       setCanAccessReferents(false);
       setCanAccessGantt(false);
+      setCanAccessReuseMatrix(false);
   };
 
   return (
@@ -235,13 +240,13 @@ const AdminUsers: React.FC = () => {
                         </select>
                     </div>
 
-                    {/* SECCIÓN DE PERMISOS PARA ANALISTAS Y VISITAS */}
-                    {(role === UserRole.ANALYST || role === UserRole.GUEST) && (
+                    {/* SECCIÓN DE PERMISOS PARA ANALISTAS, COORDINADORES Y VISITAS */}
+                    {role !== UserRole.ADMIN && (
                         <div className="md:col-span-2 bg-indigo-50 p-4 rounded-lg border border-indigo-100 mt-2">
                             <h3 className="text-xs font-bold text-indigo-900 uppercase mb-3 flex items-center gap-2">
-                                <Shield size={14} /> Permisos de Acceso ({role === UserRole.GUEST ? 'Visita' : 'Analista'})
+                                <Shield size={14} /> Permisos de Acceso ({role === UserRole.GUEST ? 'Visita' : role === UserRole.COORDINATOR ? 'Coordinador' : 'Analista'})
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div className="space-y-2">
                                     <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
                                         <input 
@@ -266,26 +271,9 @@ const AdminUsers: React.FC = () => {
                                             <span className="text-sm font-medium text-slate-700">Módulo Reportes</span>
                                         </div>
                                     </label>
-                                    
-                                    {canAccessReports && (
-                                        <div className="ml-6 space-y-2 animate-fadeIn">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox" checked={canAccessReportGestion} onChange={(e) => setCanAccessReportGestion(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500" />
-                                                <span className="text-xs text-slate-600">1. Reportes de Gestión</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox" checked={canAccessReportContinuity} onChange={(e) => setCanAccessReportContinuity(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500" />
-                                                <span className="text-xs text-slate-600">2. Monitor de Continuidad</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox" checked={canAccessReportMonthly} onChange={(e) => setCanAccessReportMonthly(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500" />
-                                                <span className="text-xs text-slate-600">3. Cierre Mensual</span>
-                                            </label>
-                                        </div>
-                                    )}
                                 </div>
                                 
-                                {role === UserRole.ANALYST && (
+                                {role !== UserRole.GUEST && (
                                     <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
                                         <input 
                                             type="checkbox" 
@@ -310,6 +298,19 @@ const AdminUsers: React.FC = () => {
                                     <div className="flex items-center gap-2">
                                         <CalendarRange size={16} className="text-indigo-500" />
                                         <span className="text-sm font-medium text-slate-700">Diagrama Gantt</span>
+                                    </div>
+                                </label>
+
+                                <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={canAccessReuseMatrix}
+                                        onChange={(e) => setCanAccessReuseMatrix(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <LinkIcon size={16} className="text-indigo-500" />
+                                        <span className="text-sm font-medium text-slate-700">Matriz Reutilizables</span>
                                     </div>
                                 </label>
                             </div>
@@ -350,52 +351,18 @@ const AdminUsers: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">
-                                        {/* BOTÓN REPORTE Y SUB-PERMISOS */}
-                                        <div className="flex flex-col gap-1">
-                                            <button 
-                                                onClick={() => handleTogglePermission(u, 'canAccessReports')}
-                                                disabled={updatingId === `${u.id}-canAccessReports`}
-                                                className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                    ${u.canAccessReports !== false 
-                                                        ? 'bg-green-50 text-green-600 hover:bg-green-100' 
-                                                        : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                                title={u.canAccessReports !== false ? "Deshabilitar Módulo Reportes" : "Habilitar Módulo Reportes"}
-                                            >
-                                                {updatingId === `${u.id}-canAccessReports` ? <Loader2 size={14} className="animate-spin" /> : <PieChart size={14} />}
-                                            </button>
-                                            
-                                            {u.canAccessReports !== false && (
-                                                <div className="flex gap-1 justify-center animate-fadeIn">
-                                                    <button 
-                                                        onClick={() => handleTogglePermission(u, 'canAccessReportGestion')}
-                                                        disabled={updatingId === `${u.id}-canAccessReportGestion`}
-                                                        className={`w-5 h-5 rounded text-[8px] font-bold flex items-center justify-center transition-all
-                                                            ${u.canAccessReportGestion !== false ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'}`}
-                                                        title="1. Reportes de Gestión"
-                                                    >
-                                                        {updatingId === `${u.id}-canAccessReportGestion` ? <Loader2 size={8} className="animate-spin" /> : "1"}
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleTogglePermission(u, 'canAccessReportContinuity')}
-                                                        disabled={updatingId === `${u.id}-canAccessReportContinuity`}
-                                                        className={`w-5 h-5 rounded text-[8px] font-bold flex items-center justify-center transition-all
-                                                            ${u.canAccessReportContinuity !== false ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'}`}
-                                                        title="2. Monitor de Continuidad"
-                                                    >
-                                                        {updatingId === `${u.id}-canAccessReportContinuity` ? <Loader2 size={8} className="animate-spin" /> : "2"}
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleTogglePermission(u, 'canAccessReportMonthly')}
-                                                        disabled={updatingId === `${u.id}-canAccessReportMonthly`}
-                                                        className={`w-5 h-5 rounded text-[8px] font-bold flex items-center justify-center transition-all
-                                                            ${u.canAccessReportMonthly !== false ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'}`}
-                                                        title="3. Cierre Mensual"
-                                                    >
-                                                        {updatingId === `${u.id}-canAccessReportMonthly` ? <Loader2 size={8} className="animate-spin" /> : "3"}
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
+                                        {/* BOTÓN REPORTE */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessReports')}
+                                            disabled={updatingId === `${u.id}-canAccessReports`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessReports !== false 
+                                                    ? 'bg-green-50 text-green-600 hover:bg-green-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessReports !== false ? "Deshabilitar Módulo Reportes" : "Habilitar Módulo Reportes"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessReports` ? <Loader2 size={14} className="animate-spin" /> : <PieChart size={14} />}
+                                        </button>
 
                                         {/* BOTÓN REFERENTES */}
                                         {u.role !== UserRole.GUEST && (
@@ -423,6 +390,19 @@ const AdminUsers: React.FC = () => {
                                             title={u.canAccessGantt !== false ? "Deshabilitar Gantt" : "Habilitar Gantt"}
                                         >
                                             {updatingId === `${u.id}-canAccessGantt` ? <Loader2 size={14} className="animate-spin" /> : <CalendarRange size={14} />}
+                                        </button>
+
+                                        {/* BOTÓN MATRIZ REUTILIZABLES */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessReuseMatrix')}
+                                            disabled={updatingId === `${u.id}-canAccessReuseMatrix`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessReuseMatrix !== false 
+                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessReuseMatrix !== false ? "Deshabilitar Matriz Reutilizables" : "Habilitar Matriz Reutilizables"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessReuseMatrix` ? <Loader2 size={14} className="animate-spin" /> : <LinkIcon size={14} />}
                                         </button>
                                     </div>
                                 </td>

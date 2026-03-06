@@ -91,7 +91,7 @@ const ManualAnalista: React.FC = () => {
             <div className="space-y-3">
               <div className="flex gap-2 text-sm">
                 <span className="font-bold text-indigo-600 min-w-[100px]">Proyecto:</span>
-                <span className="text-slate-600">Debe ser "HPC" o "HSR".</span>
+                <span className="text-slate-600">Debe ser "HPC", "HSR" o "REU".</span>
               </div>
               <div className="flex gap-2 text-sm">
                 <span className="font-bold text-indigo-600 min-w-[100px]">Tipo:</span>
@@ -99,7 +99,7 @@ const ManualAnalista: React.FC = () => {
               </div>
               <div className="flex gap-2 text-sm">
                 <span className="font-bold text-indigo-600 min-w-[100px]">Ejemplo:</span>
-                <span className="text-slate-700 italic">HPC - Gestión de Citas - ASIS - 0.1</span>
+                <span className="text-slate-700 italic">REU - Gestión de Citas - ASIS - 0.1</span>
               </div>
             </div>
           </section>
