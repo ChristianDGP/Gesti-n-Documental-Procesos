@@ -437,7 +437,7 @@ const Reports: React.FC<Props> = ({ user }) => {
         return periods;
     }, [filteredDocs, chartScale]);
 
-    const goToDashboard = (ids: string[]) => navigate('/', { state: { filterIds: ids, fromReport: true } });
+    const goToDashboard = (ids: string[]) => navigate('/dashboard', { state: { filterIds: ids, fromReport: true } });
 
     const handleExportClosureExcel = () => {
         if (closureBoardData.length === 0) return;
