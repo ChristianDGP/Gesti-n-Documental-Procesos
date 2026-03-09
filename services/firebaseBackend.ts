@@ -388,6 +388,34 @@ export const DocumentService = {
       }
   },
 
+  masterUpdate: async (docId: string, user: User, updates: { state?: DocState, version?: string, progress?: number, hasPendingRequest?: boolean, comment: string }): Promise<void> => {
+      const docRef = doc(db, "documents", docId);
+      const docSnap = await getDoc(docRef);
+      if(!docSnap.exists()) throw new Error("Documento no encontrado");
+      const currentData = docSnap.data() as Document;
+
+      const finalUpdates: any = {
+          updatedAt: new Date().toISOString(),
+          ignoredInconsistency: null as any
+      };
+
+      if (updates.state !== undefined) finalUpdates.state = updates.state;
+      if (updates.version !== undefined) finalUpdates.version = updates.version;
+      if (updates.progress !== undefined) finalUpdates.progress = updates.progress;
+      if (updates.hasPendingRequest !== undefined) finalUpdates.hasPendingRequest = updates.hasPendingRequest;
+
+      await updateDoc(docRef, finalUpdates);
+      await HistoryService.log(
+          docId, 
+          user, 
+          'Edición Maestra', 
+          currentData.state, 
+          updates.state || currentData.state, 
+          updates.comment || 'Edición manual de metadatos por administrador.', 
+          updates.version || currentData.version
+      );
+  },
+
   transitionState: async (docId: string, user: User, action: any, comment: string, file?: File, customVersion?: string): Promise<void> => {
       // Al realizar una transición, las notificaciones anteriores de este documento se consideran "atendidas"
       await NotificationService.markDocumentNotificationsAsRead(docId);
