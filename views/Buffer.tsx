@@ -111,7 +111,7 @@ const Buffer: React.FC<Props> = ({ user }) => {
       }
       
       if (notif.documentId.startsWith('MTX_')) {
-          navigate('/new');
+          navigate(`/new?assignmentId=${notif.documentId}`);
       } else {
           navigate(`/doc/${notif.documentId}`);
       }

@@ -143,6 +143,20 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
               setUserHierarchy(currentHierarchy);
           }
 
+          // Handle Pre-fill from Assignment ID (from Inbox/Buffer)
+          const searchParams = new URLSearchParams(location.search);
+          const assignmentId = searchParams.get('assignmentId');
+          if (assignmentId) {
+              const node = await HierarchyService.getMatrixNodeById(assignmentId);
+              if (node) {
+                  const { project, macroprocess, process, name } = node as any;
+                  if (project) setSelectedProject(project);
+                  if (macroprocess) setSelectedMacro(macroprocess);
+                  if (process) setSelectedProcess(process);
+                  if (name) setSelectedMicro(name);
+              }
+          }
+
           // Handle Pre-fill from Document Detail
           if (location.state?.prefill) {
               const { project, macro, process, micro, docType } = location.state.prefill;

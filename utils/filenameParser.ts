@@ -128,9 +128,20 @@ export const parseDocumentFilename = (
           result.estado = vUpper.match(/^V\d+\.\d+\.\d+AR$/) ? 'Revisión Interna Control' : 'Enviado a Control';
           result.porcentaje = 90;
       } else if (vUpper.startsWith('V')) {
-          result.estado = vUpper.split('.').length > 2 ? 'Revisión Interna Referente' : 
-                          (vUpper.startsWith('V0.') ? 'Revisión Interna' : 'Enviado a Referente');
-          result.porcentaje = vUpper.startsWith('V0.') && vUpper.split('.').length === 2 ? 60 : 80;
+          const parts = vUpper.split('.');
+          if (parts.length > 2) {
+              result.estado = 'Revisión Interna Referente';
+              result.porcentaje = 80;
+          } else {
+              const n = parseInt(parts[1]);
+              if (!isNaN(n) && n % 2 !== 0) {
+                  result.estado = 'Revisión Interna';
+                  result.porcentaje = 60;
+              } else {
+                  result.estado = 'Enviado a Referente';
+                  result.porcentaje = 80;
+              }
+          }
       } else if (vUpper === '0.0') {
           result.estado = 'Iniciado';
           result.porcentaje = 10;

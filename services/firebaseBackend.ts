@@ -33,7 +33,9 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         const parts = v.split('.');
         if (parts.length === 3) return { state: DocState.REFERENT_REVIEW, progress: 80 };
         if (parts.length === 2) {
-            if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+            // Si tiene 2 partes y el segundo dígito es impar, es Revisión Interna
+            const n = parseInt(parts[1]);
+            if (!isNaN(n) && n % 2 !== 0) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
             return { state: DocState.SENT_TO_REFERENT, progress: 80 };
         }
     }
@@ -567,6 +569,23 @@ export const HierarchyService = {
   },
   updateReusableLinks: async (docId: string, reusableLinks: string[]) => {
       await updateDoc(doc(db, "process_matrix", docId), { reusableLinks });
+  },
+  getMatrixNodeById: async (docId: string): Promise<ProcessNode | null> => {
+      const snap = await getDoc(doc(db, "process_matrix", docId));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      return {
+          name: data.name,
+          docId: snap.id,
+          assignees: data.assignees || [],
+          referentIds: data.referentIds || [],
+          requiredTypes: data.requiredTypes || [],
+          reusableLinks: data.reusableLinks || [],
+          active: data.active !== false,
+          project: data.project,
+          macroprocess: data.macroprocess,
+          process: data.process
+      } as any;
   },
   getRequiredTypesMap: async (): Promise<Record<string, DocType[]>> => {
       const q = query(collection(db, "process_matrix"));
