@@ -58,7 +58,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly));
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReferents || user.canAccessReferentsByProcess || user.canAccessReferentsDirectory));
   const canAccessGantt = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessGantt);
-  const canAccessReuseMatrix = user.role === UserRole.ADMIN || user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView;
+  const canAccessReuseMatrix = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView));
+  const canAccessStructure = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessStructure);
+  const canAccessAssignments = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessAssignments);
+  const canAccessLog = user.role === UserRole.ADMIN || (user.role === UserRole.ANALYST && user.canAccessLog);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -89,15 +92,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Visualización y Análisis</div>
             <NavItem to="/dashboard" icon={BarChart2} label="Dashboard" />
             
-            {(canAccessReports || canAccessReferents || canAccessGantt || isAdminOrCoord) && (
+            {(canAccessReports || canAccessReferents || canAccessGantt || canAccessStructure || canAccessAssignments || canAccessReuseMatrix || canAccessLog || isAdminOrCoord) && (
               <>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 {canAccessGantt && <NavItem to="/admin/gantt" icon={CalendarRange} label="Diagrama Gantt" />}
-                {user.role === UserRole.ADMIN && <NavItem to="/admin/events" icon={History} label="Log de Eventos" />}
-                {isAdminOrCoord && (
+                {canAccessLog && <NavItem to="/admin/events" icon={History} label="Log de Eventos" />}
+                {(canAccessStructure || canAccessAssignments || canAccessReuseMatrix) && (
                     <>
-                        <NavItem to="/admin/structure" icon={Network} label="Estructura" />
-                        <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />
+                        {canAccessStructure && <NavItem to="/admin/structure" icon={Network} label="Estructura" />}
+                        {canAccessAssignments && <NavItem to="/admin/assignments" icon={ClipboardList} label="Asignaciones" />}
                         {canAccessReuseMatrix && <NavItem to="/admin/reuse" icon={LinkIcon} label="Matriz Reutilizables" />}
                     </>
                 )}

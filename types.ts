@@ -27,6 +27,9 @@ export interface User {
   canAccessReuseMatrix?: boolean;
   canAccessReuseMatrixLink?: boolean;
   canAccessReuseMatrixView?: boolean;
+  canAccessStructure?: boolean;
+  canAccessAssignments?: boolean;
+  canAccessLog?: boolean;
 }
 
 export interface Referent {

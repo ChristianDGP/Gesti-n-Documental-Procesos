@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
-import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange, Link as LinkIcon } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange, Link as LinkIcon, Network, ClipboardList, History } from 'lucide-react';
 
 const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -29,6 +29,9 @@ const AdminUsers: React.FC = () => {
   const [canAccessReuseMatrix, setCanAccessReuseMatrix] = useState(false);
   const [canAccessReuseMatrixLink, setCanAccessReuseMatrixLink] = useState(false);
   const [canAccessReuseMatrixView, setCanAccessReuseMatrixView] = useState(false);
+  const [canAccessStructure, setCanAccessStructure] = useState(false);
+  const [canAccessAssignments, setCanAccessAssignments] = useState(false);
+  const [canAccessLog, setCanAccessLog] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -41,7 +44,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       
@@ -121,6 +124,9 @@ const AdminUsers: React.FC = () => {
       setCanAccessReuseMatrix(user.canAccessReuseMatrix || false);
       setCanAccessReuseMatrixLink(user.canAccessReuseMatrixLink || false);
       setCanAccessReuseMatrixView(user.canAccessReuseMatrixView || false);
+      setCanAccessStructure(user.canAccessStructure || false);
+      setCanAccessAssignments(user.canAccessAssignments || false);
+      setCanAccessLog(user.canAccessLog || false);
       setShowForm(true);
   };
 
@@ -163,7 +169,10 @@ const AdminUsers: React.FC = () => {
                 canAccessGantt: role === UserRole.ADMIN ? true : canAccessGantt,
                 canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix,
                 canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
-                canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView
+                canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView,
+                canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
+                canAccessAssignments: role === UserRole.ADMIN ? true : canAccessAssignments,
+                canAccessLog: role === UserRole.ADMIN ? true : canAccessLog
             };
             if (password) {
                 updatePayload.password = password;
@@ -189,7 +198,10 @@ const AdminUsers: React.FC = () => {
                 canAccessGantt: role === UserRole.ADMIN ? true : canAccessGantt,
                 canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix,
                 canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
-                canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView
+                canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView,
+                canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
+                canAccessAssignments: role === UserRole.ADMIN ? true : canAccessAssignments,
+                canAccessLog: role === UserRole.ADMIN ? true : canAccessLog
             } as User);
         }
         
@@ -220,6 +232,9 @@ const AdminUsers: React.FC = () => {
       setCanAccessReuseMatrix(false);
       setCanAccessReuseMatrixLink(false);
       setCanAccessReuseMatrixView(false);
+      setCanAccessStructure(false);
+      setCanAccessAssignments(false);
+      setCanAccessLog(false);
   };
 
   return (
@@ -409,6 +424,51 @@ const AdminUsers: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={canAccessStructure}
+                                            onChange={(e) => setCanAccessStructure(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Network size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Estructura</span>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={canAccessAssignments}
+                                            onChange={(e) => setCanAccessAssignments(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <ClipboardList size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Asignaciones</span>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={canAccessLog}
+                                            onChange={(e) => setCanAccessLog(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <History size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Log de Eventos</span>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -499,6 +559,45 @@ const AdminUsers: React.FC = () => {
                                             title={u.canAccessReuseMatrix !== false ? "Deshabilitar Matriz Reutilizables" : "Habilitar Matriz Reutilizables"}
                                         >
                                             {updatingId === `${u.id}-canAccessReuseMatrix` ? <Loader2 size={14} className="animate-spin" /> : <LinkIcon size={14} />}
+                                        </button>
+
+                                        {/* BOTÓN ESTRUCTURA */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessStructure')}
+                                            disabled={updatingId === `${u.id}-canAccessStructure`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessStructure !== false 
+                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessStructure !== false ? "Deshabilitar Estructura" : "Habilitar Estructura"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessStructure` ? <Loader2 size={14} className="animate-spin" /> : <Network size={14} />}
+                                        </button>
+
+                                        {/* BOTÓN ASIGNACIONES */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessAssignments')}
+                                            disabled={updatingId === `${u.id}-canAccessAssignments`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessAssignments !== false 
+                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessAssignments !== false ? "Deshabilitar Asignaciones" : "Habilitar Asignaciones"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessAssignments` ? <Loader2 size={14} className="animate-spin" /> : <ClipboardList size={14} />}
+                                        </button>
+
+                                        {/* BOTÓN LOG EVENTOS */}
+                                        <button 
+                                            onClick={() => handleTogglePermission(u, 'canAccessLog')}
+                                            disabled={updatingId === `${u.id}-canAccessLog`}
+                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
+                                                ${u.canAccessLog !== false 
+                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
+                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
+                                            title={u.canAccessLog !== false ? "Deshabilitar Log de Eventos" : "Habilitar Log de Eventos"}
+                                        >
+                                            {updatingId === `${u.id}-canAccessLog` ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
                                         </button>
                                     </div>
                                 </td>
