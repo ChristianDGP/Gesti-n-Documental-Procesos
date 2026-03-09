@@ -897,7 +897,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                                 <Info size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
                                 <div>
                                     <p className="text-xs font-black text-blue-800 uppercase mb-1">Carga de Documento Priorizada</p>
-                                    <p className="text-xs text-blue-900 leading-relaxed font-bold">{getCoordinatorRuleHint(doc.state, pendingAction)}</p>
+                                    <p className="text-xs text-blue-900 leading-relaxed font-bold">{getCoordinatorRuleHint(doc.state, pendingAction, doc.project)}</p>
                                 </div>
                             </div>
                         </div>

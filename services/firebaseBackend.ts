@@ -22,7 +22,7 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
     const v = (version || '').trim().toUpperCase();
     if (!v || v === '-' || v === '0') return { state: DocState.NOT_STARTED, progress: 0 };
     
-    if (v.endsWith('ACG')) return { state: DocState.APPROVED, progress: 100 };
+    if (v.endsWith('ACG') || v === 'PR') return { state: DocState.APPROVED, progress: 100 };
     
     if (v.endsWith('AR')) {
         if (/^V1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
@@ -34,7 +34,10 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         return { state: DocState.SENT_TO_REFERENT, progress: 80 };
     }
     
-    if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+    if (v.startsWith('V0.')) {
+        if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
+        return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+    }
     
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
     

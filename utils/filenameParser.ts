@@ -68,6 +68,7 @@ export const parseDocumentFilename = (
   const regexInProcess = /^0\.(\d+)$/;          
   const regexInternal = /^V0\.(\d+)$/;          
   const regexReferent = /^V1\.(\d+)\.(\d+)$/;   
+  const regexReferentREU = /^V0\.(\d+)\.(\d+)$/;
   const regexControl = /^V1\.(\d+)\.(\d+)AR$/;  
 
   if (expectedRequestType) {
@@ -96,13 +97,13 @@ export const parseDocumentFilename = (
               }
           }
       } else if (expectedRequestType === 'REFERENT') {
-          const match = version.match(regexReferent);
+          const match = version.match(proyecto === 'REU' ? regexReferentREU : regexReferent);
           if (!match) {
-              result.errores.push('Para Revisión Interna Referente el formato debe ser "v1.n.i" (ej: v1.0.1).');
+              result.errores.push(proyecto === 'REU' ? 'Para Revisión Interna Referente el formato debe ser "v0.n.i" (ej: v0.0.1).' : 'Para Revisión Interna Referente el formato debe ser "v1.n.i" (ej: v1.0.1).');
           } else {
               const i = parseInt(match[2]);
               if (i % 2 === 0) {
-                  result.errores.push(`Para Revisión Interna Referente el dígito "i" (${i}) debe ser IMPAR (ej: v1.0.1, v1.0.3).`);
+                  result.errores.push(`Para Revisión Interna Referente el dígito "i" (${i}) debe ser IMPAR (ej: ${proyecto === 'REU' ? 'v0.0.1' : 'v1.0.1'}).`);
               }
           }
       } else if (expectedRequestType === 'CONTROL') {
@@ -121,7 +122,7 @@ export const parseDocumentFilename = (
   if (result.errores.length === 0) {
       const vUpper = version.toUpperCase();
       
-      if (vUpper.endsWith('ACG')) {
+      if (vUpper.endsWith('ACG') || (proyecto === 'REU' && vUpper === 'PR')) {
           result.estado = 'Aprobado Final';
           result.porcentaje = 100;
       } else if (vUpper.endsWith('AR')) {
@@ -158,17 +159,22 @@ export const validateCoordinatorRules = (
     
     const parts = filename.replace(/\.[^/.]+$/, "").split(' - ');
     if (parts.length < 4) return { valid: false, error: 'Formato de nombre inválido.' };
+    const project = parts[0].toUpperCase();
     const newVersion = parts[parts.length - 1].toUpperCase();
 
     const getParts = (v: string) => {
         let m;
         const vUpper = v.toUpperCase();
+        m = vUpper.match(/^PR$/);
+        if (m) return { n: null, i: null, ar: false, acg: false, pr: true, type: 'PR' };
         m = vUpper.match(/^V?0\.(\d+)$/);
         if (m) return { n: parseInt(m[1]), i: null, ar: false, acg: false, type: 'v0.n' };
         m = vUpper.match(/^V1\.(\d+)$/);
         if (m) return { n: parseInt(m[1]), i: null, ar: false, acg: false, type: 'v1.n' };
         m = vUpper.match(/^V1\.(\d+)\.(\d+)$/);
         if (m) return { n: parseInt(m[1]), i: parseInt(m[2]), ar: false, acg: false, type: 'v1.n.i' };
+        m = vUpper.match(/^V0\.(\d+)\.(\d+)$/);
+        if (m) return { n: parseInt(m[1]), i: parseInt(m[2]), ar: false, acg: false, type: 'v0.n.i' };
         m = vUpper.match(/^V1\.(\d+)\.(\d+)AR$/);
         if (m) return { n: parseInt(m[1]), i: parseInt(m[2]), ar: true, acg: false, type: 'v1.n.iAR' };
         m = vUpper.match(/^V1\.(\d+)AR$/);
@@ -185,11 +191,15 @@ export const validateCoordinatorRules = (
 
     if (currentState === DocState.INTERNAL_REVIEW) {
         if (action === 'APPROVE') {
-            if (incoming.type !== 'v1.n') return { valid: false, error: 'Aprobación requiere v1.n (Ej: v1.0).' };
+            if (project === 'REU') {
+                if (incoming.type !== 'v0.n.i' && incoming.type !== 'v1.n') return { valid: false, error: 'Aprobación requiere v0.n.i (Referente) o v1.n (Consolidar).' };
+            } else {
+                if (incoming.type !== 'v1.n') return { valid: false, error: 'Aprobación requiere v1.n (Ej: v1.0).' };
+            }
             return { valid: true };
         } else {
             if (incoming.type !== 'v0.n') return { valid: false, error: 'Rechazo requiere v0.n.' };
-            if (incoming.n % 2 !== 0) return { valid: false, error: `Para rechazar, "n" (${incoming.n}) debe ser PAR (ej: v0.2, v0.4).` };
+            if (incoming.n! % 2 !== 0) return { valid: false, error: `Para rechazar, "n" (${incoming.n}) debe ser PAR (ej: v0.2, v0.4).` };
             return { valid: true };
         }
     }
@@ -197,26 +207,33 @@ export const validateCoordinatorRules = (
     if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) {
         if (action === 'APPROVE') {
             if (incoming.type === 'v1.n') {
-                if (current && incoming.n <= current.n) return { valid: false, error: `Para consolidar versión, v1.${incoming.n} debe ser mayor a la actual (v1.${current.n}...).` };
+                if (current && current.type === 'v1.n.i' && incoming.n! <= current.n!) return { valid: false, error: `Para consolidar versión, v1.${incoming.n} debe ser mayor a la actual (v1.${current.n}...).` };
                 return { valid: true };
             } else if (incoming.type === 'v1.nAR') {
                 if (current?.type === 'v1.n.i') {
-                    if (incoming.n <= current.n) return { valid: false, error: `Al aprobar borrador para Control, debe consolidar versión (v1.${current.n + 1}AR).` };
+                    if (incoming.n! <= current.n!) return { valid: false, error: `Al aprobar borrador para Control, debe consolidar versión (v1.${current.n! + 1}AR).` };
+                    return { valid: true };
+                }
+                if (current?.type === 'v0.n.i') {
                     return { valid: true };
                 }
                 if (current?.type === 'v1.n') {
-                    if (incoming.n !== current.n) return { valid: false, error: `Al aprobar versión limpia para Control, mantenga el número (v1.${current.n}AR).` };
+                    if (incoming.n! !== current.n!) return { valid: false, error: `Al aprobar versión limpia para Control, mantenga el número (v1.${current.n}AR).` };
                     return { valid: true };
                 }
-                if (current && incoming.n < current.n) return { valid: false, error: 'No puede bajar de versión.' };
+                if (current && current.n !== null && incoming.n! < current.n) return { valid: false, error: 'No puede bajar de versión.' };
                 return { valid: true };
             } else {
                 return { valid: false, error: 'Aprobación requiere v1.n (Consolidar) o v1.nAR (Control).' };
             }
         } else {
-            if (incoming.type !== 'v1.n.i') return { valid: false, error: 'Rechazo requiere v1.n.i (Ej: v1.0.2).' };
+            if (project === 'REU') {
+                if (incoming.type !== 'v0.n.i') return { valid: false, error: 'Rechazo requiere v0.n.i (Ej: v0.0.2).' };
+            } else {
+                if (incoming.type !== 'v1.n.i') return { valid: false, error: 'Rechazo requiere v1.n.i (Ej: v1.0.2).' };
+            }
             if (incoming.i! % 2 !== 0) return { valid: false, error: `Para rechazar, el último dígito "i" (${incoming.i}) debe ser PAR.` };
-            if (current && incoming.n !== current.n) return { valid: false, error: `El rechazo debe mantener la versión base v1.${current.n}.` };
+            if (current && incoming.n! !== current.n!) return { valid: false, error: `El rechazo debe mantener la versión base v${project === 'REU' ? '0' : '1'}.${current.n}.` };
             if (current?.i !== null && incoming.i! <= current!.i!) return { valid: false, error: `El dígito "i" (${incoming.i}) debe ser mayor al actual.` };
             return { valid: true };
         }
@@ -225,13 +242,13 @@ export const validateCoordinatorRules = (
     if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
         if (action === 'APPROVE') {
             if (incoming.type === 'v1.nAR') {
-                if (current && incoming.n <= current.n) return { valid: false, error: `Para avanzar versión, v1.${incoming.n}AR debe ser mayor a la actual (v1.${current.n}...).` };
+                if (current && current.n !== null && incoming.n! <= current.n) return { valid: false, error: `Para avanzar versión, v1.${incoming.n}AR debe ser mayor a la actual (v1.${current.n}...).` };
                 return { valid: true };
             }
-            if (incoming.type === 'v1.nACG') {
+            if (incoming.type === 'v1.nACG' || (project === 'REU' && incoming.type === 'PR')) {
                 return { valid: true };
             }
-            return { valid: false, error: 'Aprobación requiere v1.nAR (avance) o v1.nACG (final).' };
+            return { valid: false, error: project === 'REU' ? 'Aprobación requiere v1.nAR (avance) o PR (final).' : 'Aprobación requiere v1.nAR (avance) o v1.nACG (final).' };
         } else {
             if (incoming.type !== 'v1.n.iAR') return { valid: false, error: 'Rechazo requiere v1.n.iAR (Ej: v1.0.2AR).' };
             if (incoming.i! % 2 !== 0) return { valid: false, error: `Para rechazar, el dígito "i" (${incoming.i}) debe ser PAR.` };
@@ -245,17 +262,26 @@ export const validateCoordinatorRules = (
     return { valid: true };
 }
 
-export const getCoordinatorRuleHint = (currentState: DocState, action: 'APPROVE' | 'REJECT'): string => {
+export const getCoordinatorRuleHint = (currentState: DocState, action: 'APPROVE' | 'REJECT', project?: string): string => {
     if (action === 'REJECT') {
         if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v0.n (n PAR). Ej: v0.2';
-        if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) return 'Formato: v1.n.i (i PAR). Ej: v1.0.2';
+        if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) {
+            if (project === 'REU') return 'Formato: v0.n.i (i PAR). Ej: v0.0.2';
+            return 'Formato: v1.n.i (i PAR). Ej: v1.0.2';
+        }
         if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) return 'Formato: v1.n.iAR (i PAR y mayor). Ej: v1.0.2AR';
     } else {
-        if (currentState === DocState.INTERNAL_REVIEW) return 'Formato: v1.n (Ej: v1.0)';
+        if (currentState === DocState.INTERNAL_REVIEW) {
+            if (project === 'REU') return 'Opción 1: v0.n.i (Referente) / Opción 2: v1.n (Consolidar)';
+            return 'Formato: v1.n (Ej: v1.0)';
+        }
         if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) {
             return 'Opción 1: v1.n (Consolidar) / Opción 2: v1.nAR (Enviar a Control)';
         }
-        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) return 'Opción 1: v1.nAR (Avance) / Opción 2: v1.nACG (Final)';
+        if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
+            if (project === 'REU') return 'Opción 1: v1.nAR (Avance) / Opción 2: PR (Final)';
+            return 'Opción 1: v1.nAR (Avance) / Opción 2: v1.nACG (Final)';
+        }
     }
     return 'Formato estándar';
 };

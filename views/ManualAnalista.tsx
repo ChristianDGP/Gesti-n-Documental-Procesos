@@ -70,9 +70,9 @@ const ManualAnalista: React.FC = () => {
               <StateInfo label="Iniciado (0.0)" desc="Documento recién creado, aún sin contenido técnico avanzado." />
               <StateInfo label="En Proceso (0.n)" desc="Fase de elaboración. El analista sube avances periódicos." />
               <StateInfo label="Revisión Interna (v0.n)" desc="Enviado al Coordinador para validación previa." />
-              <StateInfo label="Referente (v1.n.i)" desc="Enviado a referentes para su visto bueno." />
+              <StateInfo label="Referente (v1.n.i / v0.n.i)" desc="Enviado a referentes. Para REU se mantiene v0.n.i." />
               <StateInfo label="Control Gestión (v1.n.iAR)" desc="Enviado a Control de gestión para su visto bueno." />
-              <StateInfo label="Aprobado (v1.nACG)" desc="Documento Terminado y archivado formalmente en repositorio de documentos aprobados." />
+              <StateInfo label="Aprobado (v1.nACG / PR)" desc="Documento Terminado y archivado formalmente. Para REU se usa 'PR' al final." />
             </div>
           </section>
 
