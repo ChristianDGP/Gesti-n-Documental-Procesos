@@ -18,7 +18,11 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
     const [fullHierarchy, setFullHierarchy] = useState<FullHierarchy>({});
     const [userHierarchy, setUserHierarchy] = useState<UserHierarchy | null>(null);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<ViewMode>('BY_PROCESS');
+    const [viewMode, setViewMode] = useState<ViewMode>(() => {
+        if (user.canAccessReferentsByProcess !== false) return 'BY_PROCESS';
+        if (user.canAccessReferentsDirectory !== false) return 'BY_REFERENT';
+        return 'BY_PROCESS';
+    });
     const [searchTerm, setSearchTerm] = useState('');
     const [modalSearchTerm, setModalSearchTerm] = useState('');
     
@@ -41,6 +45,15 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
     const [refOrganization, setRefOrganization] = useState('');
 
     const isAnalyst = user.role === UserRole.ANALYST;
+
+    useEffect(() => {
+        if (viewMode === 'BY_PROCESS' && user.canAccessReferentsByProcess === false) {
+            if (user.canAccessReferentsDirectory !== false) setViewMode('BY_REFERENT');
+        }
+        if (viewMode === 'BY_REFERENT' && user.canAccessReferentsDirectory === false) {
+            if (user.canAccessReferentsByProcess !== false) setViewMode('BY_PROCESS');
+        }
+    }, [user, viewMode]);
 
     useEffect(() => {
         loadData();
@@ -191,18 +204,22 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
                     <p className="text-slate-500">Asegure la cobertura de validadores técnicos por microproceso.</p>
                 </div>
                 <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                    <button 
-                        onClick={() => setViewMode('BY_PROCESS')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'BY_PROCESS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <Network size={14} /> Por Procesos
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('BY_REFERENT')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'BY_REFERENT' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <Users size={14} /> Directorio Maestro
-                    </button>
+                    {user.canAccessReferentsByProcess !== false && (
+                        <button 
+                            onClick={() => setViewMode('BY_PROCESS')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'BY_PROCESS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <Network size={14} /> Por Procesos
+                        </button>
+                    )}
+                    {user.canAccessReferentsDirectory !== false && (
+                        <button 
+                            onClick={() => setViewMode('BY_REFERENT')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'BY_REFERENT' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <Users size={14} /> Directorio Maestro
+                        </button>
+                    )}
                 </div>
             </div>
 

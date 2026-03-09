@@ -594,7 +594,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <div className="relative w-28 h-28 mb-3">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <PieChart>
-                                                    <Pie data={[{ name: 'Aprobados', value: item.percent, ids: item.finishedIds, fill: item.color }, { name: 'Pendientes', value: 100 - item.percent, ids: item.pendingIds, fill: '#f1f5f9' }]} cx="50%" cy="50%" innerRadius={35} outerRadius={50} startAngle={90} endAngle={-270} dataKey="value" stroke="none" onClick={(data) => { if (data && data.ids && data.ids.length > 0) goToDashboard(data.ids); }}>
+                                                    <Pie data={[{ name: 'Aprobados', value: item.percent, ids: item.finishedIds, fill: item.color }, { name: 'Pendientes', value: 100 - item.percent, ids: item.pendingIds, fill: '#f1f5f9' }]} cx="50%" cy="50%" innerRadius={35} outerRadius={50} startAngle={90} endAngle={-270} dataKey="value" stroke="none" onClick={(data: any) => { if (data && data.ids && data.ids.length > 0) goToDashboard(data.ids); }}>
                                                         <Cell key="progress" className="cursor-pointer" />
                                                         <Cell key="bg" className="cursor-pointer" />
                                                     </Pie>
@@ -615,7 +615,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 <div className="h-[250px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
-                                            <Pie data={stateData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" onClick={(data) => { if (data && data.ids && data.ids.length > 0) goToDashboard(data.ids); }}>
+                                            <Pie data={stateData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" onClick={(data: any) => { if (data && data.ids && data.ids.length > 0) goToDashboard(data.ids); }}>
                                                 {stateData.map((entry, index) => <Cell key={index} fill={STATE_COLOR_MAP[entry.name] || '#94a3b8'} className="cursor-pointer" />)}
                                             </Pie>
                                             <Tooltip />

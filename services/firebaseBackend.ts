@@ -165,6 +165,13 @@ export const NotificationService = {
         const batch = writeBatch(db);
         snapshot.docs.forEach(d => batch.update(d.ref, { isRead: true }));
         await batch.commit();
+    },
+    markDocumentNotificationsAsRead: async (docId: string) => {
+        const q = query(collection(db, "notifications"), where("documentId", "==", docId), where("isRead", "==", false));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(d => batch.update(d.ref, { isRead: true }));
+        await batch.commit();
     }
 };
 
@@ -271,6 +278,9 @@ export const DocumentService = {
 
     if (existingId) {
         finalDocId = existingId;
+        // Al cargar una nueva versión, las notificaciones anteriores de este documento se consideran "atendidas"
+        await NotificationService.markDocumentNotificationsAsRead(existingId);
+        
         const docRef = doc(db, "documents", existingId);
         const oldSnap = await getDoc(docRef);
         const oldData = oldSnap.data() as Document;
@@ -379,6 +389,9 @@ export const DocumentService = {
   },
 
   transitionState: async (docId: string, user: User, action: any, comment: string, file?: File, customVersion?: string): Promise<void> => {
+      // Al realizar una transición, las notificaciones anteriores de este documento se consideran "atendidas"
+      await NotificationService.markDocumentNotificationsAsRead(docId);
+
       const docRef = doc(db, "documents", docId);
       const docSnap = await getDoc(docRef);
       if(!docSnap.exists()) throw new Error("Documento no encontrado");

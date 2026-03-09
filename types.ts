@@ -21,8 +21,12 @@ export interface User {
   canAccessReportContinuity?: boolean;
   canAccessReportMonthly?: boolean;
   canAccessReferents?: boolean;
+  canAccessReferentsByProcess?: boolean;
+  canAccessReferentsDirectory?: boolean;
   canAccessGantt?: boolean;
   canAccessReuseMatrix?: boolean;
+  canAccessReuseMatrixLink?: boolean;
+  canAccessReuseMatrixView?: boolean;
 }
 
 export interface Referent {

@@ -23,8 +23,12 @@ const AdminUsers: React.FC = () => {
   const [canAccessReportContinuity, setCanAccessReportContinuity] = useState(false);
   const [canAccessReportMonthly, setCanAccessReportMonthly] = useState(false);
   const [canAccessReferents, setCanAccessReferents] = useState(false);
+  const [canAccessReferentsByProcess, setCanAccessReferentsByProcess] = useState(false);
+  const [canAccessReferentsDirectory, setCanAccessReferentsDirectory] = useState(false);
   const [canAccessGantt, setCanAccessGantt] = useState(false);
   const [canAccessReuseMatrix, setCanAccessReuseMatrix] = useState(false);
+  const [canAccessReuseMatrixLink, setCanAccessReuseMatrixLink] = useState(false);
+  const [canAccessReuseMatrixView, setCanAccessReuseMatrixView] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -37,7 +41,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       
@@ -49,6 +53,18 @@ const AdminUsers: React.FC = () => {
               updatePayload.canAccessReportGestion = newValue;
               updatePayload.canAccessReportContinuity = newValue;
               updatePayload.canAccessReportMonthly = newValue;
+          }
+
+          // Lógica de cascada para referentes
+          if (field === 'canAccessReferents') {
+              updatePayload.canAccessReferentsByProcess = newValue;
+              updatePayload.canAccessReferentsDirectory = newValue;
+          }
+
+          // Lógica de cascada para matriz
+          if (field === 'canAccessReuseMatrix') {
+              updatePayload.canAccessReuseMatrixLink = newValue;
+              updatePayload.canAccessReuseMatrixView = newValue;
           }
           
           await UserService.update(user.id, updatePayload);
@@ -99,8 +115,12 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportContinuity(user.canAccessReportContinuity || false);
       setCanAccessReportMonthly(user.canAccessReportMonthly || false);
       setCanAccessReferents(user.canAccessReferents || false);
+      setCanAccessReferentsByProcess(user.canAccessReferentsByProcess || false);
+      setCanAccessReferentsDirectory(user.canAccessReferentsDirectory || false);
       setCanAccessGantt(user.canAccessGantt || false);
       setCanAccessReuseMatrix(user.canAccessReuseMatrix || false);
+      setCanAccessReuseMatrixLink(user.canAccessReuseMatrixLink || false);
+      setCanAccessReuseMatrixView(user.canAccessReuseMatrixView || false);
       setShowForm(true);
   };
 
@@ -138,8 +158,12 @@ const AdminUsers: React.FC = () => {
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
+                canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
+                canAccessReferentsDirectory: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsDirectory),
                 canAccessGantt: role === UserRole.ADMIN ? true : canAccessGantt,
-                canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix
+                canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix,
+                canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
+                canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView
             };
             if (password) {
                 updatePayload.password = password;
@@ -160,8 +184,12 @@ const AdminUsers: React.FC = () => {
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
+                canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
+                canAccessReferentsDirectory: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsDirectory),
                 canAccessGantt: role === UserRole.ADMIN ? true : canAccessGantt,
-                canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix
+                canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix,
+                canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
+                canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView
             } as User);
         }
         
@@ -186,8 +214,12 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportContinuity(false);
       setCanAccessReportMonthly(false);
       setCanAccessReferents(false);
+      setCanAccessReferentsByProcess(false);
+      setCanAccessReferentsDirectory(false);
       setCanAccessGantt(false);
       setCanAccessReuseMatrix(false);
+      setCanAccessReuseMatrixLink(false);
+      setCanAccessReuseMatrixView(false);
   };
 
   return (
@@ -271,48 +303,112 @@ const AdminUsers: React.FC = () => {
                                             <span className="text-sm font-medium text-slate-700">Módulo Reportes</span>
                                         </div>
                                     </label>
+                                    {canAccessReports && (
+                                        <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReportGestion} onChange={(e) => setCanAccessReportGestion(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Reportes de Gestión</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReportContinuity} onChange={(e) => setCanAccessReportContinuity(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Monitor de Continuidad</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReportMonthly} onChange={(e) => setCanAccessReportMonthly(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Cierre Mensual</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 {role !== UserRole.GUEST && (
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={canAccessReferents}
+                                                onChange={(e) => {
+                                                    setCanAccessReferents(e.target.checked);
+                                                    if (e.target.checked) {
+                                                        setCanAccessReferentsByProcess(true);
+                                                        setCanAccessReferentsDirectory(true);
+                                                    } else {
+                                                        setCanAccessReferentsByProcess(false);
+                                                        setCanAccessReferentsDirectory(false);
+                                                    }
+                                                }}
+                                                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                            />
+                                            <div className="flex items-center gap-2">
+                                                <UserCheck size={16} className="text-indigo-500" />
+                                                <span className="text-sm font-medium text-slate-700">Referentes</span>
+                                            </div>
+                                        </label>
+                                        {canAccessReferents && (
+                                            <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
+                                                <label className="flex items-center gap-2 cursor-pointer group">
+                                                    <input type="checkbox" checked={canAccessReferentsByProcess} onChange={(e) => setCanAccessReferentsByProcess(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Por Procesos</span>
+                                                </label>
+                                                <label className="flex items-center gap-2 cursor-pointer group">
+                                                    <input type="checkbox" checked={canAccessReferentsDirectory} onChange={(e) => setCanAccessReferentsDirectory(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Directorio Maestro</span>
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
                                     <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
                                         <input 
                                             type="checkbox" 
-                                            checked={canAccessReferents}
-                                            onChange={(e) => setCanAccessReferents(e.target.checked)}
+                                            checked={canAccessGantt}
+                                            onChange={(e) => setCanAccessGantt(e.target.checked)}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                         />
                                         <div className="flex items-center gap-2">
-                                            <UserCheck size={16} className="text-indigo-500" />
-                                            <span className="text-sm font-medium text-slate-700">Referentes</span>
+                                            <CalendarRange size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Diagrama Gantt</span>
                                         </div>
                                     </label>
-                                )}
+                                </div>
 
-                                <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={canAccessGantt}
-                                        onChange={(e) => setCanAccessGantt(e.target.checked)}
-                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                    />
-                                    <div className="flex items-center gap-2">
-                                        <CalendarRange size={16} className="text-indigo-500" />
-                                        <span className="text-sm font-medium text-slate-700">Diagrama Gantt</span>
-                                    </div>
-                                </label>
-
-                                <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={canAccessReuseMatrix}
-                                        onChange={(e) => setCanAccessReuseMatrix(e.target.checked)}
-                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                    />
-                                    <div className="flex items-center gap-2">
-                                        <LinkIcon size={16} className="text-indigo-500" />
-                                        <span className="text-sm font-medium text-slate-700">Matriz Reutilizables</span>
-                                    </div>
-                                </label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={canAccessReuseMatrix}
+                                            onChange={(e) => {
+                                                setCanAccessReuseMatrix(e.target.checked);
+                                                if (e.target.checked) {
+                                                    setCanAccessReuseMatrixLink(true);
+                                                    setCanAccessReuseMatrixView(true);
+                                                } else {
+                                                    setCanAccessReuseMatrixLink(false);
+                                                    setCanAccessReuseMatrixView(false);
+                                                }
+                                            }}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <LinkIcon size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Matriz Reutilizables</span>
+                                        </div>
+                                    </label>
+                                    {canAccessReuseMatrix && (
+                                        <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReuseMatrixLink} onChange={(e) => setCanAccessReuseMatrixLink(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Vincular</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReuseMatrixView} onChange={(e) => setCanAccessReuseMatrixView(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Visualizar</span>
+                                            </label>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}

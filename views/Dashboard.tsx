@@ -501,7 +501,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     outerRadius={65} 
                                     paddingAngle={2} 
                                     dataKey="value"
-                                    onClick={(data) => {
+                                    onClick={(data: any) => {
                                         if (data && data.type) handleQuickFilter(data.type);
                                     }}
                                 >

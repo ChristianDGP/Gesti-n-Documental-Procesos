@@ -16,7 +16,11 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
   const [allDocs, setAllDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'LINK' | 'VIEW'>('LINK');
+  const [activeTab, setActiveTab] = useState<'LINK' | 'VIEW'>(() => {
+      if (user.canAccessReuseMatrixLink !== false) return 'LINK';
+      if (user.canAccessReuseMatrixView !== false) return 'VIEW';
+      return 'LINK';
+  });
   
   // Selection State: The REU microprocess being managed
   const [selectedReuId, setSelectedReuId] = useState<string | null>(null);
@@ -25,9 +29,45 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [treeSearchTerm, setTreeSearchTerm] = useState('');
   const [viewSearchTerm, setViewSearchTerm] = useState('');
+  
+  // Tree expansion state
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [hasInitializedExpansion, setHasInitializedExpansion] = useState(false);
+
+  useEffect(() => {
+    if (Object.keys(hierarchy).length > 0 && !hasInitializedExpansion) {
+      const initialExpanded = new Set<string>();
+      Object.keys(hierarchy).forEach(proj => {
+        if (proj !== 'REU') initialExpanded.add(`p:${proj}`);
+      });
+      setExpandedNodes(initialExpanded);
+      setHasInitializedExpansion(true);
+    }
+  }, [hierarchy, hasInitializedExpansion]);
+
+  const toggleNode = (nodeId: string) => {
+    const newExpanded = new Set(expandedNodes);
+    if (newExpanded.has(nodeId)) {
+      newExpanded.delete(nodeId);
+    } else {
+      newExpanded.add(nodeId);
+    }
+    setExpandedNodes(newExpanded);
+  };
+
+  const isNodeExpanded = (nodeId: string) => expandedNodes.has(nodeId) || treeSearchTerm.length > 0;
 
   // Permission: Admin, or anyone with the specific flag
   const canManage = user.role === UserRole.ADMIN || user.canAccessReuseMatrix;
+
+  useEffect(() => {
+      if (activeTab === 'LINK' && user.canAccessReuseMatrixLink === false) {
+          if (user.canAccessReuseMatrixView !== false) setActiveTab('VIEW');
+      }
+      if (activeTab === 'VIEW' && user.canAccessReuseMatrixView === false) {
+          if (user.canAccessReuseMatrixLink !== false) setActiveTab('LINK');
+      }
+  }, [user, activeTab]);
 
   useEffect(() => {
     loadData();
@@ -185,20 +225,24 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
           <p className="text-slate-500 text-sm">Administre y visualice la relación entre componentes REU y microprocesos base.</p>
         </div>
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-            <button 
-                onClick={() => setActiveTab('LINK')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'LINK' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <CheckSquare size={14} />
-                Vincular
-            </button>
-            <button 
-                onClick={() => setActiveTab('VIEW')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'VIEW' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <List size={14} />
-                Visualizar
-            </button>
+            {user.canAccessReuseMatrixLink !== false && (
+                <button 
+                    onClick={() => setActiveTab('LINK')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'LINK' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <CheckSquare size={14} />
+                    Vincular
+                </button>
+            )}
+            {user.canAccessReuseMatrixView !== false && (
+                <button 
+                    onClick={() => setActiveTab('VIEW')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'VIEW' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <List size={14} />
+                    Visualizar
+                </button>
+            )}
             <div className="w-px h-4 bg-slate-200 mx-1"></div>
             <button 
                 onClick={loadData}
@@ -276,80 +320,141 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                         Marcando un microproceso, este componente REU aparecerá como referencia en su detalle.
                                     </p>
                                 </div>
-                                <div className="relative w-full md:w-64">
-                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Filtrar proyectos/procesos..." 
-                                        value={treeSearchTerm}
-                                        onChange={(e) => setTreeSearchTerm(e.target.value)}
-                                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
-                                    />
+                                <div className="flex items-center gap-2">
+                                    <div className="flex bg-slate-200/50 p-0.5 rounded-lg mr-2">
+                                        <button 
+                                            onClick={() => {
+                                                const all = new Set<string>();
+                                                otherProjects.forEach(proj => {
+                                                    all.add(`p:${proj}`);
+                                                    Object.keys(hierarchy[proj]).forEach(macro => {
+                                                        all.add(`m:${proj}|${macro}`);
+                                                        Object.keys(hierarchy[proj][macro]).forEach(process => {
+                                                            all.add(`s:${proj}|${macro}|${process}`);
+                                                        });
+                                                    });
+                                                });
+                                                setExpandedNodes(all);
+                                            }}
+                                            className="px-2 py-1 text-[9px] font-bold text-slate-600 hover:text-indigo-600 hover:bg-white rounded transition-all"
+                                        >
+                                            EXPANDIR TODO
+                                        </button>
+                                        <button 
+                                            onClick={() => setExpandedNodes(new Set())}
+                                            className="px-2 py-1 text-[9px] font-bold text-slate-600 hover:text-indigo-600 hover:bg-white rounded transition-all"
+                                        >
+                                            CONTRAER TODO
+                                        </button>
+                                    </div>
+                                    <div className="relative w-full md:w-64">
+                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Filtrar proyectos/procesos..." 
+                                            value={treeSearchTerm}
+                                            onChange={(e) => setTreeSearchTerm(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6">
                             <div className="space-y-6">
-                                {otherProjects.map(proj => (
-                                    <div key={proj} className="space-y-3">
-                                        <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                                            <Network size={16} className="text-slate-400" />
-                                            <span className="text-xs font-black text-slate-800 uppercase tracking-widest">{proj}</span>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-1 gap-4">
-                                            {Object.keys(hierarchy[proj]).map(macro => (
-                                                <div key={macro} className="bg-slate-50/50 rounded-xl border border-slate-100 p-4">
-                                                    <div className="flex items-center gap-2 mb-3">
-                                                        <Layers size={14} className="text-indigo-400" />
-                                                        <span className="text-[11px] font-bold text-slate-600 uppercase">{macro}</span>
-                                                    </div>
-                                                    
-                                                    <div className="space-y-4 ml-2">
-                                                        {Object.keys(hierarchy[proj][macro]).map(process => (
-                                                            <div key={process} className="space-y-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    <FolderOpen size={12} className="text-slate-300" />
-                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{process}</span>
-                                                                </div>
+                                {otherProjects.map(proj => {
+                                    const projId = `p:${proj}`;
+                                    const isProjExpanded = isNodeExpanded(projId);
+                                    
+                                    return (
+                                        <div key={proj} className="space-y-3">
+                                            <button 
+                                                onClick={() => toggleNode(projId)}
+                                                className="w-full flex items-center gap-2 border-b border-slate-100 pb-2 hover:bg-slate-50 transition-colors group"
+                                            >
+                                                {isProjExpanded ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+                                                <Network size={16} className="text-indigo-400" />
+                                                <span className="text-xs font-black text-slate-800 uppercase tracking-widest">{proj}</span>
+                                            </button>
+                                            
+                                            {isProjExpanded && (
+                                                <div className="grid grid-cols-1 gap-4 animate-fadeIn">
+                                                    {Object.keys(hierarchy[proj]).map(macro => {
+                                                        const macroId = `m:${proj}|${macro}`;
+                                                        const isMacroExpanded = isNodeExpanded(macroId);
+                                                        
+                                                        return (
+                                                            <div key={macro} className="bg-slate-50/50 rounded-xl border border-slate-100 p-4">
+                                                                <button 
+                                                                    onClick={() => toggleNode(macroId)}
+                                                                    className="w-full flex items-center gap-2 mb-3 hover:bg-white/50 rounded-lg p-1 transition-colors"
+                                                                >
+                                                                    {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-400" /> : <ChevronRight size={14} className="text-indigo-400" />}
+                                                                    <Layers size={14} className="text-indigo-400" />
+                                                                    <span className="text-[11px] font-bold text-slate-600 uppercase">{macro}</span>
+                                                                </button>
                                                                 
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-4">
-                                                                    {hierarchy[proj][macro][process]
-                                                                        .filter(node => !treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase()))
-                                                                        .map(node => {
-                                                                        const isLinked = linkedProcessIds.has(node.docId);
-                                                                        const isSaving = savingId === node.docId;
-                                                                        
-                                                                        return (
-                                                                            <button 
-                                                                                key={node.docId}
-                                                                                onClick={() => handleToggleLink(node.docId, node.reusableLinks || [])}
-                                                                                disabled={isSaving}
-                                                                                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all text-left ${isLinked ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-200'}`}
-                                                                            >
-                                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                                    {isSaving ? (
-                                                                                        <Loader2 size={14} className="animate-spin text-indigo-500" />
-                                                                                    ) : isLinked ? (
-                                                                                        <CheckSquare size={14} className="text-indigo-600 flex-shrink-0" />
-                                                                                    ) : (
-                                                                                        <Square size={14} className="text-slate-300 flex-shrink-0" />
+                                                                {isMacroExpanded && (
+                                                                    <div className="space-y-4 ml-2 animate-fadeIn">
+                                                                        {Object.keys(hierarchy[proj][macro]).map(process => {
+                                                                            const procId = `s:${proj}|${macro}|${process}`;
+                                                                            const isProcExpanded = isNodeExpanded(procId);
+                                                                            
+                                                                            return (
+                                                                                <div key={process} className="space-y-2">
+                                                                                    <button 
+                                                                                        onClick={() => toggleNode(procId)}
+                                                                                        className="flex items-center gap-2 hover:bg-white/50 rounded-lg p-1 transition-colors w-full"
+                                                                                    >
+                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-slate-300" /> : <ChevronRight size={12} className="text-slate-300" />}
+                                                                                        <FolderOpen size={12} className="text-slate-300" />
+                                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{process}</span>
+                                                                                    </button>
+                                                                                    
+                                                                                    {isProcExpanded && (
+                                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-4 animate-fadeIn">
+                                                                                            {hierarchy[proj][macro][process]
+                                                                                                .filter(node => !treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase()))
+                                                                                                .map(node => {
+                                                                                                const isLinked = linkedProcessIds.has(node.docId);
+                                                                                                const isSaving = savingId === node.docId;
+                                                                                                
+                                                                                                return (
+                                                                                                    <button 
+                                                                                                        key={node.docId}
+                                                                                                        onClick={() => handleToggleLink(node.docId, node.reusableLinks || [])}
+                                                                                                        disabled={isSaving}
+                                                                                                        className={`flex items-center justify-between p-2.5 rounded-lg border transition-all text-left ${isLinked ? 'bg-indigo-50 border-indigo-200 text-indigo-900' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-200'}`}
+                                                                                                    >
+                                                                                                        <div className="flex items-center gap-2 min-w-0">
+                                                                                                            {isSaving ? (
+                                                                                                                <Loader2 size={14} className="animate-spin text-indigo-500" />
+                                                                                                            ) : isLinked ? (
+                                                                                                                <CheckSquare size={14} className="text-indigo-600 flex-shrink-0" />
+                                                                                                            ) : (
+                                                                                                                <Square size={14} className="text-slate-300 flex-shrink-0" />
+                                                                                                            )}
+                                                                                                            <span className="text-[11px] font-medium truncate">{node.name}</span>
+                                                                                                        </div>
+                                                                                                    </button>
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
                                                                                     )}
-                                                                                    <span className="text-[11px] font-medium truncate">{node.name}</span>
                                                                                 </div>
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        ))}
-                                                    </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

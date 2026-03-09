@@ -55,10 +55,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const isGuest = user.role === UserRole.GUEST;
   const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
   
-  const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessReports);
-  const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessReferents);
+  const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly));
+  const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReferents || user.canAccessReferentsByProcess || user.canAccessReferentsDirectory));
   const canAccessGantt = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessGantt);
-  const canAccessReuseMatrix = user.role === UserRole.ADMIN || user.canAccessReuseMatrix;
+  const canAccessReuseMatrix = user.role === UserRole.ADMIN || user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
