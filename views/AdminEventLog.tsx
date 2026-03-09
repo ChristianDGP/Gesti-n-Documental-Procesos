@@ -58,13 +58,21 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
 
             const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
             
+            // Nueva validación: Longitud de nomenclatura > 55
+            const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
+            const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
+            const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
+            const isTooLong = fullNomenclature.length > 55;
+
+            const shouldShow = isInconsistent || isTooLong;
+
             // Si el administrador ya descartó esta combinación específica, no la mostramos como inconsistente
-            const currentHash = `${doc.version}|${doc.state}`;
-            if (isInconsistent && doc.ignoredInconsistency === currentHash) {
+            const currentHash = `${doc.version}|${doc.state}${isTooLong ? '|TOOLONG' : ''}`;
+            if (shouldShow && doc.ignoredInconsistency === currentHash) {
                 return false;
             }
 
-            return isInconsistent;
+            return shouldShow;
         });
     }, [documents]);
 
@@ -276,7 +284,21 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                         Alerta desincronizada
                                                     </div>
                                                 )}
-                                                {doc.state === info.state && !isPendingMismatch && (
+                                                {(() => {
+                                                    const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
+                                                    const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
+                                                    const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
+                                                    if (fullNomenclature.length > 55) {
+                                                        return (
+                                                            <div className="flex items-center gap-1.5 text-red-600 text-[11px] font-bold bg-red-50/50 px-2 py-1 rounded border border-red-100">
+                                                                <AlertTriangle className="w-3 h-3" />
+                                                                Nombre Excesivo ({fullNomenclature.length} carac.)
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                                {doc.state === info.state && !isPendingMismatch && !(`${doc.project} - ${doc.microprocess} - ${({ 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' } as Record<string, string>)[doc.docType || ''] || doc.docType || ''} - ${doc.version}`.length > 55) && (
                                                     <div className="flex items-center gap-1.5 text-green-600 text-[11px] font-bold">
                                                         <CheckCircle2 className="w-3 h-3" />
                                                         Coherente por nomenclatura
@@ -286,6 +308,23 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2">
+                                                {(() => {
+                                                    const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
+                                                    const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
+                                                    const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
+                                                    if (fullNomenclature.length > 55) {
+                                                        return (
+                                                            <Link 
+                                                                to="/admin/structure"
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white hover:bg-amber-600 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+                                                            >
+                                                                <ArrowRight className="w-3 h-3" />
+                                                                Gestionar
+                                                            </Link>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
                                                 <button 
                                                     onClick={() => handleDiscard(doc.id, doc.version, doc.state)}
                                                     disabled={discardingId === doc.id}
