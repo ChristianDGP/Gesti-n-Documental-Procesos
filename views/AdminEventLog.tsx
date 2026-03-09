@@ -1,17 +1,28 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService, determineStateFromVersion, formatVersionForDisplay } from '../services/firebaseBackend';
-import { Document, User, DocState } from '../types';
+import { DocumentService, HierarchyService, determineStateFromVersion, formatVersionForDisplay } from '../services/firebaseBackend';
+import { Document, User, DocState, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, X, ExternalLink, FileText, Slash, ChevronDown } from 'lucide-react';
+import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, X, ExternalLink, FileText, Slash, ChevronDown, Layers } from 'lucide-react';
 
 interface Props {
     user: User;
 }
 
+interface HierarchyInconsistency {
+    type: 'HIERARCHY';
+    project: string;
+    macro: string;
+    process: string;
+    micro: string;
+    length: number;
+    docId: string; // process_matrix docId
+}
+
 const AdminEventLog: React.FC<Props> = ({ user }) => {
     const [documents, setDocuments] = useState<Document[]>([]);
+    const [hierarchy, setHierarchy] = useState<FullHierarchy | null>(null);
     const [loading, setLoading] = useState(true);
     const [syncingAll, setSyncingAll] = useState(false);
     const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -22,27 +33,59 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     const [manualStates, setManualStates] = useState<Record<string, DocState>>({});
 
     useEffect(() => {
-        loadDocuments();
+        loadData();
     }, []);
 
-    const loadDocuments = async () => {
+    const loadData = async () => {
         setLoading(true);
         try {
-            const data = await DocumentService.getAll();
-            setDocuments(data);
+            const [docsData, hierarchyData] = await Promise.all([
+                DocumentService.getAll(),
+                HierarchyService.getFullHierarchy()
+            ]);
+            
+            setDocuments(docsData);
+            setHierarchy(hierarchyData);
             
             // Inicializar estados manuales con el estado actual registrado
             const initialManual: Record<string, DocState> = {};
-            data.forEach(d => {
+            docsData.forEach(d => {
                 initialManual[d.id] = d.state;
             });
             setManualStates(initialManual);
         } catch (error) {
-            console.error("Error loading docs for event log:", error);
+            console.error("Error loading data for event log:", error);
         } finally {
             setLoading(false);
         }
     };
+
+    const hierarchyInconsistencies = useMemo(() => {
+        if (!hierarchy) return [];
+        const inconsistencies: HierarchyInconsistency[] = [];
+        
+        Object.entries(hierarchy).forEach(([project, macros]) => {
+            Object.entries(macros).forEach(([macro, processes]) => {
+                Object.entries(processes).forEach(([process, nodes]) => {
+                    nodes.forEach(node => {
+                        if (node.name.length > 35) {
+                            inconsistencies.push({
+                                type: 'HIERARCHY',
+                                project,
+                                macro,
+                                process,
+                                micro: node.name,
+                                length: node.name.length,
+                                docId: node.docId
+                            });
+                        }
+                    });
+                });
+            });
+        });
+        
+        return inconsistencies;
+    }, [hierarchy]);
 
     const inconsistentDocs = useMemo(() => {
         return documents.filter(doc => {
@@ -58,11 +101,11 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
 
             const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
             
-            // Nueva validación: Longitud de nomenclatura > 55
+            // Nueva validación: Longitud de nomenclatura > 60
             const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
             const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
             const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
-            const isTooLong = fullNomenclature.length > 55;
+            const isTooLong = fullNomenclature.length > 60;
 
             const shouldShow = isInconsistent || isTooLong;
 
@@ -86,6 +129,15 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
         );
     }, [inconsistentDocs, searchTerm]);
 
+    const filteredHierarchyInconsistent = useMemo(() => {
+        if (!searchTerm) return hierarchyInconsistencies;
+        const term = searchTerm.toLowerCase();
+        return hierarchyInconsistencies.filter(h => 
+            h.micro.toLowerCase().includes(term) || 
+            h.project.toLowerCase().includes(term)
+        );
+    }, [hierarchyInconsistencies, searchTerm]);
+
     const handleSync = async (docId: string) => {
         setSyncingId(docId);
         try {
@@ -93,7 +145,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
             const forcedState = manualStates[docId];
             await DocumentService.syncMetadata(docId, user, forcedState);
             // Actualizar localmente para reflejar el cambio inmediato
-            await loadDocuments();
+            await loadData();
         } catch (e: any) {
             alert("Error al sincronizar: " + e.message);
         } finally {
@@ -106,7 +158,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
         setDiscardingId(docId);
         try {
             await DocumentService.ignoreInconsistency(docId, version, state);
-            await loadDocuments();
+            await loadData();
         } catch (e: any) {
             alert("Error al descartar: " + e.message);
         } finally {
@@ -122,7 +174,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
         try {
             const promises = filteredInconsistent.map(d => DocumentService.syncMetadata(d.id, user));
             await Promise.all(promises);
-            await loadDocuments();
+            await loadData();
             alert("Sincronización masiva completada con éxito.");
         } catch (e: any) {
             alert("Error en sincronización masiva: " + e.message);
@@ -137,6 +189,8 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
 
     if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando integridad de la base de datos...</div>;
 
+    const totalInconsistencies = inconsistentDocs.length + hierarchyInconsistencies.length;
+
     return (
         <div className="space-y-6 pb-12 animate-fadeIn max-w-6xl mx-auto">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -145,7 +199,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                         <History className="text-indigo-600" />
                         Log de Eventos e Integridad
                     </h1>
-                    <p className="text-slate-500">Buffer de inconsistencias detectadas automáticamente en metadatos.</p>
+                    <p className="text-slate-500">Buffer de inconsistencias detectadas automáticamente en metadatos y estructura.</p>
                 </div>
                 {inconsistentDocs.length > 0 && (
                     <button 
@@ -159,28 +213,79 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Documentos Analizados</p>
                     <p className="text-3xl font-black text-slate-900">{documents.length}</p>
                 </div>
                 <div className={`bg-white p-6 rounded-2xl border shadow-sm transition-colors ${inconsistentDocs.length > 0 ? 'border-amber-200' : 'border-slate-200'}`}>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Inconsistencias Totales</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Inconsistencias Docs</p>
                     <p className={`text-3xl font-black ${inconsistentDocs.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>{inconsistentDocs.length}</p>
                 </div>
+                <div className={`bg-white p-6 rounded-2xl border shadow-sm transition-colors ${hierarchyInconsistencies.length > 0 ? 'border-red-200' : 'border-slate-200'}`}>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Inconsistencias Estructura</p>
+                    <p className={`text-3xl font-black ${hierarchyInconsistencies.length > 0 ? 'text-red-600' : 'text-slate-900'}`}>{hierarchyInconsistencies.length}</p>
+                </div>
                 <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Integridad del Sistema</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Integridad Global</p>
                     <p className="text-3xl font-black text-slate-900">
-                        {documents.length > 0 ? Math.round(((documents.length - inconsistentDocs.length) / documents.length) * 100) : 100}%
+                        {documents.length > 0 ? Math.round(((documents.length + (hierarchy ? 100 : 0) - totalInconsistencies) / (documents.length + (hierarchy ? 100 : 0))) * 100) : 100}%
                     </p>
                 </div>
             </div>
+
+            {/* Sección de Estructura */}
+            {hierarchyInconsistencies.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-red-200 overflow-hidden">
+                    <div className="p-4 bg-red-50 border-b border-red-100 flex items-center gap-2 text-red-700 font-bold text-sm">
+                        <Layers size={18} className="text-red-500" />
+                        Inconsistencias en Estructura (Nombres de Microproceso {'>'} 35 carac.)
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-[10px] text-slate-400 uppercase font-bold bg-slate-50/50 border-b border-slate-100">
+                                <tr>
+                                    <th className="px-6 py-4">Proyecto / Macro / Proceso</th>
+                                    <th className="px-6 py-4">Microproceso</th>
+                                    <th className="px-6 py-4">Longitud</th>
+                                    <th className="px-6 py-4 text-right">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {filteredHierarchyInconsistent.map((h, idx) => (
+                                    <tr key={idx} className="hover:bg-red-50/30 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{h.project}</div>
+                                            <div className="text-[11px] text-slate-600 font-medium">{h.macro} / {h.process}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="font-bold text-slate-800">{h.micro}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="text-red-600 font-black">{h.length} / 35</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <Link 
+                                                to="/admin/structure"
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+                                            >
+                                                <ArrowRight size={12} />
+                                                Corregir
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
                 <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
                         <AlertTriangle size={18} className={inconsistentDocs.length > 0 ? 'text-amber-500' : 'text-green-500'} />
-                        Listado de Inconsistencias
+                        Listado de Inconsistencias en Documentos
                     </div>
                     <div className="relative w-full md:w-64">
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -211,8 +316,8 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                     <td colSpan={5} className="py-20 text-center">
                                         <div className="flex flex-col items-center justify-center text-slate-400">
                                             <CheckCircle2 size={48} className="text-green-200 mb-3" />
-                                            <p className="font-bold text-slate-500">¡Sistema Íntegro!</p>
-                                            <p className="text-xs">No se han detectado inconsistencias en los metadatos.</p>
+                                            <p className="font-bold text-slate-500">¡Documentos Íntegros!</p>
+                                            <p className="text-xs">No se han detectado inconsistencias en los metadatos de archivos.</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -288,7 +393,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                     const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
                                                     const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
                                                     const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
-                                                    if (fullNomenclature.length > 55) {
+                                                    if (fullNomenclature.length > 60) {
                                                         return (
                                                             <div className="flex items-center gap-1.5 text-red-600 text-[11px] font-bold bg-red-50/50 px-2 py-1 rounded border border-red-100">
                                                                 <AlertTriangle className="w-3 h-3" />
@@ -298,7 +403,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                     }
                                                     return null;
                                                 })()}
-                                                {doc.state === info.state && !isPendingMismatch && !(`${doc.project} - ${doc.microprocess} - ${({ 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' } as Record<string, string>)[doc.docType || ''] || doc.docType || ''} - ${doc.version}`.length > 55) && (
+                                                {doc.state === info.state && !isPendingMismatch && !(`${doc.project} - ${doc.microprocess} - ${({ 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' } as Record<string, string>)[doc.docType || ''] || doc.docType || ''} - ${doc.version}`.length > 60) && (
                                                     <div className="flex items-center gap-1.5 text-green-600 text-[11px] font-bold">
                                                         <CheckCircle2 className="w-3 h-3" />
                                                         Coherente por nomenclatura
@@ -312,7 +417,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                     const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
                                                     const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
                                                     const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
-                                                    if (fullNomenclature.length > 55) {
+                                                    if (fullNomenclature.length > 60) {
                                                         return (
                                                             <Link 
                                                                 to="/admin/structure"

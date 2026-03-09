@@ -17,8 +17,8 @@ export const parseDocumentFilename = (
   const lastDotIndex = fullFilename.lastIndexOf('.');
   const filenameBase = lastDotIndex !== -1 ? fullFilename.substring(0, lastDotIndex) : fullFilename;
   
-  if (filenameBase.length > 80) {
-    result.errores.push(`El nombre del archivo excede 80 caracteres.`);
+  if (filenameBase.length > 60) {
+    result.errores.push(`El nombre del archivo excede 60 caracteres.`);
   }
 
   const parts = filenameBase.split(' - ');

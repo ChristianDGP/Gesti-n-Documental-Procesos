@@ -369,14 +369,14 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
                     <div className="flex justify-between items-center mb-2">
                         <label className="block text-sm font-medium text-slate-700">Nombre del {addLevel}</label>
                         {addLevel === 'MICRO' && (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${newItemName.length > 60 ? 'bg-red-100 text-red-600' : newItemName.length > 50 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
-                                {newItemName.length} / 60
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${newItemName.length > 35 ? 'bg-red-100 text-red-600' : newItemName.length > 30 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
+                                {newItemName.length} / 35
                             </span>
                         )}
                     </div>
-                    <input autoFocus type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className={`w-full p-2 border rounded-lg outline-none focus:ring-2 transition-all ${addLevel === 'MICRO' && newItemName.length > 60 ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500'}`} placeholder={`Ingrese nombre para nuevo ${addLevel.toLowerCase()}...`} />
-                    {addLevel === 'MICRO' && newItemName.length > 60 && <p className="text-[10px] text-red-500 mt-1 font-bold">⚠️ El nombre excede el límite técnico de 60 caracteres.</p>}
-                    <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded text-sm">Cancelar</button><button type="submit" disabled={addLevel === 'MICRO' && newItemName.length > 60} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Crear</button></div>
+                    <input autoFocus type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className={`w-full p-2 border rounded-lg outline-none focus:ring-2 transition-all ${addLevel === 'MICRO' && newItemName.length > 35 ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500'}`} placeholder={`Ingrese nombre para nuevo ${addLevel.toLowerCase()}...`} />
+                    {addLevel === 'MICRO' && newItemName.length > 35 && <p className="text-[10px] text-red-500 mt-1 font-bold">⚠️ El nombre excede el límite de 35 caracteres para asegurar la nomenclatura total.</p>}
+                    <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded text-sm">Cancelar</button><button type="submit" disabled={addLevel === 'MICRO' && newItemName.length > 35} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Crear</button></div>
                 </form>
             </div>
           </div>
@@ -390,20 +390,20 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
                     <div className="flex justify-between items-center mb-2">
                         <label className="block text-sm font-medium text-slate-700">Nuevo nombre para "{renameMode.oldName}"</label>
                         {renameMode.level === 'MICRO' && (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${renameValue.length > 60 ? 'bg-red-100 text-red-600' : renameValue.length > 50 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
-                                {renameValue.length} / 60
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${renameValue.length > 35 ? 'bg-red-100 text-red-600' : renameValue.length > 30 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
+                                {renameValue.length} / 35
                             </span>
                         )}
                     </div>
-                    <input autoFocus type="text" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className={`w-full p-2 border rounded-lg outline-none focus:ring-2 transition-all ${renameMode.level === 'MICRO' && renameValue.length > 60 ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500'}`} />
-                    {renameMode.level === 'MICRO' && renameValue.length > 60 && <p className="text-[10px] text-red-500 mt-1 font-bold">⚠️ El nombre excede el límite técnico de 60 caracteres.</p>}
+                    <input autoFocus type="text" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className={`w-full p-2 border rounded-lg outline-none focus:ring-2 transition-all ${renameMode.level === 'MICRO' && renameValue.length > 35 ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-indigo-500'}`} />
+                    {renameMode.level === 'MICRO' && renameValue.length > 35 && <p className="text-[10px] text-red-500 mt-1 font-bold">⚠️ El nombre excede el límite de 35 caracteres para asegurar la nomenclatura total.</p>}
                     {renameMode.level === 'MICRO' && (
                         <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-xs text-amber-800">
                             <AlertTriangle size={16} className="text-amber-500 flex-shrink-0" />
                             <p><b>Nota de trazabilidad:</b> Esta acción actualizará el nombre en el Dashboard y Reportes para todos los documentos cargados previamente bajo este microproceso.</p>
                         </div>
                     )}
-                    <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={() => setRenameMode(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded text-sm">Cancelar</button><button onClick={handleRenameSubmit} disabled={renameMode.level === 'MICRO' && renameValue.length > 60} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Guardar Cambios</button></div>
+                    <div className="flex justify-end gap-2 mt-6"><button type="button" onClick={() => setRenameMode(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded text-sm">Cancelar</button><button onClick={handleRenameSubmit} disabled={renameMode.level === 'MICRO' && renameValue.length > 35} className="px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Guardar Cambios</button></div>
                 </div>
             </div>
           </div>
