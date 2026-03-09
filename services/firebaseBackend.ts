@@ -25,18 +25,17 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
     if (v.endsWith('ACG') || v === 'PR') return { state: DocState.APPROVED, progress: 100 };
     
     if (v.endsWith('AR')) {
-        if (/^V1\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
+        if (/^V\d+\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
         return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     }
     
-    if (v.startsWith('V1.')) {
-        if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
-        return { state: DocState.SENT_TO_REFERENT, progress: 80 };
-    }
-    
-    if (v.startsWith('V0.')) {
-        if (v.split('.').length > 2) return { state: DocState.REFERENT_REVIEW, progress: 80 };
-        return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+    if (v.startsWith('V')) {
+        const parts = v.split('.');
+        if (parts.length === 3) return { state: DocState.REFERENT_REVIEW, progress: 80 };
+        if (parts.length === 2) {
+            if (v.startsWith('V0.')) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+            return { state: DocState.SENT_TO_REFERENT, progress: 80 };
+        }
     }
     
     if (v === '0.0') return { state: DocState.INITIATED, progress: 10 };
