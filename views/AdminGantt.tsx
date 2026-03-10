@@ -644,9 +644,16 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                                             </div>
                                                                                         </td>
                                                                                         <td className="px-6 py-3 text-right">
-                                                                                            {(canEditDates && !isAnalyst && !doc.id.startsWith('virtual-') && !isApproved) && (
-                                                                                                <button onClick={() => { setEditModalDoc(doc); setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]); }} className="p-1 text-slate-300 hover:text-indigo-600 transition-colors">
-                                                                                                    <Calendar size={12} />
+                                                                                            {(canEditDates && !doc.id.startsWith('virtual-') && !isApproved) && (
+                                                                                                <button 
+                                                                                                    onClick={() => { 
+                                                                                                        setEditModalDoc(doc); 
+                                                                                                        setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]); 
+                                                                                                    }} 
+                                                                                                    className="p-2 bg-white text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-all shadow-sm hover:shadow-md active:scale-95"
+                                                                                                    title="Editar Fecha Meta"
+                                                                                                >
+                                                                                                    <Calendar size={14} />
                                                                                                 </button>
                                                                                             )}
                                                                                         </td>
@@ -671,7 +678,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             </div>
 
             {/* MODAL AJUSTE DE FECHA */}
-            {canEditDates && !isAnalyst && editModalDoc && (
+            {canEditDates && editModalDoc && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-white/20">
                         <div className="p-8 border-b border-slate-100">
