@@ -38,8 +38,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [originalAssignees, setOriginalAssignees] = useState<string[]>([]);
   const [matrixKeyToUpdate, setMatrixKeyToUpdate] = useState<string | null>(null);
 
-  // Permission: Admin and Coordinator can both delete and edit
-  const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
+  // Permissions
+  const canAssignDocs = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canAssignDefinedDocs;
+  const canManageActions = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canManageAssignments;
 
   useEffect(() => {
     loadData();
@@ -246,14 +247,14 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                                         <tr key={`${row.node.docId}-${idx}`} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-4 py-3 align-top text-slate-600"><div className="font-semibold text-xs text-slate-700 mb-0.5">{row.macro}</div><div className="text-xs text-slate-500 pl-2 border-l-2 border-slate-200">{row.proc}</div></td>
                                             <td className="px-4 py-3 align-top"><span className="font-medium text-slate-900">{row.node.name}</span></td>
-                                            <td className="px-4 py-3 align-top"><div className="flex items-center gap-2 flex-wrap">{['AS IS', 'FCE', 'PM', 'TO BE'].map((type) => { const isChecked = row.node.requiredTypes?.includes(type as DocType); return (<button key={type} onClick={() => handleToggleRequiredType(row.node.docId, type as DocType)} className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all ${isChecked ? 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200' : 'bg-slate-50 text-slate-300 border-slate-200 hover:border-slate-300'}`} title={`Alternar ${type}`}>{isChecked ? <CheckSquare size={10} /> : <Square size={10} />}{type}</button>); })}</div></td>
+                                            <td className="px-4 py-3 align-top"><div className="flex items-center gap-2 flex-wrap">{['AS IS', 'FCE', 'PM', 'TO BE'].map((type) => { const isChecked = row.node.requiredTypes?.includes(type as DocType); return (<button key={type} onClick={() => canAssignDocs && handleToggleRequiredType(row.node.docId, type as DocType)} className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all ${isChecked ? 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200' : 'bg-slate-50 text-slate-300 border-slate-200 hover:border-slate-300'} ${!canAssignDocs ? 'cursor-not-allowed opacity-70' : ''}`} title={canAssignDocs ? `Alternar ${type}` : 'Sin permiso'}>{isChecked ? <CheckSquare size={10} /> : <Square size={10} />}{type}</button>); })}</div></td>
                                             <td className="px-4 py-3 align-top">
                                                 {(row.node.assignees?.length > 0) ? (<><div className="flex -space-x-2 overflow-hidden py-1">{row.node.assignees.map((aid: string) => { const u = allUsers.find(user => user.id === aid); if (!u) return <div key={aid} className="inline-flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white bg-slate-200 text-[10px] text-slate-500 font-bold">?</div>; return (<div key={u.id} className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-indigo-100 overflow-hidden" title={u.name}>{u.avatar ? <img src={u.avatar} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-indigo-700">{u.name.charAt(0)}</span>}</div>); })}</div><div className="text-xs text-slate-500 mt-1 truncate">{row.node.assignees.map((aid: string) => { const u = allUsers.find(user => user.id === aid); return u ? u.name : 'Desc.'; }).join(', ')}</div></>) : (<span className="text-xs text-red-400 italic py-1 block">Sin asignar</span>)}
                                             </td>
                                             <td className="px-4 py-3 align-top text-right">
                                                 <div className="flex justify-end gap-1">
-                                                    <button onClick={() => handleEditAssignment(projectKey, row.macro, row.proc, row.node)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors" title="Editar Asignación"><Users size={16} /></button>
-                                                    {canEdit && (
+                                                    {canManageActions && <button onClick={() => handleEditAssignment(projectKey, row.macro, row.proc, row.node)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors" title="Editar Asignación"><Users size={16} /></button>}
+                                                    {canManageActions && (
                                                         <button 
                                                             onClick={(e) => handleDelete(projectKey, row.macro, row.proc, row.node.docId, row.node.name, e)}
                                                             className="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded transition-colors"

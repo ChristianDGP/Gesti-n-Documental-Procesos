@@ -41,7 +41,9 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
   const [targetMacro, setTargetMacro] = useState('');
   const [targetProcess, setTargetProcess] = useState('');
 
-  // Permission: Both ADMIN and COORDINATOR can manage hierarchy
+  // Permissions
+  const canAdd = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canAddStructure;
+  const canEdit = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canEditStructure;
   const canManage = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
 
   useEffect(() => {
@@ -280,8 +282,8 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
                                   <td className="px-4 py-3 font-medium text-slate-800">{item.micro.name}</td>
                                   <td className="px-4 py-3">{item.micro.active !== false ? <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">Activo</span> : <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">Inactivo</span>}</td>
                                   <td className="px-4 py-3 text-right flex justify-end gap-1">
-                                      <button onClick={() => handleRenameStart('MICRO', item.micro.name, item.micro.docId)} className="p-1.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Renombrar Microproceso"><Edit size={16} /></button>
-                                      <button onClick={(e) => handleToggleStatus(item.micro.docId, item.micro.name, item.micro.active !== false, e)} className={`p-1.5 rounded transition-colors ${item.micro.active !== false ? 'text-slate-400 hover:text-red-500 hover:bg-red-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`} title={item.micro.active !== false ? "Inactivar" : "Reactivar"}><Power size={16} /></button>
+                                      {canEdit && <button onClick={() => handleRenameStart('MICRO', item.micro.name, item.micro.docId)} className="p-1.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Renombrar Microproceso"><Edit size={16} /></button>}
+                                      {canEdit && <button onClick={(e) => handleToggleStatus(item.micro.docId, item.micro.name, item.micro.active !== false, e)} className={`p-1.5 rounded transition-colors ${item.micro.active !== false ? 'text-slate-400 hover:text-red-500 hover:bg-red-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`} title={item.micro.active !== false ? "Inactivar" : "Reactivar"}><Power size={16} /></button>}
                                       {canManage && <button onClick={(e) => handleHardDeleteMicro(item.micro.docId, item.micro.name, e)} className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Eliminar Definitivamente"><Trash2 size={16} /></button>}
                                   </td>
                               </tr>
@@ -294,13 +296,13 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-[calc(100vh-220px)]">
               {/* COLUMN 1: PROJECTS */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Proyectos</h3><button onClick={() => handleAdd('PROJECT')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Proyecto"><Plus size={16}/></button></div>
+                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Proyectos</h3>{canAdd && <button onClick={() => handleAdd('PROJECT')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Proyecto"><Plus size={16}/></button>}</div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {projects.map(p => (
                           <div key={p} onClick={() => { setSelectedProject(p); setSelectedMacro(null); setSelectedProcess(null); }} className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-sm transition-colors group ${selectedProject === p ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
                               <div className="flex items-center gap-2 truncate"><FolderTree size={16} className={selectedProject === p ? 'text-indigo-500' : 'text-slate-400'} /><span className="truncate">{p}</span></div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={(e) => { e.stopPropagation(); handleRenameStart('PROJECT', p); }} className="text-slate-400 hover:text-indigo-600 p-1"><Edit size={12}/></button>
+                                  {canEdit && <button onClick={(e) => { e.stopPropagation(); handleRenameStart('PROJECT', p); }} className="text-slate-400 hover:text-indigo-600 p-1"><Edit size={12}/></button>}
                                   {canManage && <button onClick={(e) => handleDeleteNode('PROJECT', p, e)} className="text-slate-400 hover:text-red-600 p-1" title="Eliminar Proyecto"><Trash2 size={12}/></button>}
                               </div>
                           </div>
@@ -310,13 +312,13 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
 
               {/* COLUMN 2: MACROS */}
               <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${!selectedProject ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Macroprocesos</h3>{selectedProject && <button onClick={() => handleAdd('MACRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nueva Macro"><Plus size={16}/></button>}</div>
+                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Macroprocesos</h3>{selectedProject && canAdd && <button onClick={() => handleAdd('MACRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nueva Macro"><Plus size={16}/></button>}</div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {macros.map(m => (
                           <div key={m} onClick={() => { setSelectedMacro(m); setSelectedProcess(null); }} className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-sm transition-colors group ${selectedMacro === m ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
                               <div className="flex items-center gap-2 truncate"><FolderOpen size={16} className={selectedMacro === m ? 'text-blue-500' : 'text-slate-400'} /><span className="truncate">{m}</span></div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={(e) => { e.stopPropagation(); handleRenameStart('MACRO', m); }} className="text-slate-400 hover:text-blue-600 p-1"><Edit size={12}/></button>
+                                  {canEdit && <button onClick={(e) => { e.stopPropagation(); handleRenameStart('MACRO', m); }} className="text-slate-400 hover:text-blue-600 p-1"><Edit size={12}/></button>}
                                   {canManage && <button onClick={(e) => handleDeleteNode('MACRO', m, e)} className="text-slate-400 hover:text-red-600 p-1" title="Eliminar Macro"><Trash2 size={12}/></button>}
                               </div>
                           </div>
@@ -326,13 +328,13 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
 
               {/* COLUMN 3: PROCESSES */}
               <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${!selectedMacro ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Procesos</h3>{selectedMacro && <button onClick={() => handleAdd('PROCESS')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Proceso"><Plus size={16}/></button>}</div>
+                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Procesos</h3>{selectedMacro && canAdd && <button onClick={() => handleAdd('PROCESS')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Proceso"><Plus size={16}/></button>}</div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {processes.map(proc => (
                           <div key={proc} onClick={() => setSelectedProcess(proc)} className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-sm transition-colors group ${selectedProcess === proc ? 'bg-purple-50 text-purple-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
                               <div className="flex items-center gap-2 truncate"><Layers size={16} className={selectedProcess === proc ? 'text-purple-500' : 'text-slate-400'} /><span className="truncate">{proc}</span></div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={(e) => { e.stopPropagation(); handleRenameStart('PROCESS', proc); }} className="text-slate-400 hover:text-purple-600 p-1"><Edit size={12}/></button>
+                                  {canEdit && <button onClick={(e) => { e.stopPropagation(); handleRenameStart('PROCESS', proc); }} className="text-slate-400 hover:text-purple-600 p-1"><Edit size={12}/></button>}
                                   {canManage && <button onClick={(e) => handleDeleteNode('PROCESS', proc, e)} className="text-slate-400 hover:text-red-600 p-1" title="Eliminar Proceso"><Trash2 size={12}/></button>}
                               </div>
                           </div>
@@ -342,15 +344,15 @@ const AdminHierarchy: React.FC<Props> = ({ user }) => {
 
               {/* COLUMN 4: MICROPROCESSES */}
               <div className={`bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden ${!selectedProcess ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Microprocesos</h3>{selectedProcess && <button onClick={() => handleAdd('MICRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Microproceso"><Plus size={16}/></button>}</div>
+                  <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h3 className="font-bold text-slate-700 text-xs uppercase tracking-wide">Microprocesos</h3>{selectedProcess && canAdd && <button onClick={() => handleAdd('MICRO')} className="p-1 hover:bg-indigo-100 text-indigo-600 rounded" title="Nuevo Microproceso"><Plus size={16}/></button>}</div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {columnMicros.map(micro => (
                           <div key={micro.docId} className={`flex items-center justify-between p-2 rounded-lg text-sm bg-white border group transition-all ${micro.active === false ? 'border-slate-100 bg-slate-50 text-slate-400 italic' : 'border-slate-100 hover:border-slate-300'}`}>
                               <div className="flex items-center gap-2 truncate"><FileText size={14} className={micro.active === false ? 'text-slate-300' : 'text-slate-400'} /><span className="truncate font-medium">{micro.name}</span></div>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => handleRenameStart('MICRO', micro.name, micro.docId)} className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded" title="Renombrar Microproceso"><Edit size={14}/></button>
-                                  <button onClick={(e) => handleMoveStart(micro, e)} className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded" title="Reubicar (Mover)"><FolderInput size={14} /></button>
-                                  <button onClick={(e) => handleToggleStatus(micro.docId, micro.name, micro.active !== false, e)} className={`p-1 rounded transition-colors ${micro.active === false ? 'text-slate-300 hover:text-green-600 hover:bg-green-50' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`} title={micro.active === false ? "Reactivar" : "Inactivar"}><Power size={14}/></button>
+                                  {canEdit && <button onClick={() => handleRenameStart('MICRO', micro.name, micro.docId)} className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded" title="Renombrar Microproceso"><Edit size={14}/></button>}
+                                  {canEdit && <button onClick={(e) => handleMoveStart(micro, e)} className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-indigo-50 rounded" title="Reubicar (Mover)"><FolderInput size={14} /></button>}
+                                  {canEdit && <button onClick={(e) => handleToggleStatus(micro.docId, micro.name, micro.active !== false, e)} className={`p-1 rounded transition-colors ${micro.active === false ? 'text-slate-300 hover:text-green-600 hover:bg-green-50' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`} title={micro.active === false ? "Reactivar" : "Inactivar"}><Power size={14}/></button>}
                                   {canManage && <button onClick={(e) => handleHardDeleteMicro(micro.docId, micro.name, e)} className="p-1 rounded text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors" title="Eliminar Definitivamente"><Trash2 size={14}/></button>}
                               </div>
                           </div>

@@ -32,6 +32,12 @@ const AdminUsers: React.FC = () => {
   const [canAccessStructure, setCanAccessStructure] = useState(false);
   const [canAccessAssignments, setCanAccessAssignments] = useState(false);
   const [canAccessLog, setCanAccessLog] = useState(false);
+  const [canAuditEvents, setCanAuditEvents] = useState(false);
+  const [canEditGanttDate, setCanEditGanttDate] = useState(false);
+  const [canAddStructure, setCanAddStructure] = useState(false);
+  const [canEditStructure, setCanEditStructure] = useState(false);
+  const [canAssignDefinedDocs, setCanAssignDefinedDocs] = useState(false);
+  const [canManageAssignments, setCanManageAssignments] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -126,7 +132,13 @@ const AdminUsers: React.FC = () => {
       setCanAccessReuseMatrixView(user.canAccessReuseMatrixView || false);
       setCanAccessStructure(user.canAccessStructure || false);
       setCanAccessAssignments(user.canAccessAssignments || false);
+      setCanAssignDefinedDocs(user.canAssignDefinedDocs || false);
+      setCanManageAssignments(user.canManageAssignments || false);
       setCanAccessLog(user.canAccessLog || false);
+      setCanAuditEvents(user.canAuditEvents || false);
+      setCanEditGanttDate(user.canEditGanttDate || false);
+      setCanAddStructure(user.canAddStructure || false);
+      setCanEditStructure(user.canEditStructure || false);
       setShowForm(true);
   };
 
@@ -171,8 +183,14 @@ const AdminUsers: React.FC = () => {
                 canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
                 canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView,
                 canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
+                canAddStructure: role === UserRole.ADMIN ? true : canAddStructure,
+                canEditStructure: role === UserRole.ADMIN ? true : canEditStructure,
                 canAccessAssignments: role === UserRole.ADMIN ? true : canAccessAssignments,
-                canAccessLog: role === UserRole.ADMIN ? true : canAccessLog
+                canAssignDefinedDocs: role === UserRole.ADMIN ? true : canAssignDefinedDocs,
+                canManageAssignments: role === UserRole.ADMIN ? true : canManageAssignments,
+                canAccessLog: role === UserRole.ADMIN ? true : canAccessLog,
+                canAuditEvents: role === UserRole.ADMIN ? true : canAuditEvents,
+                canEditGanttDate: role === UserRole.ADMIN ? true : canEditGanttDate
             };
             if (password) {
                 updatePayload.password = password;
@@ -200,8 +218,14 @@ const AdminUsers: React.FC = () => {
                 canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
                 canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView,
                 canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
+                canAddStructure: role === UserRole.ADMIN ? true : canAddStructure,
+                canEditStructure: role === UserRole.ADMIN ? true : canEditStructure,
                 canAccessAssignments: role === UserRole.ADMIN ? true : canAccessAssignments,
-                canAccessLog: role === UserRole.ADMIN ? true : canAccessLog
+                canAssignDefinedDocs: role === UserRole.ADMIN ? true : canAssignDefinedDocs,
+                canManageAssignments: role === UserRole.ADMIN ? true : canManageAssignments,
+                canAccessLog: role === UserRole.ADMIN ? true : canAccessLog,
+                canAuditEvents: role === UserRole.ADMIN ? true : canAuditEvents,
+                canEditGanttDate: role === UserRole.ADMIN ? true : canEditGanttDate
             } as User);
         }
         
@@ -233,8 +257,14 @@ const AdminUsers: React.FC = () => {
       setCanAccessReuseMatrixLink(false);
       setCanAccessReuseMatrixView(false);
       setCanAccessStructure(false);
+      setCanAddStructure(false);
+      setCanEditStructure(false);
       setCanAccessAssignments(false);
+      setCanAssignDefinedDocs(false);
+      setCanManageAssignments(false);
       setCanAccessLog(false);
+      setCanAuditEvents(false);
+      setCanEditGanttDate(false);
   };
 
   return (
@@ -379,7 +409,10 @@ const AdminUsers: React.FC = () => {
                                         <input 
                                             type="checkbox" 
                                             checked={canAccessGantt}
-                                            onChange={(e) => setCanAccessGantt(e.target.checked)}
+                                            onChange={(e) => {
+                                                setCanAccessGantt(e.target.checked);
+                                                if (!e.target.checked) setCanEditGanttDate(false);
+                                            }}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                         />
                                         <div className="flex items-center gap-2">
@@ -387,6 +420,14 @@ const AdminUsers: React.FC = () => {
                                             <span className="text-sm font-medium text-slate-700">Diagrama Gantt</span>
                                         </div>
                                     </label>
+                                    {canAccessGantt && (
+                                        <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canEditGanttDate} onChange={(e) => setCanEditGanttDate(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Editar Fecha</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -430,7 +471,13 @@ const AdminUsers: React.FC = () => {
                                         <input 
                                             type="checkbox" 
                                             checked={canAccessStructure}
-                                            onChange={(e) => setCanAccessStructure(e.target.checked)}
+                                            onChange={(e) => {
+                                                setCanAccessStructure(e.target.checked);
+                                                if (!e.target.checked) {
+                                                    setCanAddStructure(false);
+                                                    setCanEditStructure(false);
+                                                }
+                                            }}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                         />
                                         <div className="flex items-center gap-2">
@@ -438,6 +485,18 @@ const AdminUsers: React.FC = () => {
                                             <span className="text-sm font-medium text-slate-700">Estructura</span>
                                         </div>
                                     </label>
+                                    {canAccessStructure && (
+                                        <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAddStructure} onChange={(e) => setCanAddStructure(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Agregar</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canEditStructure} onChange={(e) => setCanEditStructure(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Editar</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -445,7 +504,13 @@ const AdminUsers: React.FC = () => {
                                         <input 
                                             type="checkbox" 
                                             checked={canAccessAssignments}
-                                            onChange={(e) => setCanAccessAssignments(e.target.checked)}
+                                            onChange={(e) => {
+                                                setCanAccessAssignments(e.target.checked);
+                                                if (!e.target.checked) {
+                                                    setCanAssignDefinedDocs(false);
+                                                    setCanManageAssignments(false);
+                                                }
+                                            }}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                         />
                                         <div className="flex items-center gap-2">
@@ -453,6 +518,18 @@ const AdminUsers: React.FC = () => {
                                             <span className="text-sm font-medium text-slate-700">Asignaciones</span>
                                         </div>
                                     </label>
+                                    {canAccessAssignments && (
+                                        <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAssignDefinedDocs} onChange={(e) => setCanAssignDefinedDocs(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Asignar Documentos Definidos</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canManageAssignments} onChange={(e) => setCanManageAssignments(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Gestionar Acciones</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -460,7 +537,10 @@ const AdminUsers: React.FC = () => {
                                         <input 
                                             type="checkbox" 
                                             checked={canAccessLog}
-                                            onChange={(e) => setCanAccessLog(e.target.checked)}
+                                            onChange={(e) => {
+                                                setCanAccessLog(e.target.checked);
+                                                if (!e.target.checked) setCanAuditEvents(false);
+                                            }}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                         />
                                         <div className="flex items-center gap-2">
@@ -468,6 +548,14 @@ const AdminUsers: React.FC = () => {
                                             <span className="text-sm font-medium text-slate-700">Log de Eventos</span>
                                         </div>
                                     </label>
+                                    {canAccessLog && (
+                                        <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAuditEvents} onChange={(e) => setCanAuditEvents(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Acciones de Auditoría</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -488,7 +576,6 @@ const AdminUsers: React.FC = () => {
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                         <tr>
                             <th className="px-6 py-3">Usuario</th>
-                            <th className="px-6 py-3">Permisos</th>
                             <th className="px-6 py-3 text-center">Estado</th>
                             <th className="px-6 py-3">Rol</th>
                             <th className="px-6 py-3">Organización</th>
@@ -503,102 +590,6 @@ const AdminUsers: React.FC = () => {
                                     <div>
                                         <p className="font-medium text-slate-900">{u.name}</p>
                                         <p className="text-xs text-slate-500">{u.email}</p>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2">
-                                        {/* BOTÓN REPORTE */}
-                                        <button 
-                                            onClick={() => handleTogglePermission(u, 'canAccessReports')}
-                                            disabled={updatingId === `${u.id}-canAccessReports`}
-                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                ${u.canAccessReports !== false 
-                                                    ? 'bg-green-50 text-green-600 hover:bg-green-100' 
-                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                            title={u.canAccessReports !== false ? "Deshabilitar Módulo Reportes" : "Habilitar Módulo Reportes"}
-                                        >
-                                            {updatingId === `${u.id}-canAccessReports` ? <Loader2 size={14} className="animate-spin" /> : <PieChart size={14} />}
-                                        </button>
-
-                                        {/* BOTÓN REFERENTES */}
-                                        {u.role !== UserRole.GUEST && (
-                                            <button 
-                                                onClick={() => handleTogglePermission(u, 'canAccessReferents')}
-                                                disabled={updatingId === `${u.id}-canAccessReferents`}
-                                                className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                    ${u.canAccessReferents !== false 
-                                                        ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
-                                                        : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                                title={u.canAccessReferents !== false ? "Deshabilitar Referentes" : "Habilitar Referentes"}
-                                            >
-                                                {updatingId === `${u.id}-canAccessReferents` ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
-                                            </button>
-                                        )}
-
-                                        {/* BOTÓN GANTT */}
-                                        <button 
-                                            onClick={() => handleTogglePermission(u, 'canAccessGantt')}
-                                            disabled={updatingId === `${u.id}-canAccessGantt`}
-                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                ${u.canAccessGantt !== false 
-                                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' 
-                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                            title={u.canAccessGantt !== false ? "Deshabilitar Gantt" : "Habilitar Gantt"}
-                                        >
-                                            {updatingId === `${u.id}-canAccessGantt` ? <Loader2 size={14} className="animate-spin" /> : <CalendarRange size={14} />}
-                                        </button>
-
-                                        {/* BOTÓN MATRIZ REUTILIZABLES */}
-                                        <button 
-                                            onClick={() => handleTogglePermission(u, 'canAccessReuseMatrix')}
-                                            disabled={updatingId === `${u.id}-canAccessReuseMatrix`}
-                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                ${u.canAccessReuseMatrix !== false 
-                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
-                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                            title={u.canAccessReuseMatrix !== false ? "Deshabilitar Matriz Reutilizables" : "Habilitar Matriz Reutilizables"}
-                                        >
-                                            {updatingId === `${u.id}-canAccessReuseMatrix` ? <Loader2 size={14} className="animate-spin" /> : <LinkIcon size={14} />}
-                                        </button>
-
-                                        {/* BOTÓN ESTRUCTURA */}
-                                        <button 
-                                            onClick={() => handleTogglePermission(u, 'canAccessStructure')}
-                                            disabled={updatingId === `${u.id}-canAccessStructure`}
-                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                ${u.canAccessStructure !== false 
-                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
-                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                            title={u.canAccessStructure !== false ? "Deshabilitar Estructura" : "Habilitar Estructura"}
-                                        >
-                                            {updatingId === `${u.id}-canAccessStructure` ? <Loader2 size={14} className="animate-spin" /> : <Network size={14} />}
-                                        </button>
-
-                                        {/* BOTÓN ASIGNACIONES */}
-                                        <button 
-                                            onClick={() => handleTogglePermission(u, 'canAccessAssignments')}
-                                            disabled={updatingId === `${u.id}-canAccessAssignments`}
-                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                ${u.canAccessAssignments !== false 
-                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
-                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                            title={u.canAccessAssignments !== false ? "Deshabilitar Asignaciones" : "Habilitar Asignaciones"}
-                                        >
-                                            {updatingId === `${u.id}-canAccessAssignments` ? <Loader2 size={14} className="animate-spin" /> : <ClipboardList size={14} />}
-                                        </button>
-
-                                        {/* BOTÓN LOG EVENTOS */}
-                                        <button 
-                                            onClick={() => handleTogglePermission(u, 'canAccessLog')}
-                                            disabled={updatingId === `${u.id}-canAccessLog`}
-                                            className={`p-1.5 rounded-lg transition-all flex items-center justify-center
-                                                ${u.canAccessLog !== false 
-                                                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' 
-                                                    : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-400'}`}
-                                            title={u.canAccessLog !== false ? "Deshabilitar Log de Eventos" : "Habilitar Log de Eventos"}
-                                        >
-                                            {updatingId === `${u.id}-canAccessLog` ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
-                                        </button>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-center">

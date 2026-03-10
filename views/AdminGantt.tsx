@@ -48,7 +48,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     const [editModalDoc, setEditModalDoc] = useState<Document | null>(null);
     const [newDeadline, setNewDeadline] = useState('');
 
-    const canEditDates = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
+    const canEditDates = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canEditGanttDate;
     const isAnalyst = user.role === UserRole.ANALYST;
 
     useEffect(() => {

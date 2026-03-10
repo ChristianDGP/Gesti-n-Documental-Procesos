@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { DocumentService, HierarchyService, determineStateFromVersion, formatVersionForDisplay } from '../services/firebaseBackend';
-import { Document, User, DocState, FullHierarchy } from '../types';
+import { Document, User, DocState, FullHierarchy, UserRole } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, X, ExternalLink, FileText, Slash, ChevronDown, Layers } from 'lucide-react';
 
@@ -31,6 +31,8 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     
     // Estado para manejar la selección manual de estados en la tabla
     const [manualStates, setManualStates] = useState<Record<string, DocState>>({});
+    
+    const canAudit = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canAuditEvents;
 
     useEffect(() => {
         loadData();
@@ -201,7 +203,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                     </h1>
                     <p className="text-slate-500">Buffer de inconsistencias detectadas automáticamente en metadatos y estructura.</p>
                 </div>
-                {inconsistentDocs.length > 0 && (
+                {inconsistentDocs.length > 0 && canAudit && (
                     <button 
                         onClick={handleSyncAll}
                         disabled={syncingAll}
@@ -354,8 +356,9 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                 <select 
                                                     value={currentManualState}
                                                     onChange={(e) => handleManualStateChange(doc.id, e.target.value as DocState)}
-                                                    className={`appearance-none w-full pl-3 pr-8 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer outline-none focus:ring-2 focus:ring-indigo-500/20
-                                                        ${STATE_CONFIG[currentManualState].color}`}
+                                                    disabled={!canAudit}
+                                                    className={`appearance-none w-full pl-3 pr-8 py-1.5 rounded-lg text-[10px] font-bold border transition-all outline-none focus:ring-2 focus:ring-indigo-500/20
+                                                        ${STATE_CONFIG[currentManualState].color} ${!canAudit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
                                                 >
                                                     {Object.entries(STATE_CONFIG).map(([key, cfg]) => (
                                                         <option key={key} value={key} className="bg-white text-slate-700">{cfg.label.split('(')[0].trim()}</option>
@@ -417,7 +420,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                     const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
                                                     const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
                                                     const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
-                                                    if (fullNomenclature.length > 60) {
+                                                    if (fullNomenclature.length > 60 && canAudit) {
                                                         return (
                                                             <Link 
                                                                 to="/admin/structure"
@@ -430,22 +433,27 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                     }
                                                     return null;
                                                 })()}
-                                                <button 
-                                                    onClick={() => handleDiscard(doc.id, doc.version, doc.state)}
-                                                    disabled={discardingId === doc.id}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
-                                                >
-                                                    {discardingId === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Slash className="w-3 h-3" />}
-                                                    Descartar
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleSync(doc.id)}
-                                                    disabled={syncingId === doc.id}
-                                                    className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md transition-all active:scale-95 disabled:opacity-50"
-                                                >
-                                                    {syncingId === doc.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                                                    Sincronizar
-                                                </button>
+                                                {canAudit && (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => handleDiscard(doc.id, doc.version, doc.state)}
+                                                            disabled={discardingId === doc.id}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
+                                                        >
+                                                            {discardingId === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Slash className="w-3 h-3" />}
+                                                            Descartar
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleSync(doc.id)}
+                                                            disabled={syncingId === doc.id}
+                                                            className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md transition-all active:scale-95 disabled:opacity-50"
+                                                        >
+                                                            {syncingId === doc.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                                            Sincronizar
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {!canAudit && <span className="text-[10px] text-slate-400 italic">Solo lectura</span>}
                                             </div>
                                         </td>
                                     </tr>

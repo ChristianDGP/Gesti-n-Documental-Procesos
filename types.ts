@@ -29,7 +29,13 @@ export interface User {
   canAccessReuseMatrixView?: boolean;
   canAccessStructure?: boolean;
   canAccessAssignments?: boolean;
+  canAssignDefinedDocs?: boolean;
+  canManageAssignments?: boolean;
   canAccessLog?: boolean;
+  canAuditEvents?: boolean;
+  canEditGanttDate?: boolean;
+  canAddStructure?: boolean;
+  canEditStructure?: boolean;
 }
 
 export interface Referent {
