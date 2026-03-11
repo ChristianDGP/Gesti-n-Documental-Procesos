@@ -392,14 +392,14 @@ export const DocumentService = {
       }
   },
 
-  masterUpdate: async (docId: string, user: User, updates: { state?: DocState, version?: string, progress?: number, hasPendingRequest?: boolean, comment: string }): Promise<void> => {
+  masterUpdate: async (docId: string, user: User, updates: { state?: DocState, version?: string, progress?: number, hasPendingRequest?: boolean, updatedAt?: string, comment: string }): Promise<void> => {
       const docRef = doc(db, "documents", docId);
       const docSnap = await getDoc(docRef);
       if(!docSnap.exists()) throw new Error("Documento no encontrado");
       const currentData = docSnap.data() as Document;
 
       const finalUpdates: any = {
-          updatedAt: new Date().toISOString(),
+          updatedAt: updates.updatedAt || new Date().toISOString(),
           ignoredInconsistency: null as any
       };
 

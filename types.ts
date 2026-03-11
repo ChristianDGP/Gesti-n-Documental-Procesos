@@ -36,6 +36,7 @@ export interface User {
   canEditGanttDate?: boolean;
   canAddStructure?: boolean;
   canEditStructure?: boolean;
+  canEditMasterData?: boolean;
 }
 
 export interface Referent {

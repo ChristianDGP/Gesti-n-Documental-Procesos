@@ -33,6 +33,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [masterVersion, setMasterVersion] = useState('');
   const [masterProgress, setMasterProgress] = useState(0);
   const [masterPending, setMasterPending] = useState(false);
+  const [masterUpdatedAt, setMasterUpdatedAt] = useState('');
   const [masterComment, setMasterComment] = useState('');
 
   // --- GUARDIAS DE SEGURIDAD CONTRA DUPLICIDAD ---
@@ -418,7 +419,8 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   };
 
   const handleMasterUpdate = async () => {
-      if (!doc || !isAdmin) return;
+      const canEditMaster = user.role === UserRole.ADMIN || user.canEditMasterData;
+      if (!doc || !canEditMaster) return;
       if (!masterComment.trim()) {
           alert("Debe ingresar un comentario para la edición maestra.");
           return;
@@ -430,6 +432,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
               version: masterVersion,
               progress: masterProgress,
               hasPendingRequest: masterPending,
+              updatedAt: masterUpdatedAt ? new Date(masterUpdatedAt).toISOString() : undefined,
               comment: masterComment
           });
           setShowMasterEdit(false);
@@ -462,6 +465,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
   const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
   const isAdmin = user.role === UserRole.ADMIN;
+  const canEditMaster = isAdmin || user.canEditMasterData;
   const canEdit = !isGuest && (isAnalystAssigned || isCoordinatorOrAdmin);
   const isDocActive = doc.state !== DocState.APPROVED;
 
@@ -629,115 +633,6 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
             {!canEdit && !isGuest && <div className="bg-amber-50 border-l-4 border-amber-400 p-4 flex gap-3 text-xs text-amber-800 font-medium"><Lock size={18} className="text-amber-500" /> Vista de solo lectura. No tiene permisos de gestión en este documento.</div>}
             
-            {/* EDICIÓN MAESTRA PARA ADMINISTRADORES */}
-            {isAdmin && (
-                <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-6 text-white overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                        <Settings size={120} />
-                    </div>
-                    
-                    <div className="flex items-center justify-between mb-6 relative z-10">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-500 rounded-lg">
-                                <Wrench size={20} className="text-white" />
-                            </div>
-                            <div>
-                                <h3 className="font-black uppercase tracking-widest text-sm">Edición Maestra (Solo Admin)</h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Control total de metadatos sin carga de archivos</p>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => {
-                                if (!showMasterEdit) {
-                                    setMasterState(doc.state);
-                                    setMasterVersion(doc.version);
-                                    setMasterProgress(doc.progress);
-                                    setMasterPending(doc.hasPendingRequest || false);
-                                }
-                                setShowMasterEdit(!showMasterEdit);
-                            }}
-                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${showMasterEdit ? 'bg-slate-700 text-slate-300' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/20'}`}
-                        >
-                            {showMasterEdit ? 'Cancelar' : 'Activar Editor'}
-                        </button>
-                    </div>
-
-                    {showMasterEdit && (
-                        <div className="space-y-5 animate-fadeIn relative z-10">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado del Documento</label>
-                                    <select 
-                                        value={masterState} 
-                                        onChange={(e) => setMasterState(e.target.value as DocState)}
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        {Object.entries(DocState).map(([key, value]) => (
-                                            <option key={value} value={value}>{STATE_CONFIG[value as DocState]?.label || value}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Versión (Nomenclatura)</label>
-                                    <input 
-                                        type="text" 
-                                        value={masterVersion} 
-                                        onChange={(e) => setMasterVersion(e.target.value)}
-                                        placeholder="Ej: 0.1, v1.0, v1.0.1AR"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Progreso (%)</label>
-                                    <input 
-                                        type="number" 
-                                        min="0" max="100"
-                                        value={masterProgress} 
-                                        onChange={(e) => setMasterProgress(parseInt(e.target.value))}
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Alerta de Gestión</label>
-                                    <div className="flex items-center h-9">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={masterPending} 
-                                                onChange={(e) => setMasterPending(e.target.checked)}
-                                                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                            <span className="text-xs font-bold text-slate-300">Solicitud Pendiente</span>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Justificación del Cambio</label>
-                                <textarea 
-                                    value={masterComment}
-                                    onChange={(e) => setMasterComment(e.target.value)}
-                                    placeholder="Explique por qué está modificando estos valores manualmente..."
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 min-h-[80px]"
-                                />
-                            </div>
-
-                            <div className="flex justify-end pt-2">
-                                <button 
-                                    onClick={handleMasterUpdate}
-                                    disabled={actionLoading || !masterComment.trim()}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 active:scale-95"
-                                >
-                                    <Save size={16} />
-                                    {actionLoading ? 'Guardando...' : 'Aplicar Cambios Maestros'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
             {/* DOCUMENTOS REUTILIZABLES VINCULADOS */}
             {reusableLinks.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -832,6 +727,135 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                             </button>
                         )}
                      </div>
+                </div>
+            )}
+
+            {/* EDICIÓN MAESTRA PARA ADMINISTRADORES O USUARIOS CON PERMISO ESPECIAL */}
+            {canEditMaster && (
+                <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-6 text-white overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                        <Settings size={120} />
+                    </div>
+                    
+                    <div className="flex items-center justify-between mb-6 relative z-10">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-indigo-500 rounded-lg">
+                                <Wrench size={20} className="text-white" />
+                            </div>
+                            <div>
+                                <h3 className="font-black uppercase tracking-widest text-sm">Edición Maestra</h3>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Control total de metadatos sin carga de archivos</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => {
+                                    if (!showMasterEdit) {
+                                        setMasterState(doc.state);
+                                        setMasterVersion(doc.version);
+                                        setMasterProgress(doc.progress);
+                                        setMasterPending(doc.hasPendingRequest || false);
+                                        setMasterUpdatedAt(doc.updatedAt ? doc.updatedAt.split('.')[0].slice(0, 16) : '');
+                                    }
+                                    setShowMasterEdit(!showMasterEdit);
+                            }}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${showMasterEdit ? 'bg-slate-700 text-slate-300' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/20'}`}
+                        >
+                            {showMasterEdit ? 'Cancelar' : 'Activar Editor'}
+                        </button>
+                    </div>
+
+                    {showMasterEdit && (
+                        <div className="space-y-5 animate-fadeIn relative z-10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado del Documento</label>
+                                    <select 
+                                        value={masterState} 
+                                        onChange={(e) => {
+                                            const newState = e.target.value as DocState;
+                                            setMasterState(newState);
+                                            // Vincular progreso al estado seleccionado automáticamente
+                                            const config = STATE_CONFIG[newState];
+                                            if (config) {
+                                                setMasterProgress(config.progress);
+                                            }
+                                        }}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        {Object.entries(DocState).map(([key, value]) => (
+                                            <option key={value} value={value}>{STATE_CONFIG[value as DocState]?.label || value}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Progreso (%)</label>
+                                    <input 
+                                        type="number" 
+                                        min="0" max="100"
+                                        value={masterProgress} 
+                                        onChange={(e) => setMasterProgress(parseInt(e.target.value))}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Versión (Nomenclatura)</label>
+                                    <input 
+                                        type="text" 
+                                        value={masterVersion} 
+                                        onChange={(e) => setMasterVersion(e.target.value)}
+                                        placeholder="Ej: 0.1, v1.0, v1.0.1AR"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Alerta de Gestión</label>
+                                    <div className="flex items-center h-9">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={masterPending} 
+                                                onChange={(e) => setMasterPending(e.target.checked)}
+                                                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                            <span className="text-xs font-bold text-slate-300">Solicitud Pendiente</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha "Actualizado"</label>
+                                    <input 
+                                        type="datetime-local" 
+                                        value={masterUpdatedAt} 
+                                        onChange={(e) => setMasterUpdatedAt(e.target.value)}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 text-white"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Justificación del Cambio</label>
+                                    <textarea 
+                                        value={masterComment}
+                                        onChange={(e) => setMasterComment(e.target.value)}
+                                        placeholder="Explique por qué está modificando estos valores manualmente..."
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 min-h-[80px]"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-2">
+                                <button 
+                                    onClick={handleMasterUpdate}
+                                    disabled={actionLoading || !masterComment.trim()}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 active:scale-95"
+                                >
+                                    <Save size={16} />
+                                    {actionLoading ? 'Guardando...' : 'Aplicar Cambios Maestros'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

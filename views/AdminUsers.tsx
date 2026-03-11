@@ -36,6 +36,7 @@ const AdminUsers: React.FC = () => {
   const [canEditGanttDate, setCanEditGanttDate] = useState(false);
   const [canAddStructure, setCanAddStructure] = useState(false);
   const [canEditStructure, setCanEditStructure] = useState(false);
+  const [canEditMasterData, setCanEditMasterData] = useState(false);
   const [canAssignDefinedDocs, setCanAssignDefinedDocs] = useState(false);
   const [canManageAssignments, setCanManageAssignments] = useState(false);
 
@@ -139,6 +140,7 @@ const AdminUsers: React.FC = () => {
       setCanEditGanttDate(user.canEditGanttDate || false);
       setCanAddStructure(user.canAddStructure || false);
       setCanEditStructure(user.canEditStructure || false);
+      setCanEditMasterData(user.canEditMasterData || false);
       setShowForm(true);
   };
 
@@ -185,6 +187,7 @@ const AdminUsers: React.FC = () => {
                 canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
                 canAddStructure: role === UserRole.ADMIN ? true : canAddStructure,
                 canEditStructure: role === UserRole.ADMIN ? true : canEditStructure,
+                canEditMasterData: role === UserRole.ADMIN ? true : canEditMasterData,
                 canAccessAssignments: role === UserRole.ADMIN ? true : canAccessAssignments,
                 canAssignDefinedDocs: role === UserRole.ADMIN ? true : canAssignDefinedDocs,
                 canManageAssignments: role === UserRole.ADMIN ? true : canManageAssignments,
@@ -220,6 +223,7 @@ const AdminUsers: React.FC = () => {
                 canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
                 canAddStructure: role === UserRole.ADMIN ? true : canAddStructure,
                 canEditStructure: role === UserRole.ADMIN ? true : canEditStructure,
+                canEditMasterData: role === UserRole.ADMIN ? true : canEditMasterData,
                 canAccessAssignments: role === UserRole.ADMIN ? true : canAccessAssignments,
                 canAssignDefinedDocs: role === UserRole.ADMIN ? true : canAssignDefinedDocs,
                 canManageAssignments: role === UserRole.ADMIN ? true : canManageAssignments,
@@ -259,6 +263,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessStructure(false);
       setCanAddStructure(false);
       setCanEditStructure(false);
+      setCanEditMasterData(false);
       setCanAccessAssignments(false);
       setCanAssignDefinedDocs(false);
       setCanManageAssignments(false);
@@ -556,6 +561,22 @@ const AdminUsers: React.FC = () => {
                                             </label>
                                         </div>
                                     )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={canEditMasterData}
+                                            onChange={(e) => setCanEditMasterData(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Shield size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Edición Maestra</span>
+                                        </div>
+                                    </label>
+                                    <p className="ml-7 text-[9px] text-slate-400 leading-tight">Permite modificar metadatos críticos (fecha, progreso, versión) en el detalle del documento.</p>
                                 </div>
                             </div>
                         </div>
