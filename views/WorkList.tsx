@@ -1,20 +1,20 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService, HierarchyService, formatVersionForDisplay } from '../services/firebaseBackend';
-import { Document, User, DocState, UserRole, DocType } from '../types';
+import { DocumentService, HierarchyService, NotificationService, formatVersionForDisplay } from '../services/firebaseBackend';
+import { Document, User, DocState, UserRole, DocType, Notification } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
   Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, 
   Search, ArrowUp, ArrowDown, ArrowUpDown, X, AlertTriangle, 
-  Layers, Network, FolderTree, ChevronDown 
+  Layers, Network, FolderTree, ChevronDown, RotateCcw, Bell 
 } from 'lucide-react';
 
 interface Props {
   user: User;
 }
 
-type SortOption = 'microprocess' | 'state' | 'updatedAt';
+type SortOption = 'microprocess' | 'state' | 'updatedAt' | 'default';
 
 const WorkList: React.FC<Props> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -29,13 +29,26 @@ const WorkList: React.FC<Props> = ({ user }) => {
 
   // Ordenamiento
   const [sortConfig, setSortConfig] = useState<{ key: SortOption; direction: 'asc' | 'desc' }>({
-    key: 'updatedAt',
+    key: 'default',
     direction: 'desc'
   });
 
+  const [unreadNotifs, setUnreadNotifs] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     loadData();
-  }, []);
+    
+    // Suscribirse a notificaciones no leídas para mostrar indicadores en la lista
+    const unsubscribe = NotificationService.subscribeToUnreadNotifications(user.id, (notifs) => {
+        const map: Record<string, boolean> = {};
+        notifs.forEach(n => {
+            if (n.documentId) map[n.documentId] = true;
+        });
+        setUnreadNotifs(map);
+    });
+
+    return () => unsubscribe();
+  }, [user.id]);
 
   const normalize = (str: string | undefined) => {
       if (!str) return '';
@@ -171,6 +184,21 @@ const WorkList: React.FC<Props> = ({ user }) => {
           );
       }
       return filtered.sort((a, b) => {
+          if (sortConfig.key === 'default') {
+              // 1. Prioridad por Solicitud Pendiente
+              if (a.hasPendingRequest !== b.hasPendingRequest) {
+                  return a.hasPendingRequest ? -1 : 1;
+              }
+              
+              // 2. Si ambos tienen solicitud pendiente -> Antiguo a Reciente (ASC)
+              if (a.hasPendingRequest) {
+                  return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+              }
+              
+              // 3. Si ninguno tiene solicitud pendiente -> Reciente a Antiguo (DESC)
+              return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          }
+
           const modifier = sortConfig.direction === 'asc' ? 1 : -1;
           switch (sortConfig.key) {
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
@@ -185,6 +213,17 @@ const WorkList: React.FC<Props> = ({ user }) => {
       let direction: 'asc' | 'desc' = 'asc';
       if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
       setSortConfig({ key, direction });
+  };
+
+  const handleOpenDocument = async (docId: string) => {
+      // Al abrir desde la lista de trabajo, limpiamos los avisos de este documento para el usuario
+      if (unreadNotifs[docId]) {
+          try {
+              await NotificationService.markDocumentNotificationsAsReadForUser(docId, user.id);
+          } catch (e) {
+              console.error("Error clearing notifications on open", e);
+          }
+      }
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Activity className="animate-spin mb-2" />Cargando lista de trabajo...</div>;
@@ -205,8 +244,19 @@ const WorkList: React.FC<Props> = ({ user }) => {
 
       {/* FILTROS DE BÚSQUEDA - Estilo Imagen de Referencia */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-[0.15em] ml-1">
-          <Filter size={14} /> FILTROS DE BÚSQUEDA
+        <div className="flex items-center justify-between ml-1">
+          <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-[0.15em]">
+            <Filter size={14} /> FILTROS DE BÚSQUEDA
+          </div>
+          {sortConfig.key !== 'default' && (
+            <button 
+              onClick={() => setSortConfig({ key: 'default', direction: 'desc' })}
+              className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-600 font-black text-[9px] uppercase tracking-widest transition-all group"
+            >
+              <RotateCcw size={12} className="group-hover:rotate-[-45deg] transition-transform" /> 
+              Restablecer Orden Inteligente
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="relative">
@@ -352,6 +402,11 @@ const WorkList: React.FC<Props> = ({ user }) => {
                           state={{ docData: doc }}
                           className="text-indigo-600 hover:text-indigo-800 text-[10px] font-black uppercase tracking-[0.1em] inline-flex items-center gap-2 group/link transition-all"
                         >
+                          {unreadNotifs[doc.id] && (
+                            <span className="flex items-center gap-1 text-[9px] font-black text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-lg animate-bounce">
+                              <Bell size={10} fill="currentColor" /> AVISO
+                            </span>
+                          )}
                           Ver Detalle 
                           <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
                         </Link>

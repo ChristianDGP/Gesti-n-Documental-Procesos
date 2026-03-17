@@ -146,10 +146,17 @@ export const NotificationService = {
     },
     subscribeToUnreadCount: (userId: string, callback: (count: number) => void) => {
         if (!userId) return () => {};
-        const q = query(collection(db, "notifications"), where("userId", "==", userId));
+        const q = query(collection(db, "notifications"), where("userId", "==", userId), where("isRead", "==", false));
         return onSnapshot(q, (snapshot) => {
-            const unread = snapshot.docs.filter(d => d.data().isRead === false).length;
-            callback(unread);
+            callback(snapshot.docs.length);
+        });
+    },
+    subscribeToUnreadNotifications: (userId: string, callback: (notifications: Notification[]) => void) => {
+        if (!userId) return () => {};
+        const q = query(collection(db, "notifications"), where("userId", "==", userId), where("isRead", "==", false));
+        return onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Notification));
+            callback(data);
         });
     },
     markAsRead: async (notifId: string) => {
@@ -172,6 +179,17 @@ export const NotificationService = {
     },
     markDocumentNotificationsAsRead: async (docId: string) => {
         const q = query(collection(db, "notifications"), where("documentId", "==", docId), where("isRead", "==", false));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(d => batch.update(d.ref, { isRead: true }));
+        await batch.commit();
+    },
+    markDocumentNotificationsAsReadForUser: async (docId: string, userId: string) => {
+        const q = query(collection(db, "notifications"), 
+            where("documentId", "==", docId), 
+            where("userId", "==", userId), 
+            where("isRead", "==", false)
+        );
         const snapshot = await getDocs(q);
         const batch = writeBatch(db);
         snapshot.docs.forEach(d => batch.update(d.ref, { isRead: true }));
