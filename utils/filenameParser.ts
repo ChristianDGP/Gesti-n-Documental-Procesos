@@ -188,8 +188,8 @@ export const validateCoordinatorRules = (
         m = vUpper.match(/^V(\d+)\.(\d+)$/);
         if (m) return { major: parseInt(m[1]), n: parseInt(m[2]), i: null, ar: false, acg: false, type: 'vN.n' };
         
-        m = vUpper.match(/^V(\d+)ACG$/);
-        if (m) return { major: parseInt(m[1]), n: null, i: null, ar: false, acg: true, type: 'vN.ACG' };
+        m = vUpper.match(/^V(\d+)\.(\d+)ACG$/);
+        if (m) return { major: parseInt(m[1]), n: parseInt(m[2]), i: null, ar: false, acg: true, type: 'vN.nACG' };
         
         m = vUpper.match(/^0\.(\d+)$/);
         if (m) return { major: 0, n: parseInt(m[1]), i: null, ar: false, acg: false, type: 'v0.n' };
@@ -253,10 +253,10 @@ export const validateCoordinatorRules = (
                 if (current && current.n !== null && incoming.n! <= current.n) return { valid: false, error: `Para avanzar versión, v${incoming.major}.${incoming.n}AR debe ser mayor a la actual (v${current.major}.${current.n}...).` };
                 return { valid: true };
             }
-            if (incoming.type === 'vN.ACG' || (project === 'REU' && incoming.type === 'PR')) {
+            if (incoming.type === 'vN.nACG' || (project === 'REU' && incoming.type === 'PR')) {
                 return { valid: true };
             }
-            return { valid: false, error: project === 'REU' ? 'Aprobación requiere vN.nAR (avance) o PR (final).' : 'Aprobación requiere vN.nAR (avance) o vN.ACG (final).' };
+            return { valid: false, error: project === 'REU' ? 'Aprobación requiere vN.nAR (avance) o PR (final).' : 'Aprobación requiere vN.nAR (avance) o vN.nACG (final).' };
         } else {
             if (incoming.type !== 'vN.n.iAR') return { valid: false, error: 'Rechazo requiere vN.n.iAR (Ej: v1.0.2AR).' };
             if (incoming.i! % 2 !== 0) return { valid: false, error: `Para rechazar, el dígito "i" (${incoming.i}) debe ser PAR.` };
@@ -287,7 +287,7 @@ export const getCoordinatorRuleHint = (currentState: DocState, action: 'APPROVE'
         }
         if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
             if (project === 'REU') return 'Opción 1: vN.nAR (Avance) / Opción 2: PR (Final)';
-            return 'Opción 1: vN.nAR (Avance) / Opción 2: vN.ACG (Final)';
+            return 'Opción 1: vN.nAR (Avance) / Opción 2: vN.nACG (Final)';
         }
     }
     return 'Formato estándar';
