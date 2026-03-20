@@ -28,8 +28,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
 
     // Estado de Expansión
     const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
-    const [expandedMacros, setExpandedMacros] = useState<Record<string, boolean>>({});
-    const [expandedProcesses, setExpandedProcesses] = useState<Record<string, boolean>>({});
     const [expandedMicros, setExpandedMicros] = useState<Record<string, boolean>>({});
 
     // Filtros
@@ -136,7 +134,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             });
 
             setDocuments(unifiedList);
-            setExpandedProjects(initialProjects);
         } catch (e) {
             console.error("Error loading Gantt data", e);
         } finally {
@@ -178,19 +175,19 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
     }, [documents, filterProject, filterMacro, filterProcess, filterAnalyst, statusFilter, searchTerm]);
 
     const groupedData = useMemo(() => {
-        const groups: Record<string, Record<string, Record<string, Record<string, Document[]>>>> = {};
+        const groups: Record<string, Record<string, { docs: Document[], name: string, key: string }>> = {};
         filteredDocuments.forEach(doc => {
             const p = doc.project || 'Sin Proyecto';
             const ma = doc.macroprocess || 'Sin Macroproceso';
             const pr = doc.process || 'Sin Proceso';
             const mi = doc.microprocess || 'General';
+            const microKey = `${p}|${ma}|${pr}|${mi}`;
             
             if (!groups[p]) groups[p] = {};
-            if (!groups[p][ma]) groups[p][ma] = {};
-            if (!groups[p][ma][pr]) groups[p][ma][pr] = {};
-            if (!groups[p][ma][pr][mi]) groups[p][ma][pr][mi] = [];
-            
-            groups[p][ma][pr][mi].push(doc);
+            if (!groups[p][microKey]) {
+                groups[p][microKey] = { docs: [], name: mi, key: microKey };
+            }
+            groups[p][microKey].docs.push(doc);
         });
         return groups;
     }, [filteredDocuments]);
@@ -260,52 +257,25 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
         setExpandedProjects(prev => ({ ...prev, [proj]: !prev[proj] }));
     };
 
-    const toggleMacro = (proj: string, macro: string) => {
-        const key = `${proj}|${macro}`;
-        setExpandedMacros(prev => ({ ...prev, [key]: !prev[key] }));
-    };
-
-    const toggleProcess = (proj: string, macro: string, proc: string) => {
-        const key = `${proj}|${macro}|${proc}`;
-        setExpandedProcesses(prev => ({ ...prev, [key]: !prev[key] }));
-    };
-
-    const toggleMicro = (proj: string, macro: string, proc: string, micro: string) => {
-        const key = `${proj}|${macro}|${proc}|${micro}`;
+    const toggleMicro = (key: string) => {
         setExpandedMicros(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
     const expandAll = () => {
         const allP: Record<string, boolean> = {};
-        const allMa: Record<string, boolean> = {};
-        const allPr: Record<string, boolean> = {};
         const allMi: Record<string, boolean> = {};
-        
         Object.keys(groupedData).forEach(p => {
             allP[p] = true;
-            Object.keys(groupedData[p]).forEach(ma => {
-                const maKey = `${p}|${ma}`;
-                allMa[maKey] = true;
-                Object.keys(groupedData[p][ma]).forEach(pr => {
-                    const prKey = `${p}|${ma}|${pr}`;
-                    allPr[prKey] = true;
-                    Object.keys(groupedData[p][ma][pr]).forEach(mi => {
-                        const miKey = `${p}|${ma}|${pr}|${mi}`;
-                        allMi[miKey] = true;
-                    });
-                });
+            Object.keys(groupedData[p]).forEach(miKey => {
+                allMi[miKey] = true;
             });
         });
         setExpandedProjects(allP);
-        setExpandedMacros(allMa);
-        setExpandedProcesses(allPr);
         setExpandedMicros(allMi);
     };
 
     const collapseAll = () => {
         setExpandedProjects({});
-        setExpandedMacros({});
-        setExpandedProcesses({});
         setExpandedMicros({});
     };
 
@@ -391,7 +361,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                 <div className="flex flex-wrap items-center gap-3 px-2">
                     <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">
                         <Filter size={14} className="text-slate-300" />
-                        Drill Down:
+                        Estados:
                     </div>
                     <FilterableLegend 
                         color="bg-rose-500" 
@@ -440,7 +410,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                     <table className="w-full text-left border-collapse min-w-[1300px]">
                         <thead className="bg-slate-900 text-[10px] text-slate-400 font-black uppercase tracking-[0.15em] border-b border-slate-800">
                             <tr>
-                                <th className="px-6 py-5 w-64">Jerarquía Organizacional</th>
+                                <th className="px-6 py-5 w-64">Microprocesos</th>
                                 <th className="px-6 py-5 w-48">Tipo / Estado</th>
                                 <th className="px-6 py-5 w-24 text-center">Versión</th>
                                 <th className="px-6 py-5 w-40 text-center">Progreso</th>
@@ -462,9 +432,10 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         <tbody className="divide-y divide-slate-100">
                             {Object.keys(groupedData).length === 0 ? (
                                 <tr><td colSpan={6} className="py-24 text-center opacity-30 italic">No se encontraron registros {statusFilter !== 'ALL' ? `con estado "${statusFilter}"` : ''}.</td></tr>
-                            ) : Object.keys(groupedData).map(project => {
+                            ) : Object.keys(groupedData).sort().map(project => {
                                 const isProjectExpanded = expandedProjects[project];
-                                const projectDocs = Object.values(groupedData[project]).flatMap(ma => Object.values(ma).flatMap(pr => Object.values(pr).flat())) as Document[];
+                                const projectMicros = groupedData[project];
+                                const projectDocs = Object.values(projectMicros).flatMap(m => m.docs);
                                 const projectAverageProgress = projectDocs.length > 0 
                                     ? Math.round(projectDocs.reduce((acc: number, d: Document) => acc + d.progress, 0) / projectDocs.length)
                                     : 0;
@@ -492,178 +463,117 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                             <td className="px-6 py-4"></td>
                                         </tr>
 
-                                        {isProjectExpanded && Object.keys(groupedData[project]).map((macro) => {
-                                            const macroKey = `${project}|${macro}`;
-                                            const isMacroExpanded = expandedMacros[macroKey];
-                                            const macroDocs = Object.values(groupedData[project][macro]).flatMap(pr => Object.values(pr).flat());
-                                            const macroAverageProgress = macroDocs.length > 0 ? Math.round(macroDocs.reduce((acc, d) => acc + d.progress, 0) / macroDocs.length) : 0;
+                                        {isProjectExpanded && Object.values(projectMicros).sort((a, b) => a.name.localeCompare(b.name)).map(group => {
+                                            const isMicroExpanded = expandedMicros[group.key];
+                                            const microDocs = group.docs;
+                                            const microAverageProgress = Math.round(microDocs.reduce((acc, d) => acc + d.progress, 0) / microDocs.length);
 
                                             return (
-                                                <React.Fragment key={macroKey}>
-                                                    {/* HEADER DE MACROPROCESO */}
-                                                    <tr onClick={() => toggleMacro(project, macro)} className="bg-slate-50/50 cursor-pointer hover:bg-slate-100/80 transition-colors">
-                                                        <td className="px-10 py-3 font-bold text-slate-700 flex items-center gap-2">
-                                                            {isMacroExpanded ? <ChevronDown size={16} className="text-indigo-500" /> : <ChevronRight size={16} className="text-slate-300" />}
-                                                            <span className="text-xs uppercase tracking-tight">{macro}</span>
+                                                <React.Fragment key={group.key}>
+                                                    {/* HEADER DE MICROPROCESO */}
+                                                    <tr onClick={() => toggleMicro(group.key)} className="bg-white cursor-pointer hover:bg-slate-50/80 transition-colors border-l-4 border-indigo-500">
+                                                        <td className="px-10 py-4 font-bold text-slate-700">
+                                                            <div className="flex items-center gap-2">
+                                                                {isMicroExpanded ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-300" />}
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-xs uppercase tracking-tight truncate max-w-[400px]">{group.name}</span>
+                                                                </div>
+                                                            </div>
                                                         </td>
-                                                        <td className="px-6 py-3"></td>
-                                                        <td className="px-6 py-3"></td>
-                                                        <td className="px-6 py-3 text-center">
-                                                            <span className="text-[10px] font-bold text-blue-600">{macroAverageProgress}%</span>
-                                                        </td>
-                                                        <td className="px-6 py-3">
-                                                            {!isMacroExpanded && (
-                                                                <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                                    <div className="h-full bg-blue-400" style={{ width: `${macroAverageProgress}%` }}></div>
+                                                        <td className="px-6 py-4">
+                                                            {!isMicroExpanded && (
+                                                                <div className="flex gap-1">
+                                                                    {microDocs.map(d => (
+                                                                        <div key={d.id} className={`w-2 h-2 rounded-full ${getStatusInfo(d).color}`} title={d.docType}></div>
+                                                                    ))}
                                                                 </div>
                                                             )}
                                                         </td>
-                                                        <td className="px-6 py-3"></td>
+                                                        <td className="px-6 py-4 text-center"></td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className="text-[10px] font-bold text-slate-500">{microAverageProgress}%</span>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            {!isMicroExpanded && (
+                                                                <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-indigo-400" style={{ width: `${microAverageProgress}%` }}></div>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4"></td>
                                                     </tr>
 
-                                                    {isMacroExpanded && Object.keys(groupedData[project][macro]).map((proc) => {
-                                                        const procKey = `${project}|${macro}|${proc}`;
-                                                        const isProcExpanded = expandedProcesses[procKey];
-                                                        const procDocs = Object.values(groupedData[project][macro][proc]).flat();
-                                                        const procAverageProgress = procDocs.length > 0 ? Math.round(procDocs.reduce((acc, d) => acc + d.progress, 0) / procDocs.length) : 0;
+                                                    {/* FILAS DE DOCUMENTOS INDIVIDUALES */}
+                                                    {isMicroExpanded && microDocs.map((doc) => {
+                                                        const statusInfo = getStatusInfo(doc);
+                                                        const isApproved = doc.state === DocState.APPROVED;
+                                                        const barStart = doc.createdAt;
+                                                        const barEnd = isApproved ? doc.updatedAt : (doc.expectedEndDate || DEFAULT_EXECUTIVE_DEADLINE);
+                                                        const startPos = getPositionInGantt(barStart);
+                                                        const endPos = getPositionInGantt(barEnd);
+                                                        const duration = Math.max(1.5, endPos - startPos);
 
                                                         return (
-                                                            <React.Fragment key={procKey}>
-                                                                {/* HEADER DE PROCESO */}
-                                                                <tr onClick={() => toggleProcess(project, macro, proc)} className="bg-white cursor-pointer hover:bg-slate-50 transition-colors">
-                                                                    <td className="px-14 py-3 font-bold text-slate-700 flex items-center gap-2">
-                                                                        {isProcExpanded ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-300" />}
-                                                                        <span className="text-xs uppercase tracking-tight">{proc}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-3"></td>
-                                                                    <td className="px-6 py-3"></td>
-                                                                    <td className="px-6 py-3 text-center">
-                                                                        <span className="text-[10px] font-bold text-purple-500">{procAverageProgress}%</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-3">
-                                                                        {!isProcExpanded && (
-                                                                            <div className="h-1 w-full bg-slate-50 rounded-full overflow-hidden">
-                                                                                <div className="h-full bg-purple-400" style={{ width: `${procAverageProgress}%` }}></div>
-                                                                            </div>
+                                                            <tr key={doc.id} className="hover:bg-indigo-50/30 transition-all group bg-slate-50/20">
+                                                                <td className="px-16 py-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-200"></div>
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase">{doc.docType}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3">
+                                                                    <div className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-black border ${doc.state === DocState.NOT_STARTED ? 'bg-white text-slate-300 border-slate-100' : STATE_CONFIG[doc.state].color}`}>
+                                                                        {STATE_CONFIG[doc.state].label.split('(')[0].trim()}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-center">
+                                                                    <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                                                        {formatVersionForDisplay(doc.version)}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-center">
+                                                                    <span className="text-[9px] font-mono text-slate-400 font-bold">{doc.progress}%</span>
+                                                                </td>
+                                                                <td className="px-6 py-3">
+                                                                    <div className="relative h-8 flex items-center">
+                                                                        {/* Grid Background */}
+                                                                        <div className="absolute inset-0 grid grid-cols-12 pointer-events-none opacity-[0.03]">
+                                                                            {timelineHeaders.map((_, i) => <div key={i} className={`border-r border-slate-900 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-3'}`}></div>)}
+                                                                        </div>
+                                                                        
+                                                                        {/* Indicador de HOY */}
+                                                                        {viewScale === 'MONTHS' && todayPos > 0 && todayPos < 100 && (
+                                                                            <div className="absolute top-0 bottom-0 w-px bg-rose-500/20 z-10" style={{ left: `${todayPos}%` }}></div>
                                                                         )}
-                                                                    </td>
-                                                                    <td className="px-6 py-3"></td>
-                                                                </tr>
 
-                                                                {isProcExpanded && Object.keys(groupedData[project][macro][proc]).map((micro) => {
-                                                                    const microKey = `${project}|${macro}|${proc}|${micro}`;
-                                                                    const isMicroExpanded = expandedMicros[microKey];
-                                                                    const microDocs = groupedData[project][macro][proc][micro];
-                                                                    const microAverageProgress = Math.round(microDocs.reduce((acc, d) => acc + d.progress, 0) / microDocs.length);
-
-                                                                    return (
-                                                                        <React.Fragment key={microKey}>
-                                                                            {/* HEADER DE MICROPROCESO */}
-                                                                            <tr onClick={() => toggleMicro(project, macro, proc, micro)} className="bg-white cursor-pointer hover:bg-slate-50/80 transition-colors border-l-4 border-indigo-500">
-                                                                                <td className="px-20 py-3 font-bold text-slate-700 flex items-center gap-2">
-                                                                                    {isMicroExpanded ? <ChevronDown size={14} className="text-indigo-500" /> : <ChevronRight size={14} className="text-slate-300" />}
-                                                                                    <span className="text-xs uppercase tracking-tight truncate max-w-[300px]">{micro}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3">
-                                                                                    {!isMicroExpanded && (
-                                                                                        <div className="flex gap-1">
-                                                                                            {microDocs.map(d => (
-                                                                                                <div key={d.id} className={`w-2 h-2 rounded-full ${getStatusInfo(d).color}`} title={d.docType}></div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </td>
-                                                                                <td className="px-6 py-3"></td>
-                                                                                <td className="px-6 py-3 text-center">
-                                                                                    <span className="text-[10px] font-bold text-slate-500">{microAverageProgress}%</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3">
-                                                                                    {!isMicroExpanded && (
-                                                                                        <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                                                            <div className="h-full bg-indigo-400" style={{ width: `${microAverageProgress}%` }}></div>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </td>
-                                                                                <td className="px-6 py-3"></td>
-                                                                            </tr>
-
-                                                                            {/* FILAS DE DOCUMENTOS INDIVIDUALES */}
-                                                                            {isMicroExpanded && microDocs.map((doc) => {
-                                                                                const statusInfo = getStatusInfo(doc);
-                                                                                const isApproved = doc.state === DocState.APPROVED;
-                                                                                const barStart = doc.createdAt;
-                                                                                const barEnd = isApproved ? doc.updatedAt : (doc.expectedEndDate || DEFAULT_EXECUTIVE_DEADLINE);
-                                                                                const startPos = getPositionInGantt(barStart);
-                                                                                const endPos = getPositionInGantt(barEnd);
-                                                                                const duration = Math.max(1.5, endPos - startPos);
-
-                                                                                return (
-                                                                                    <tr key={doc.id} className="hover:bg-indigo-50/30 transition-all group bg-slate-50/20">
-                                                                                        <td className="px-24 py-3">
-                                                                                            <div className="flex items-center gap-2">
-                                                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-200"></div>
-                                                                                                <span className="text-[10px] font-black text-slate-500 uppercase">{doc.docType}</span>
-                                                                                            </div>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-3">
-                                                                                            <div className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-black border ${doc.state === DocState.NOT_STARTED ? 'bg-white text-slate-300 border-slate-100' : STATE_CONFIG[doc.state].color}`}>
-                                                                                                {STATE_CONFIG[doc.state].label.split('(')[0].trim()}
-                                                                                            </div>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-3 text-center">
-                                                                                            <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                                                                                                {formatVersionForDisplay(doc.version)}
-                                                                                            </span>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-3 text-center">
-                                                                                            <span className="text-[9px] font-mono text-slate-400 font-bold">{doc.progress}%</span>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-3">
-                                                                                            <div className="relative h-8 flex items-center">
-                                                                                                {/* Grid Background */}
-                                                                                                <div className="absolute inset-0 grid grid-cols-12 pointer-events-none opacity-[0.03]">
-                                                                                                    {timelineHeaders.map((_, i) => <div key={i} className={`border-r border-slate-900 last:border-0 ${viewScale === 'MONTHS' ? 'col-span-1' : 'col-span-3'}`}></div>)}
-                                                                                                </div>
-                                                                                                
-                                                                                                {/* Indicador de HOY */}
-                                                                                                {viewScale === 'MONTHS' && todayPos > 0 && todayPos < 100 && (
-                                                                                                    <div className="absolute top-0 bottom-0 w-px bg-rose-500/20 z-10" style={{ left: `${todayPos}%` }}></div>
-                                                                                                )}
-
-                                                                                                {/* Main Bar */}
-                                                                                                <div 
-                                                                                                    className="absolute h-4 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shadow-sm transition-all group-hover:scale-[1.01] cursor-help"
-                                                                                                    style={{ left: `${startPos}%`, width: `${duration}%` }}
-                                                                                                    title={`Plazo: ${new Date(barStart).toLocaleDateString()} al ${new Date(barEnd).toLocaleDateString()}`}
-                                                                                                >
-                                                                                                    <div 
-                                                                                                        className={`h-full ${statusInfo.color} transition-all duration-1000 ease-out`}
-                                                                                                        style={{ width: `${isApproved ? 100 : doc.progress}%` }}
-                                                                                                    ></div>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-3 text-right">
-                                                                                            {(canEditDates && !doc.id.startsWith('virtual-') && !isApproved) && (
-                                                                                                <button 
-                                                                                                    onClick={() => { 
-                                                                                                        setEditModalDoc(doc); 
-                                                                                                        setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]); 
-                                                                                                    }} 
-                                                                                                    className="p-2 bg-white text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                                                                                                    title="Editar Fecha Meta"
-                                                                                                >
-                                                                                                    <Calendar size={14} />
-                                                                                                </button>
-                                                                                            )}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                );
-                                                                            })}
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
-                                                            </React.Fragment>
+                                                                        {/* Main Bar */}
+                                                                        <div 
+                                                                            className="absolute h-4 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shadow-sm transition-all group-hover:scale-[1.01] cursor-help"
+                                                                            style={{ left: `${startPos}%`, width: `${duration}%` }}
+                                                                            title={`Plazo: ${new Date(barStart).toLocaleDateString()} al ${new Date(barEnd).toLocaleDateString()}`}
+                                                                        >
+                                                                            <div 
+                                                                                className={`h-full ${statusInfo.color} transition-all duration-1000 ease-out`}
+                                                                                style={{ width: `${isApproved ? 100 : doc.progress}%` }}
+                                                                            ></div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-right">
+                                                                    {(canEditDates && !doc.id.startsWith('virtual-') && !isApproved) && (
+                                                                        <button 
+                                                                            onClick={() => { 
+                                                                                setEditModalDoc(doc); 
+                                                                                setNewDeadline(doc.expectedEndDate ? doc.expectedEndDate.split('T')[0] : DEFAULT_EXECUTIVE_DEADLINE.split('T')[0]); 
+                                                                            }} 
+                                                                            className="p-2 bg-white text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-all shadow-sm hover:shadow-md active:scale-95"
+                                                                            title="Editar Fecha Meta"
+                                                                        >
+                                                                            <Calendar size={14} />
+                                                                        </button>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
                                                         );
                                                     })}
                                                 </React.Fragment>
