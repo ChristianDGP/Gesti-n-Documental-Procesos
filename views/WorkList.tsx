@@ -1,7 +1,10 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService, HierarchyService, NotificationService, formatVersionForDisplay } from '../services/firebaseBackend';
+import { 
+  DocumentService, HierarchyService, NotificationService, 
+  formatVersionForDisplay, getStatusInfo, DEFAULT_EXECUTIVE_DEADLINE 
+} from '../services/firebaseBackend';
 import { Document, User, DocState, UserRole, DocType, Notification } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
@@ -14,7 +17,7 @@ interface Props {
   user: User;
 }
 
-type SortOption = 'microprocess' | 'state' | 'updatedAt' | 'default';
+type SortOption = 'microprocess' | 'state' | 'updatedAt' | 'expectedEndDate' | 'default';
 
 const WorkList: React.FC<Props> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -25,6 +28,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
   const [filterMacro, setFilterMacro] = useState('');
   const [filterProcess, setFilterProcess] = useState('');
   const [filterState, setFilterState] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Ordenamiento
@@ -175,6 +179,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
       if (filterMacro) filtered = filtered.filter(d => d.macroprocess === filterMacro);
       if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
       if (filterState) filtered = filtered.filter(d => d.state === filterState);
+      if (filterStatus !== 'ALL') filtered = filtered.filter(d => getStatusInfo(d).status === filterStatus);
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
           filtered = filtered.filter(d => 
@@ -204,10 +209,15 @@ const WorkList: React.FC<Props> = ({ user }) => {
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
               case 'state': return ((STATE_CONFIG[a.state]?.progress || 0) - (STATE_CONFIG[b.state]?.progress || 0)) * modifier;
               case 'updatedAt': return (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) * modifier;
+              case 'expectedEndDate': {
+                  const dateA = a.expectedEndDate ? new Date(a.expectedEndDate).getTime() : new Date(DEFAULT_EXECUTIVE_DEADLINE).getTime();
+                  const dateB = b.expectedEndDate ? new Date(b.expectedEndDate).getTime() : new Date(DEFAULT_EXECUTIVE_DEADLINE).getTime();
+                  return (dateA - dateB) * modifier;
+              }
               default: return 0;
           }
       });
-  }, [docs, filterProject, filterMacro, filterProcess, filterState, searchTerm, sortConfig]);
+  }, [docs, filterProject, filterMacro, filterProcess, filterState, filterStatus, searchTerm, sortConfig]);
 
   const handleSort = (key: SortOption) => {
       let direction: 'asc' | 'desc' = 'asc';
@@ -314,6 +324,22 @@ const WorkList: React.FC<Props> = ({ user }) => {
             </div>
 
             <div className="relative">
+              <Activity className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select 
+                value={filterStatus} 
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
+              >
+                <option value="ALL">SITUACIÓN</option>
+                <option value="OVERDUE">ATRASADO</option>
+                <option value="RISK">EN RIESGO</option>
+                <option value="ON_TRACK">EN PLAZO</option>
+                <option value="PENDING">NO INICIADO</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
+            </div>
+
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 type="text" 
@@ -336,6 +362,12 @@ const WorkList: React.FC<Props> = ({ user }) => {
                 <th className="px-6 py-5">MICROPROCESO</th>
                 <th className="px-6 py-5">DOCUMENTO</th>
                 <th className="px-6 py-5">ESTADO ACTUAL</th>
+                <th className="px-6 py-5 cursor-pointer group" onClick={() => handleSort('expectedEndDate')}>
+                  <div className="flex items-center gap-1">
+                    FECHA META
+                    <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </th>
                 <th className="px-6 py-5 cursor-pointer group" onClick={() => handleSort('updatedAt')}>
                   <div className="flex items-center gap-1">
                     FECHA 
@@ -352,7 +384,8 @@ const WorkList: React.FC<Props> = ({ user }) => {
                 <tr><td colSpan={6} className="px-6 py-20 text-center text-slate-300 font-bold italic uppercase tracking-widest">No hay tareas pendientes en este contexto</td></tr>
               ) : (
                 processedDocs.map((doc, idx) => {
-                  const status = STATE_CONFIG[doc.state];
+                  const stateInfo = STATE_CONFIG[doc.state];
+                  const statusInfo = getStatusInfo(doc);
                   return (
                     <tr key={`${doc.id}-${idx}`} className="group hover:bg-slate-50/50 transition-all">
                       <td className="px-6 py-5">
@@ -382,12 +415,18 @@ const WorkList: React.FC<Props> = ({ user }) => {
                       {/* ESTADO ACTUAL - Estética Dashboard */}
                       <td className="px-6 py-5">
                         <div className="flex flex-col">
-                            <div className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit mb-1 ${status.color}`}>
-                                {status.label.split('(')[0].trim()}
+                            <div className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit mb-1 ${statusInfo.color}`}>
+                                {statusInfo.label}
                             </div>
                             <div className="text-[10px] font-mono text-slate-500 font-bold">
-                                {formatVersionForDisplay(doc.version)} ({status.progress}%)
+                                {formatVersionForDisplay(doc.version)} ({stateInfo.progress}%)
                             </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className={`flex items-center gap-2 font-bold text-[10px] ${getStatusInfo(doc).status === 'OVERDUE' ? 'text-rose-600' : 'text-slate-500'}`}>
+                          <Calendar size={12} className="text-slate-300" />
+                          <span>{doc.expectedEndDate ? new Date(doc.expectedEndDate).toLocaleDateString('es-CL') : new Date(DEFAULT_EXECUTIVE_DEADLINE).toLocaleDateString('es-CL')}</span>
                         </div>
                       </td>
                       <td className="px-6 py-5">

@@ -98,6 +98,26 @@ const deleteCollectionInBatches = async (collectionName: string) => {
     if (count > 0) await batch.commit();
 };
 
+export const DEFAULT_EXECUTIVE_DEADLINE = '2026-06-30T23:59:59Z';
+
+export const getStatusInfo = (doc: Document) => {
+    const now = new Date();
+    const deadline = doc.expectedEndDate ? new Date(doc.expectedEndDate) : new Date(DEFAULT_EXECUTIVE_DEADLINE);
+    
+    if (doc.state === DocState.APPROVED) return { status: 'DONE' as const, color: 'bg-emerald-500', label: 'Terminado' };
+    if (doc.state === DocState.NOT_STARTED) return { status: 'PENDING' as const, color: 'bg-slate-300', label: 'No Iniciado' };
+    
+    if (now > deadline) return { status: 'OVERDUE' as const, color: 'bg-rose-500', label: 'Atrasado' };
+
+    const created = new Date(doc.createdAt);
+    const totalDuration = deadline.getTime() - created.getTime();
+    const elapsed = now.getTime() - created.getTime();
+    const ratio = elapsed / totalDuration;
+    
+    if (ratio > 0.8 && doc.progress < 80) return { status: 'RISK' as const, color: 'bg-amber-500', label: 'En Riesgo' };
+    return { status: 'ON_TRACK' as const, color: 'bg-indigo-500', label: 'En Plazo' };
+};
+
 export const ReferentService = {
   getAll: async (): Promise<Referent[]> => {
     const q = query(collection(db, "referents"), orderBy("name"));
@@ -280,9 +300,20 @@ export const DocumentService = {
           .filter(d => normalizeHeader(d.data().microprocess || d.data().title.split(' - ')[0]) === normalizedMicro)
           .map(d => d.id);
   },
-  updateDeadline: async (docId: string, expectedEndDate: string) => {
-    const docRef = doc(db, "documents", docId);
-    await updateDoc(docRef, { expectedEndDate });
+  updateDeadline: async (docId: string, expectedEndDate: string, virtualDocData?: Document) => {
+    if (docId.startsWith('virtual-') && virtualDocData) {
+        const { id, ...data } = virtualDocData;
+        // Al crear un documento desde uno virtual, le asignamos la fecha meta y tiempos reales
+        await addDoc(collection(db, "documents"), {
+            ...data,
+            expectedEndDate,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+    } else {
+        const docRef = doc(db, "documents", docId);
+        await updateDoc(docRef, { expectedEndDate });
+    }
   },
   ignoreInconsistency: async (docId: string, version: string, state: string) => {
       const docRef = doc(db, "documents", docId);

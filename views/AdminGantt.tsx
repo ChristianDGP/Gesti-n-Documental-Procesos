@@ -1,6 +1,9 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { DocumentService, UserService, HierarchyService, normalizeHeader, formatVersionForDisplay } from '../services/firebaseBackend';
+import { 
+    DocumentService, UserService, HierarchyService, normalizeHeader, 
+    formatVersionForDisplay, getStatusInfo, DEFAULT_EXECUTIVE_DEADLINE 
+} from '../services/firebaseBackend';
 import { Document, User, DocState, UserRole, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
@@ -14,7 +17,6 @@ interface Props {
     user: User;
 }
 
-const DEFAULT_EXECUTIVE_DEADLINE = '2026-06-30T23:59:59Z';
 const DOC_TYPE_ORDER: DocType[] = ['AS IS', 'FCE', 'PM', 'TO BE'];
 
 type ViewScale = 'YEARS' | 'MONTHS';
@@ -141,24 +143,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
         }
     };
 
-    const getStatusInfo = (doc: Document) => {
-        const now = new Date();
-        const deadline = doc.expectedEndDate ? new Date(doc.expectedEndDate) : new Date(DEFAULT_EXECUTIVE_DEADLINE);
-        
-        if (doc.state === DocState.APPROVED) return { status: 'DONE' as const, color: 'bg-emerald-500', label: 'Terminado' };
-        if (doc.state === DocState.NOT_STARTED) return { status: 'PENDING' as const, color: 'bg-slate-300', label: 'No Iniciado' };
-        
-        if (now > deadline) return { status: 'OVERDUE' as const, color: 'bg-rose-500', label: 'Atrasado' };
-
-        const created = new Date(doc.createdAt);
-        const totalDuration = deadline.getTime() - created.getTime();
-        const elapsed = now.getTime() - created.getTime();
-        const ratio = elapsed / totalDuration;
-        
-        if (ratio > 0.8 && doc.progress < 80) return { status: 'RISK' as const, color: 'bg-amber-500', label: 'En Riesgo' };
-        return { status: 'ON_TRACK' as const, color: 'bg-indigo-500', label: 'En Plazo' };
-    };
-
     const filteredDocuments = useMemo(() => {
         return documents.filter(d => {
             if (filterProject && d.project !== filterProject) return false;
@@ -223,7 +207,11 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
         if (!canEditDates || !editModalDoc || !newDeadline) return;
         setUpdatingId(editModalDoc.id);
         try {
-            await DocumentService.updateDeadline(editModalDoc.id, new Date(newDeadline).toISOString());
+            await DocumentService.updateDeadline(
+                editModalDoc.id, 
+                new Date(newDeadline).toISOString(),
+                editModalDoc.id.startsWith('virtual-') ? editModalDoc : undefined
+            );
             setEditModalDoc(null);
             await loadData();
         } catch (e) {
@@ -558,9 +546,9 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                             ></div>
                                                                         </div>
                                                                     </div>
-                                                                </td>
+                                                                 </td>
                                                                 <td className="px-6 py-3 text-right">
-                                                                    {(canEditDates && !doc.id.startsWith('virtual-') && !isApproved) && (
+                                                                    {(canEditDates && !isApproved) && (
                                                                         <button 
                                                                             onClick={() => { 
                                                                                 setEditModalDoc(doc); 
