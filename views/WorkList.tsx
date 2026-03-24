@@ -2,22 +2,22 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  DocumentService, HierarchyService, NotificationService, 
+  DocumentService, HierarchyService, 
   formatVersionForDisplay, getStatusInfo, DEFAULT_EXECUTIVE_DEADLINE 
 } from '../services/firebaseBackend';
-import { Document, User, DocState, UserRole, DocType, Notification } from '../types';
+import { Document, User, DocState, UserRole, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
   Filter, ArrowRight, Calendar, ListTodo, Activity, FileText, 
   Search, ArrowUp, ArrowDown, ArrowUpDown, X, AlertTriangle, 
-  Layers, Network, FolderTree, ChevronDown, RotateCcw, Bell 
+  Layers, Network, FolderTree, ChevronDown, RotateCcw 
 } from 'lucide-react';
 
 interface Props {
   user: User;
 }
 
-type SortOption = 'microprocess' | 'state' | 'updatedAt' | 'expectedEndDate' | 'default';
+type SortOption = 'microprocess' | 'state' | 'updatedAt' | 'default';
 
 const WorkList: React.FC<Props> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -28,7 +28,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
   const [filterMacro, setFilterMacro] = useState('');
   const [filterProcess, setFilterProcess] = useState('');
   const [filterState, setFilterState] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Ordenamiento
@@ -37,21 +36,8 @@ const WorkList: React.FC<Props> = ({ user }) => {
     direction: 'desc'
   });
 
-  const [unreadNotifs, setUnreadNotifs] = useState<Record<string, boolean>>({});
-
   useEffect(() => {
     loadData();
-    
-    // Suscribirse a notificaciones no leídas para mostrar indicadores en la lista
-    const unsubscribe = NotificationService.subscribeToUnreadNotifications(user.id, (notifs) => {
-        const map: Record<string, boolean> = {};
-        notifs.forEach(n => {
-            if (n.documentId) map[n.documentId] = true;
-        });
-        setUnreadNotifs(map);
-    });
-
-    return () => unsubscribe();
   }, [user.id]);
 
   const normalize = (str: string | undefined) => {
@@ -179,7 +165,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
       if (filterMacro) filtered = filtered.filter(d => d.macroprocess === filterMacro);
       if (filterProcess) filtered = filtered.filter(d => d.process === filterProcess);
       if (filterState) filtered = filtered.filter(d => d.state === filterState);
-      if (filterStatus !== 'ALL') filtered = filtered.filter(d => getStatusInfo(d).status === filterStatus);
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
           filtered = filtered.filter(d => 
@@ -209,31 +194,15 @@ const WorkList: React.FC<Props> = ({ user }) => {
               case 'microprocess': return (a.microprocess || '').localeCompare(b.microprocess || '') * modifier;
               case 'state': return ((STATE_CONFIG[a.state]?.progress || 0) - (STATE_CONFIG[b.state]?.progress || 0)) * modifier;
               case 'updatedAt': return (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) * modifier;
-              case 'expectedEndDate': {
-                  const dateA = a.expectedEndDate ? new Date(a.expectedEndDate).getTime() : new Date(DEFAULT_EXECUTIVE_DEADLINE).getTime();
-                  const dateB = b.expectedEndDate ? new Date(b.expectedEndDate).getTime() : new Date(DEFAULT_EXECUTIVE_DEADLINE).getTime();
-                  return (dateA - dateB) * modifier;
-              }
               default: return 0;
           }
       });
-  }, [docs, filterProject, filterMacro, filterProcess, filterState, filterStatus, searchTerm, sortConfig]);
+  }, [docs, filterProject, filterMacro, filterProcess, filterState, searchTerm, sortConfig]);
 
   const handleSort = (key: SortOption) => {
       let direction: 'asc' | 'desc' = 'asc';
       if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
       setSortConfig({ key, direction });
-  };
-
-  const handleOpenDocument = async (docId: string) => {
-      // Al abrir desde la lista de trabajo, limpiamos los avisos de este documento para el usuario
-      if (unreadNotifs[docId]) {
-          try {
-              await NotificationService.markDocumentNotificationsAsReadForUser(docId, user.id);
-          } catch (e) {
-              console.error("Error clearing notifications on open", e);
-          }
-      }
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Activity className="animate-spin mb-2" />Cargando lista de trabajo...</div>;
@@ -324,22 +293,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
             </div>
 
             <div className="relative">
-              <Activity className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <select 
-                value={filterStatus} 
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-sm"
-              >
-                <option value="ALL">SITUACIÓN</option>
-                <option value="OVERDUE">ATRASADO</option>
-                <option value="RISK">EN RIESGO</option>
-                <option value="ON_TRACK">EN PLAZO</option>
-                <option value="PENDING">NO INICIADO</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-            </div>
-
-            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 type="text" 
@@ -362,12 +315,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
                 <th className="px-6 py-5">MICROPROCESO</th>
                 <th className="px-6 py-5">DOCUMENTO</th>
                 <th className="px-6 py-5">ESTADO ACTUAL</th>
-                <th className="px-6 py-5 cursor-pointer group" onClick={() => handleSort('expectedEndDate')}>
-                  <div className="flex items-center gap-1">
-                    FECHA META
-                    <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </th>
                 <th className="px-6 py-5 cursor-pointer group" onClick={() => handleSort('updatedAt')}>
                   <div className="flex items-center gap-1">
                     FECHA 
@@ -385,7 +332,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
               ) : (
                 processedDocs.map((doc, idx) => {
                   const stateInfo = STATE_CONFIG[doc.state];
-                  const statusInfo = getStatusInfo(doc);
                   return (
                     <tr key={`${doc.id}-${idx}`} className="group hover:bg-slate-50/50 transition-all">
                       <td className="px-6 py-5">
@@ -415,18 +361,12 @@ const WorkList: React.FC<Props> = ({ user }) => {
                       {/* ESTADO ACTUAL - Estética Dashboard */}
                       <td className="px-6 py-5">
                         <div className="flex flex-col">
-                            <div className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit mb-1 ${statusInfo.color}`}>
-                                {statusInfo.label}
+                            <div className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit mb-1 ${stateInfo.color}`}>
+                                {stateInfo.label.split('(')[0].trim()}
                             </div>
                             <div className="text-[10px] font-mono text-slate-500 font-bold">
                                 {formatVersionForDisplay(doc.version)} ({stateInfo.progress}%)
                             </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className={`flex items-center gap-2 font-bold text-[10px] ${getStatusInfo(doc).status === 'OVERDUE' ? 'text-rose-600' : 'text-slate-500'}`}>
-                          <Calendar size={12} className="text-slate-300" />
-                          <span>{doc.expectedEndDate ? new Date(doc.expectedEndDate).toLocaleDateString('es-CL') : new Date(DEFAULT_EXECUTIVE_DEADLINE).toLocaleDateString('es-CL')}</span>
                         </div>
                       </td>
                       <td className="px-6 py-5">
@@ -441,11 +381,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
                           state={{ docData: doc }}
                           className="text-indigo-600 hover:text-indigo-800 text-[10px] font-black uppercase tracking-[0.1em] inline-flex items-center gap-2 group/link transition-all"
                         >
-                          {unreadNotifs[doc.id] && (
-                            <span className="flex items-center gap-1 text-[9px] font-black text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-lg animate-bounce">
-                              <Bell size={10} fill="currentColor" /> AVISO
-                            </span>
-                          )}
                           Ver Detalle 
                           <ArrowRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
                         </Link>
