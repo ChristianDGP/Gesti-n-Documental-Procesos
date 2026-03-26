@@ -10,6 +10,7 @@ import AdminUsers from './views/AdminUsers';
 import AdminAssignments from './views/AdminAssignments';
 import AdminHierarchy from './views/AdminHierarchy'; 
 import AdminDatabase from './views/AdminDatabase';
+import AdminBI from './views/AdminBI';
 import AdminReferents from './views/AdminReferents';
 import AdminGantt from './views/AdminGantt';
 import AdminEventLog from './views/AdminEventLog';
@@ -23,6 +24,7 @@ import { UserRole } from './types';
 import { logoutUser } from './services/firebaseAuthService'; 
 import { useAuthStatus } from './hooks/useAuthStatus'; 
 import { RefreshCw } from 'lucide-react';
+import { Toaster } from 'sonner';
 
 const App: React.FC = () => {
     const { user, cargando } = useAuthStatus(); 
@@ -44,6 +46,7 @@ const App: React.FC = () => {
 
     return (
         <HashRouter>
+            <Toaster position="top-right" richColors closeButton />
             <Routes>
                 <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
                 <Route
@@ -99,6 +102,7 @@ const App: React.FC = () => {
                                         <>
                                             <Route path="/admin/users" element={<AdminUsers />} />
                                             <Route path="/admin/database" element={<AdminDatabase />} />
+                                            <Route path="/admin/bi" element={<AdminBI />} />
                                             <Route path="/admin/events" element={<AdminEventLog user={user} />} />
                                         </>
                                     )}

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DatabaseService } from '../services/firebaseBackend';
-import { Download, Upload, Database, AlertTriangle, Save, FileSpreadsheet, RefreshCw, CheckSquare, Clock } from 'lucide-react';
+import { Download, Upload, Database, AlertTriangle, Save, FileSpreadsheet, RefreshCw, CheckSquare, Clock, Search } from 'lucide-react';
 
 const AdminDatabase: React.FC = () => {
   const navigate = useNavigate();
@@ -149,6 +149,29 @@ const AdminDatabase: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
+        {/* Card 0: BI / Query Builder */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-200 md:col-span-2 flex flex-col md:flex-row items-center gap-6">
+            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 shrink-0">
+                <FileSpreadsheet size={32} />
+            </div>
+            <div className="flex-1">
+                <h2 className="text-xl font-bold text-slate-800 mb-1">Constructor de Consultas BI</h2>
+                <p className="text-sm text-slate-500 mb-4">
+                    Extrae datos crudos, genera reportes personalizados y exporta a Excel para análisis avanzado.
+                </p>
+                <button 
+                    onClick={() => navigate('/admin/bi')}
+                    className="flex items-center justify-center px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-bold shadow-sm"
+                >
+                    <Search size={18} className="mr-2" />
+                    Abrir Constructor BI
+                </button>
+            </div>
+            <div className="hidden md:block bg-slate-50 p-4 rounded-lg border border-slate-100 italic text-xs text-slate-400 max-w-[200px]">
+                "Permite cruzar proyectos, microprocesos y referentes en un solo reporte."
+            </div>
+        </div>
+
         {/* Card 1: Backup */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4 text-green-600">
@@ -221,13 +244,13 @@ const AdminDatabase: React.FC = () => {
                         </div>
                     </div>
                     
-                    <p className="text-sm text-slate-600 mb-6">
+                    <div className="text-sm text-slate-600 mb-6">
                         Este proceso <b>borra todo</b> y reconstruye el sistema usando dos fuentes:
                         <ul className="list-disc pl-5 mt-2 space-y-1">
                             <li><b>Reglas:</b> Define la estructura del árbol y los documentos obligatorios.</li>
                             <li><b>Histórico:</b> Define la versión, fecha y estado actual de cada documento.</li>
                         </ul>
-                    </p>
+                    </div>
 
                     <div className="space-y-4">
                         {/* File 1: Rules */}

@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History, Link as LinkIcon } from 'lucide-react';
-import { User, UserRole, DocState, Document } from '../types';
+import { User, UserRole, DocState, Document, Notification } from '../types';
 import { NotificationService } from '../services/firebaseBackend';
+import { toast } from 'sonner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,22 +15,53 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
+  const lastNotifId = useRef<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path: string) => location.pathname === path ? 'bg-slate-800 text-white shadow-inner' : 'text-slate-300 hover:bg-slate-800 hover:text-white';
 
   useEffect(() => {
     if (!user?.id) return;
     
-    // Establishing reliable real-time connection for notification badge
-    const unsubscribeBadge = NotificationService.subscribeToUnreadCount(user.id, (count) => {
-        setInboxCount(count);
+    // Establishing reliable real-time connection for notification badge and toasts
+    const unsubscribe = NotificationService.subscribeToNotifications(user.id, (notifs) => {
+        const unread = notifs.filter(n => !n.isRead);
+        setInboxCount(unread.length);
+        
+        // Show toast for new unread notification
+        if (unread.length > 0) {
+            const latest = unread[0];
+            // Only show if it's a new ID and not the one we already saw
+            if (latest.id !== lastNotifId.current) {
+                // If this is the first load, we don't want to spam toasts for all old unread ones
+                // So we only toast if lastNotifId was already set or if the notification is very recent (last 30 seconds)
+                const isRecent = (new Date().getTime() - new Date(latest.timestamp).getTime()) < 30000;
+                
+                if (lastNotifId.current !== null || isRecent) {
+                    toast(latest.title, {
+                        description: latest.message,
+                        action: {
+                            label: 'Ver',
+                            onClick: () => {
+                                if (latest.documentId.startsWith('MTX_')) {
+                                    navigate(`/new?assignmentId=${latest.documentId}`);
+                                } else {
+                                    navigate(`/doc/${latest.documentId}`);
+                                }
+                            }
+                        }
+                    });
+                }
+                lastNotifId.current = latest.id;
+            }
+        }
     });
     
     return () => {
-        if (unsubscribeBadge) unsubscribeBadge();
+        if (unsubscribe) unsubscribe();
     };
-  }, [user?.id]); 
+  }, [user?.id, navigate]); 
 
   const NavItem = ({ to, icon: Icon, label, badge }: { to: string, icon: any, label: string, badge?: number }) => (
     <Link

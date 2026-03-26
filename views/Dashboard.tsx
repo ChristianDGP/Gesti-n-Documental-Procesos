@@ -298,7 +298,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           getUserNames(d.assignees || [])
       ]);
       const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
-      const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a'); link.setAttribute('href', url); link.setAttribute('download', `SGD_Reporte_${new Date().toISOString().split('T')[0]}.csv`);
       link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);

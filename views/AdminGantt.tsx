@@ -234,7 +234,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             ];
         });
         const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
-        const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url); link.setAttribute('download', `SGD_Gantt_Estrategico_${new Date().toISOString().split('T')[0]}.csv`);

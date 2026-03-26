@@ -448,7 +448,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             return [item.project, item.macro, item.process, item.micro, asis.v, asis.s, fce.v, fce.s, pm.v, pm.s, tobe.v, tobe.s, closureMonth];
         });
         const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
-        const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a'); link.setAttribute('href', url); link.setAttribute('download', `SGD_Cierre_Mensual_${closureMonth}.csv`);
         link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
