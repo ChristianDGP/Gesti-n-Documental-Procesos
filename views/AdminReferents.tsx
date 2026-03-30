@@ -167,6 +167,8 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
                 Object.keys(fullHierarchy[proj][macro]).forEach(proc => {
                     if (filterProcess && proc !== filterProcess) return;
                     fullHierarchy[proj][macro][proc].forEach(node => {
+                        if (node.active === false) return; // Omitir microprocesos inactivos
+                        
                         const matchesSearch = !filterMicroSearch || node.name.toLowerCase().includes(filterMicroSearch.toLowerCase());
                         const isEmpty = !node.referentIds || node.referentIds.length === 0;
                         
