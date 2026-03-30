@@ -125,10 +125,23 @@ export const ReferentService = {
     return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Referent));
   },
   create: async (data: Omit<Referent, 'id'>): Promise<Referent> => {
+    const q = query(collection(db, "referents"), where("email", "==", data.email));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+        throw new Error("REFERENT_ALREADY_EXISTS");
+    }
     const docRef = await addDoc(collection(db, "referents"), data);
     return { ...data, id: docRef.id } as Referent;
   },
   update: async (id: string, data: Partial<Referent>): Promise<void> => {
+    if (data.email) {
+        const q = query(collection(db, "referents"), where("email", "==", data.email));
+        const querySnapshot = await getDocs(q);
+        const duplicate = querySnapshot.docs.find(d => d.id !== id);
+        if (duplicate) {
+            throw new Error("REFERENT_ALREADY_EXISTS");
+        }
+    }
     const ref = doc(db, "referents", id);
     await updateDoc(ref, data);
   },

@@ -43,6 +43,7 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
     const [refEmail, setRefEmail] = useState('');
     const [refSpecialty, setRefSpecialty] = useState('');
     const [refOrganization, setRefOrganization] = useState('');
+    const [formError, setFormError] = useState<string | null>(null);
 
     const isAnalyst = user.role === UserRole.ANALYST;
 
@@ -86,6 +87,7 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
     // --- REFERENT MANAGEMENT ---
     const handleSaveReferent = async (e: React.FormEvent) => {
         e.preventDefault();
+        setFormError(null);
         const data = { name: refName, email: refEmail, specialty: refSpecialty, organization: refOrganization };
         try {
             if (editingReferentId) {
@@ -96,11 +98,18 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
             setShowReferentForm(false);
             resetRefForm();
             await loadData();
-        } catch (e) { alert("Error al guardar referente"); }
+        } catch (e: any) { 
+            if (e.message === 'REFERENT_ALREADY_EXISTS') {
+                setFormError("Ya existe un referente con este correo electrónico.");
+            } else {
+                alert("Error al guardar referente"); 
+            }
+        }
     };
 
     const resetRefForm = () => {
         setEditingReferentId(null); setRefName(''); setRefEmail(''); setRefSpecialty(''); setRefOrganization('');
+        setFormError(null);
     };
 
     const handleEditReferent = (r: Referent) => {
@@ -529,6 +538,12 @@ const AdminReferents: React.FC<Props> = ({ user }) => {
                             <button onClick={() => setShowReferentForm(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
                         </div>
                         <form onSubmit={handleSaveReferent} className="p-6 space-y-4">
+                            {formError && (
+                                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2 text-rose-600 text-xs font-bold animate-shake">
+                                    <AlertTriangle size={14} />
+                                    {formError}
+                                </div>
+                            )}
                             <div className="space-y-1">
                                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nombre Completo</label>
                                 <input type="text" value={refName} onChange={(e) => setRefName(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10" required />
