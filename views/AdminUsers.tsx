@@ -345,10 +345,12 @@ const AdminUsers: React.FC = () => {
                                                     setCanAccessReportGestion(true);
                                                     setCanAccessReportContinuity(true);
                                                     setCanAccessReportMonthly(true);
+                                                    setCanAccessBIQueryBuilder(true);
                                                 } else {
                                                     setCanAccessReportGestion(false);
                                                     setCanAccessReportContinuity(false);
                                                     setCanAccessReportMonthly(false);
+                                                    setCanAccessBIQueryBuilder(false);
                                                 }
                                             }}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
@@ -372,25 +374,14 @@ const AdminUsers: React.FC = () => {
                                                 <input type="checkbox" checked={canAccessReportMonthly} onChange={(e) => setCanAccessReportMonthly(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Cierre Mensual</span>
                                             </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessBIQueryBuilder} onChange={(e) => setCanAccessBIQueryBuilder(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Constructor de Consultas (BI)</span>
+                                            </label>
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="space-y-2">
-                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={canAccessBIQueryBuilder}
-                                            onChange={(e) => setCanAccessBIQueryBuilder(e.target.checked)}
-                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                        />
-                                        <div className="flex items-center gap-2">
-                                            <Database size={16} className="text-indigo-500" />
-                                            <span className="text-sm font-medium text-slate-700">Constructor de Consultas (BI)</span>
-                                        </div>
-                                    </label>
-                                </div>
-                                
                                 {role !== UserRole.GUEST && (
                                     <div className="space-y-2">
                                         <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
