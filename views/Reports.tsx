@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
 import { Document, User, DocState, FullHierarchy, DocType, UserRole, DocHistory } from '../types';
 import { STATE_CONFIG } from '../constants';
+import AdminBI from './AdminBI';
 import { 
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database
 } from 'lucide-react';
 
 interface Props {
@@ -51,10 +52,14 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     
-    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE'>(() => {
+    const location = useLocation();
+    
+    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE' | 'BI'>(() => {
+        if (location.state?.tab === 'BI' && (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder)) return 'BI';
         if (user.canAccessReportGestion !== false) return 'REPORTS';
         if (user.canAccessReportContinuity !== false) return 'SUMMARY';
         if (user.canAccessReportMonthly !== false) return 'CLOSURE';
+        if (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) return 'BI';
         return 'REPORTS';
     });
     const [chartScale, setChartScale] = useState<ChartScale>('MONTHLY');
@@ -62,17 +67,26 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     // Redirección si no tiene acceso a la pestaña activa (por si acaso)
     useEffect(() => {
-        if (activeTab === 'REPORTS' && user.canAccessReportGestion === false) {
-             if (user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
-             else if (user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+        const isAdmin = user.role === UserRole.ADMIN;
+        if (activeTab === 'REPORTS' && !isAdmin && user.canAccessReportGestion === false) {
+             if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
-        if (activeTab === 'SUMMARY' && user.canAccessReportContinuity === false) {
-             if (user.canAccessReportGestion !== false) setActiveTab('REPORTS');
-             else if (user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+        if (activeTab === 'SUMMARY' && !isAdmin && user.canAccessReportContinuity === false) {
+             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
+             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
-        if (activeTab === 'CLOSURE' && user.canAccessReportMonthly === false) {
-             if (user.canAccessReportGestion !== false) setActiveTab('REPORTS');
-             else if (user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+        if (activeTab === 'CLOSURE' && !isAdmin && user.canAccessReportMonthly === false) {
+             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
+             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        }
+        if (activeTab === 'BI' && !isAdmin && !user.canAccessBIQueryBuilder) {
+             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
+             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
         }
     }, [user, activeTab]);
 
@@ -507,14 +521,17 @@ const Reports: React.FC<Props> = ({ user }) => {
             </div>
 
             <div className="flex flex-col sm:flex-row bg-slate-100 p-1 rounded-xl w-fit gap-1">
-                {user.canAccessReportGestion !== false && (
-                    <button onClick={() => setActiveTab('REPORTS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'REPORTS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart2 size={18} /> 1. Reportes de Gestión</button>
+                {(user.role === UserRole.ADMIN || user.canAccessReportGestion !== false) && (
+                    <button onClick={() => setActiveTab('REPORTS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'REPORTS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart2 size={18} /> Reportes de Gestión</button>
                 )}
-                {user.canAccessReportContinuity !== false && (
-                    <button onClick={() => setActiveTab('SUMMARY')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'SUMMARY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><ShieldAlert size={18} /> 2. Monitor de Continuidad</button>
+                {(user.role === UserRole.ADMIN || user.canAccessReportContinuity !== false) && (
+                    <button onClick={() => setActiveTab('SUMMARY')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'SUMMARY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><ShieldAlert size={18} /> Monitor de Continuidad</button>
                 )}
-                {user.canAccessReportMonthly !== false && (
-                    <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> 3. Cierre Mensual</button>
+                {(user.role === UserRole.ADMIN || user.canAccessReportMonthly !== false) && (
+                    <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> Cierre Mensual</button>
+                )}
+                {(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) && (
+                    <button onClick={() => setActiveTab('BI')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'BI' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Database size={18} /> Constructor de Consultas (BI)</button>
                 )}
             </div>
 
@@ -820,6 +837,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 </div>
                             )}
                         </div>
+                    </section>
+                )}
+
+                {(activeTab === 'BI' && (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder)) && (
+                    <section className="animate-fadeIn">
+                        <AdminBI hideHeader />
                     </section>
                 )}
             </div>

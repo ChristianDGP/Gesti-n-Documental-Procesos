@@ -68,7 +68,11 @@ const COLUMN_LABELS: Record<string, string> = {
   active: 'Estado Activo (Matriz)'
 };
 
-const AdminBI: React.FC = () => {
+interface AdminBIProps {
+  hideHeader?: boolean;
+}
+
+const AdminBI: React.FC<AdminBIProps> = ({ hideHeader = false }) => {
   const [source, setSource] = useState<DataSource>('DOCUMENTS');
   const [filters, setFilters] = useState<QueryFilter[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -362,16 +366,18 @@ const AdminBI: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-20 px-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Database className="text-indigo-600" />
-            Constructor de Consultas BI
-          </h1>
-          <p className="text-slate-500">Extrae datos crudos y genera reportes personalizados para análisis externo.</p>
+    <div className={`space-y-6 max-w-7xl mx-auto pb-20 px-4 ${hideHeader ? 'pt-4' : ''}`}>
+      {!hideHeader && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <Database className="text-indigo-600" />
+              Constructor de Consultas BI
+            </h1>
+            <p className="text-slate-500">Extrae datos crudos y genera reportes personalizados para análisis externo.</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         

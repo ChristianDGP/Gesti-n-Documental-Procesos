@@ -37,6 +37,7 @@ export interface User {
   canAddStructure?: boolean;
   canEditStructure?: boolean;
   canEditMasterData?: boolean;
+  canAccessBIQueryBuilder?: boolean;
 }
 
 export interface Referent {

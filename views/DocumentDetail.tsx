@@ -732,40 +732,48 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
             {/* EDICIÓN MAESTRA PARA ADMINISTRADORES O USUARIOS CON PERMISO ESPECIAL */}
             {canEditMaster && (
-                <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-6 text-white overflow-hidden relative">
+                <div className={`bg-slate-900 rounded-xl shadow-lg border border-slate-800 text-white overflow-hidden relative transition-all duration-300 ${showMasterEdit ? 'p-6' : 'p-4'}`}>
                     <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                        <Settings size={120} />
+                        <Settings size={showMasterEdit ? 120 : 60} className="transition-all" />
                     </div>
                     
-                    <div className="flex items-center justify-between mb-6 relative z-10">
+                    <div 
+                        className="flex items-center justify-between relative z-10 cursor-pointer group"
+                        onClick={() => {
+                            if (!showMasterEdit) {
+                                setMasterState(doc.state);
+                                setMasterVersion(doc.version);
+                                setMasterProgress(doc.progress);
+                                setMasterPending(doc.hasPendingRequest || false);
+                                setMasterUpdatedAt(doc.updatedAt ? doc.updatedAt.split('.')[0].slice(0, 16) : '');
+                            }
+                            setShowMasterEdit(!showMasterEdit);
+                        }}
+                    >
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-500 rounded-lg">
-                                <Wrench size={20} className="text-white" />
+                            <div className={`p-2 bg-indigo-500 rounded-lg transition-all ${showMasterEdit ? 'scale-100' : 'scale-90'}`}>
+                                <Wrench size={showMasterEdit ? 20 : 16} className="text-white" />
                             </div>
                             <div>
-                                <h3 className="font-black uppercase tracking-widest text-sm">Edición Maestra</h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Control total de metadatos sin carga de archivos</p>
+                                <h3 className={`font-black uppercase tracking-widest transition-all ${showMasterEdit ? 'text-sm' : 'text-xs'}`}>Edición Maestra</h3>
+                                {showMasterEdit && (
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter animate-fadeIn">Control total de metadatos sin carga de archivos</p>
+                                )}
                             </div>
                         </div>
-                        <button 
-                            onClick={() => {
-                                    if (!showMasterEdit) {
-                                        setMasterState(doc.state);
-                                        setMasterVersion(doc.version);
-                                        setMasterProgress(doc.progress);
-                                        setMasterPending(doc.hasPendingRequest || false);
-                                        setMasterUpdatedAt(doc.updatedAt ? doc.updatedAt.split('.')[0].slice(0, 16) : '');
-                                    }
-                                    setShowMasterEdit(!showMasterEdit);
-                            }}
-                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${showMasterEdit ? 'bg-slate-700 text-slate-300' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/20'}`}
-                        >
-                            {showMasterEdit ? 'Cancelar' : 'Activar Editor'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {!showMasterEdit && <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 group-hover:text-indigo-400 transition-colors">Haga clic para expandir</span>}
+                            <button 
+                                type="button"
+                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${showMasterEdit ? 'bg-slate-700 text-slate-300' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/20'}`}
+                            >
+                                {showMasterEdit ? 'Cancelar' : 'Activar Editor'}
+                            </button>
+                        </div>
                     </div>
 
                     {showMasterEdit && (
-                        <div className="space-y-5 animate-fadeIn relative z-10">
+                        <div className="mt-6 space-y-5 animate-fadeIn relative z-10">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado del Documento</label>

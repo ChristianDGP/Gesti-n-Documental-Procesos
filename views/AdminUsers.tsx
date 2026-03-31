@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
-import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange, Link as LinkIcon, Network, ClipboardList, History } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange, Link as LinkIcon, Network, ClipboardList, History, Database } from 'lucide-react';
 
 const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -31,6 +31,7 @@ const AdminUsers: React.FC = () => {
   const [canAccessReuseMatrixView, setCanAccessReuseMatrixView] = useState(false);
   const [canAccessStructure, setCanAccessStructure] = useState(false);
   const [canAccessAssignments, setCanAccessAssignments] = useState(false);
+  const [canAccessBIQueryBuilder, setCanAccessBIQueryBuilder] = useState(false);
   const [canAccessLog, setCanAccessLog] = useState(false);
   const [canAuditEvents, setCanAuditEvents] = useState(false);
   const [canEditGanttDate, setCanEditGanttDate] = useState(false);
@@ -51,7 +52,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog' | 'canAccessBIQueryBuilder') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       
@@ -133,6 +134,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReuseMatrixView(user.canAccessReuseMatrixView || false);
       setCanAccessStructure(user.canAccessStructure || false);
       setCanAccessAssignments(user.canAccessAssignments || false);
+      setCanAccessBIQueryBuilder(user.canAccessBIQueryBuilder || false);
       setCanAssignDefinedDocs(user.canAssignDefinedDocs || false);
       setCanManageAssignments(user.canManageAssignments || false);
       setCanAccessLog(user.canAccessLog || false);
@@ -177,6 +179,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReportGestion: role === UserRole.ADMIN ? true : canAccessReportGestion,
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
+                canAccessBIQueryBuilder: role === UserRole.ADMIN ? true : canAccessBIQueryBuilder,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
                 canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
                 canAccessReferentsDirectory: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsDirectory),
@@ -213,6 +216,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReportGestion: role === UserRole.ADMIN ? true : canAccessReportGestion,
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
+                canAccessBIQueryBuilder: role === UserRole.ADMIN ? true : canAccessBIQueryBuilder,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
                 canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
                 canAccessReferentsDirectory: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsDirectory),
@@ -253,6 +257,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportGestion(false);
       setCanAccessReportContinuity(false);
       setCanAccessReportMonthly(false);
+      setCanAccessBIQueryBuilder(false);
       setCanAccessReferents(false);
       setCanAccessReferentsByProcess(false);
       setCanAccessReferentsDirectory(false);
@@ -369,6 +374,21 @@ const AdminUsers: React.FC = () => {
                                             </label>
                                         </div>
                                     )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={canAccessBIQueryBuilder}
+                                            onChange={(e) => setCanAccessBIQueryBuilder(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Database size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Constructor de Consultas (BI)</span>
+                                        </div>
+                                    </label>
                                 </div>
                                 
                                 {role !== UserRole.GUEST && (

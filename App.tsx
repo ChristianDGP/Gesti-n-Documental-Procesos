@@ -102,10 +102,15 @@ const App: React.FC = () => {
                                         <>
                                             <Route path="/admin/users" element={<AdminUsers />} />
                                             <Route path="/admin/database" element={<AdminDatabase />} />
-                                            <Route path="/admin/bi" element={<AdminBI />} />
                                             <Route path="/admin/events" element={<AdminEventLog user={user} />} />
                                         </>
                                     )}
+                                    <Route 
+                                        path="/admin/bi" 
+                                        element={(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) 
+                                            ? <AdminBI /> 
+                                            : <Navigate to="/" />} 
+                                    />
                                     <Route path="*" element={<Navigate to="/" />} />
                                 </Routes>
                             </Layout>
