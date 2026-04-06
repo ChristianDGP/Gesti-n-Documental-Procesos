@@ -90,13 +90,24 @@ const App: React.FC = () => {
                                             : <Navigate to="/" />} 
                                     />
 
-                                    {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
-                                      <>
-                                        <Route path="/admin/structure" element={<AdminHierarchy user={user} />} />
-                                        <Route path="/admin/assignments" element={<AdminAssignments user={user} />} />
-                                        <Route path="/admin/reuse" element={<AdminReuseMatrix user={user} />} />
-                                      </>
-                                    )}
+                                    <Route 
+                                        path="/admin/structure" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessStructure)) 
+                                            ? <AdminHierarchy user={user} /> 
+                                            : <Navigate to="/" />} 
+                                    />
+                                    <Route 
+                                        path="/admin/assignments" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessAssignments)) 
+                                            ? <AdminAssignments user={user} /> 
+                                            : <Navigate to="/" />} 
+                                    />
+                                    <Route 
+                                        path="/admin/reuse" 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView))) 
+                                            ? <AdminReuseMatrix user={user} /> 
+                                            : <Navigate to="/" />} 
+                                    />
 
                                     {user.role === UserRole.ADMIN && (
                                         <>

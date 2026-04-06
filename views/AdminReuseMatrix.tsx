@@ -17,9 +17,13 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
   const [allDocs, setAllDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const isAdminOrCoord = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR;
+
   const [activeTab, setActiveTab] = useState<'LINK' | 'VIEW' | 'INTERSECT'>(() => {
-      if (user.canAccessReuseMatrixLink !== false) return 'LINK';
-      if (user.canAccessReuseMatrixView !== false) return 'VIEW';
+      if (isAdminOrCoord) return 'LINK';
+      if (user.canAccessReuseMatrixLink) return 'LINK';
+      if (user.canAccessReuseMatrixView) return 'VIEW';
+      if (user.canAccessReuseMatrix) return 'INTERSECT';
       return 'LINK';
   });
 
@@ -101,8 +105,11 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
     );
   };
 
-  // Permission: Admin, or anyone with the specific flag
-  const canManage = user.role === UserRole.ADMIN || user.canAccessReuseMatrix;
+  // Permission: Admin, Coordinator, or anyone with specific flags
+  const canManage = isAdminOrCoord || 
+                   user.canAccessReuseMatrix || 
+                   user.canAccessReuseMatrixLink || 
+                   user.canAccessReuseMatrixView;
 
   useEffect(() => {
       if (activeTab === 'LINK' && user.canAccessReuseMatrixLink === false) {
@@ -269,7 +276,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
           <p className="text-slate-500 text-sm">Administre y visualice la relación entre componentes REU y microprocesos base.</p>
         </div>
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-            {user.canAccessReuseMatrixLink !== false && (
+            {(isAdminOrCoord || user.canAccessReuseMatrixLink) && (
                 <button 
                     onClick={() => setActiveTab('LINK')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'LINK' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -278,7 +285,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                     Vincular
                 </button>
             )}
-            {user.canAccessReuseMatrixView !== false && (
+            {(isAdminOrCoord || user.canAccessReuseMatrixView) && (
                 <button 
                     onClick={() => setActiveTab('VIEW')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'VIEW' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -287,13 +294,15 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                     Visualizar
                 </button>
             )}
-            <button 
-                onClick={() => setActiveTab('INTERSECT')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'INTERSECT' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-                <Network size={14} />
-                Intersección
-            </button>
+            {(isAdminOrCoord || user.canAccessReuseMatrix) && (
+                <button 
+                    onClick={() => setActiveTab('INTERSECT')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'INTERSECT' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <Network size={14} />
+                    Intersección
+                </button>
+            )}
             <div className="w-px h-4 bg-slate-200 mx-1"></div>
             <button 
                 onClick={loadData}
