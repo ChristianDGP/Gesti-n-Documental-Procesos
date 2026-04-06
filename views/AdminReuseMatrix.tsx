@@ -23,7 +23,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
       if (isAdminOrCoord) return 'LINK';
       if (user.canAccessReuseMatrixLink) return 'LINK';
       if (user.canAccessReuseMatrixView) return 'VIEW';
-      if (user.canAccessReuseMatrix) return 'INTERSECT';
+      if (user.canAccessReuseMatrixIntersect) return 'INTERSECT';
       return 'LINK';
   });
 
@@ -109,14 +109,21 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
   const canManage = isAdminOrCoord || 
                    user.canAccessReuseMatrix || 
                    user.canAccessReuseMatrixLink || 
-                   user.canAccessReuseMatrixView;
+                   user.canAccessReuseMatrixView ||
+                   user.canAccessReuseMatrixIntersect;
 
   useEffect(() => {
       if (activeTab === 'LINK' && user.canAccessReuseMatrixLink === false) {
           if (user.canAccessReuseMatrixView !== false) setActiveTab('VIEW');
+          else if (user.canAccessReuseMatrixIntersect !== false) setActiveTab('INTERSECT');
       }
       if (activeTab === 'VIEW' && user.canAccessReuseMatrixView === false) {
           if (user.canAccessReuseMatrixLink !== false) setActiveTab('LINK');
+          else if (user.canAccessReuseMatrixIntersect !== false) setActiveTab('INTERSECT');
+      }
+      if (activeTab === 'INTERSECT' && user.canAccessReuseMatrixIntersect === false) {
+          if (user.canAccessReuseMatrixLink !== false) setActiveTab('LINK');
+          else if (user.canAccessReuseMatrixView !== false) setActiveTab('VIEW');
       }
   }, [user, activeTab]);
 
@@ -294,7 +301,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                     Visualizar
                 </button>
             )}
-            {(isAdminOrCoord || user.canAccessReuseMatrix) && (
+            {(isAdminOrCoord || user.canAccessReuseMatrixIntersect) && (
                 <button 
                     onClick={() => setActiveTab('INTERSECT')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'INTERSECT' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}

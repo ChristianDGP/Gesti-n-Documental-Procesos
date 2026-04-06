@@ -90,7 +90,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly || user.canAccessBIQueryBuilder));
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReferents || user.canAccessReferentsByProcess || user.canAccessReferentsDirectory));
   const canAccessGantt = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessGantt);
-  const canAccessReuseMatrix = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView));
+  const canAccessReuseMatrix = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView || user.canAccessReuseMatrixIntersect));
   const canAccessStructure = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessStructure);
   const canAccessAssignments = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessAssignments);
   const canAccessLog = user.role === UserRole.ADMIN || (user.role === UserRole.ANALYST && user.canAccessLog);

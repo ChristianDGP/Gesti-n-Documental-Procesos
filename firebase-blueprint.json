@@ -1,0 +1,142 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Application user profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "nickname": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "COORDINATOR", "ANALYST", "GUEST"] },
+        "avatar": { "type": "string" },
+        "organization": { "type": "string" },
+        "active": { "type": "boolean" },
+        "canAccessReports": { "type": "boolean" },
+        "canAccessReportGestion": { "type": "boolean" },
+        "canAccessReportContinuity": { "type": "boolean" },
+        "canAccessReportMonthly": { "type": "boolean" },
+        "canAccessReferents": { "type": "boolean" },
+        "canAccessReferentsByProcess": { "type": "boolean" },
+        "canAccessReferentsDirectory": { "type": "boolean" },
+        "canAccessGantt": { "type": "boolean" },
+        "canAccessReuseMatrix": { "type": "boolean" },
+        "canAccessReuseMatrixLink": { "type": "boolean" },
+        "canAccessReuseMatrixView": { "type": "boolean" },
+        "canAccessReuseMatrixIntersect": { "type": "boolean" },
+        "canAccessStructure": { "type": "boolean" },
+        "canAccessAssignments": { "type": "boolean" },
+        "canAssignDefinedDocs": { "type": "boolean" },
+        "canManageAssignments": { "type": "boolean" },
+        "canAccessLog": { "type": "boolean" },
+        "canAuditEvents": { "type": "boolean" },
+        "canEditGanttDate": { "type": "boolean" },
+        "canAddStructure": { "type": "boolean" },
+        "canEditStructure": { "type": "boolean" },
+        "canEditMasterData": { "type": "boolean" },
+        "canAccessBIQueryBuilder": { "type": "boolean" }
+      },
+      "required": ["id", "email", "name", "role"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Managed document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "project": { "type": "string" },
+        "macroprocess": { "type": "string" },
+        "process": { "type": "string" },
+        "microprocess": { "type": "string" },
+        "docType": { "type": "string", "enum": ["AS IS", "FCE", "PM", "TO BE"] },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "assignees": { "type": "array", "items": { "type": "string" } },
+        "state": { "type": "string" },
+        "version": { "type": "string" },
+        "progress": { "type": "number" },
+        "hasPendingRequest": { "type": "boolean" },
+        "files": { "type": "array", "items": { "type": "object" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "expectedEndDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "authorId", "state", "version", "progress", "createdAt", "updatedAt"]
+    },
+    "History": {
+      "title": "History",
+      "description": "Document history log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "documentId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "previousState": { "type": "string" },
+        "newState": { "type": "string" },
+        "version": { "type": "string" },
+        "comment": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "documentId", "userId", "action", "timestamp"]
+    },
+    "ProcessMatrix": {
+      "title": "ProcessMatrix",
+      "description": "Process matrix configuration",
+      "type": "object",
+      "properties": {
+        "project": { "type": "string" },
+        "macroprocess": { "type": "string" },
+        "process": { "type": "string" },
+        "name": { "type": "string" },
+        "assignees": { "type": "array", "items": { "type": "string" } },
+        "referentIds": { "type": "array", "items": { "type": "string" } },
+        "requiredTypes": { "type": "array", "items": { "type": "string" } },
+        "reusableLinks": { "type": "array", "items": { "type": "string" } },
+        "active": { "type": "boolean" }
+      },
+      "required": ["project", "process", "name"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "documentId": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "actorName": { "type": "string" }
+      },
+      "required": ["userId", "documentId", "type", "title", "timestamp"]
+    },
+    "Referent": {
+      "title": "Referent",
+      "description": "Process referent",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "specialty": { "type": "string" },
+        "organization": { "type": "string" }
+      },
+      "required": ["name", "email"]
+    }
+  },
+  "firestore": {
+    "users": { "schema": { "$ref": "User" }, "description": "User profiles" },
+    "documents": { "schema": { "$ref": "Document" }, "description": "Managed documents" },
+    "history": { "schema": { "$ref": "History" }, "description": "Document change history" },
+    "process_matrix": { "schema": { "$ref": "ProcessMatrix" }, "description": "Process hierarchy and assignments" },
+    "notifications": { "schema": { "$ref": "Notification" }, "description": "User notifications" },
+    "referents": { "schema": { "$ref": "Referent" }, "description": "Process referents" }
+  }
+}

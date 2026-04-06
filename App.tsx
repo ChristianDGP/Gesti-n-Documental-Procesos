@@ -104,7 +104,7 @@ const App: React.FC = () => {
                                     />
                                     <Route 
                                         path="/admin/reuse" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView))) 
+                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView || user.canAccessReuseMatrixIntersect))) 
                                             ? <AdminReuseMatrix user={user} /> 
                                             : <Navigate to="/" />} 
                                     />

@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (auth.uid)
+    // Fields:
+    //   - id: string (required)
+    //   - email: string (required, email format)
+    //   - name: string (required)
+    //   - role: string (required, enum: ADMIN, COORDINATOR, ANALYST, GUEST)
+    //   - active: boolean (optional, default true)
+    //   ... other permission flags (boolean)
+    //
+    // Collection: documents
+    // Document ID: auto-generated
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - authorId: string (required)
+    //   - state: string (required)
+    //   - version: string (required)
+    //   - progress: number (required)
+    //   - createdAt: string (required, ISO 8601)
+    //   - updatedAt: string (required, ISO 8601)
+    //
+    // Collection: history
+    // Document ID: auto-generated
+    // Fields:
+    //   - id: string (required)
+    //   - documentId: string (required)
+    //   - userId: string (required)
+    //   - action: string (required)
+    //   - timestamp: string (required, ISO 8601)
+    //
+    // Collection: process_matrix
+    // Document ID: generated (MTX_...)
+    // Fields:
+    //   - project: string (required)
+    //   - name: string (required)
+    //   - assignees: list (string)
+    //
+    // Collection: notifications
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required)
+    //   - isRead: boolean (required)
+    //
+    // Collection: referents
+    // Document ID: auto-generated
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' || 
+         (request.auth.token.email == "carayag@ugp-ssmso.cl" && request.auth.token.email_verified == true));
+    }
+
+    function isCoordinator() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COORDINATOR';
+    }
+
+    function isAdminOrCoord() {
+      return isAdmin() || isCoordinator();
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.id is string && 
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['ADMIN', 'COORDINATOR', 'ANALYST', 'GUEST'];
+    }
+
+    function isValidDocument(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.authorId is string &&
+             data.state is string &&
+             data.version is string &&
+             data.progress is number &&
+             isValidDateString(data.createdAt) &&
+             isValidDateString(data.updatedAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      (isOwner(userId) && request.resource.data.role != 'ADMIN' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      (isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role));
+      allow delete: if isAdmin();
+    }
+
+    match /documents/{docId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidDocument(request.resource.data);
+      allow update: if isAuthenticated() && isValidDocument(request.resource.data);
+      allow delete: if isAdminOrCoord();
+    }
+
+    match /history/{histId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /process_matrix/{nodeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminOrCoord();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId && 
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isAdmin();
+    }
+
+    match /referents/{refId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdminOrCoord();
+    }
+  }
+}

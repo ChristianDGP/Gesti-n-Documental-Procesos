@@ -29,6 +29,7 @@ const AdminUsers: React.FC = () => {
   const [canAccessReuseMatrix, setCanAccessReuseMatrix] = useState(false);
   const [canAccessReuseMatrixLink, setCanAccessReuseMatrixLink] = useState(false);
   const [canAccessReuseMatrixView, setCanAccessReuseMatrixView] = useState(false);
+  const [canAccessReuseMatrixIntersect, setCanAccessReuseMatrixIntersect] = useState(false);
   const [canAccessStructure, setCanAccessStructure] = useState(false);
   const [canAccessAssignments, setCanAccessAssignments] = useState(false);
   const [canAccessBIQueryBuilder, setCanAccessBIQueryBuilder] = useState(false);
@@ -52,7 +53,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog' | 'canAccessBIQueryBuilder') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessReuseMatrixIntersect' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog' | 'canAccessBIQueryBuilder') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       
@@ -76,6 +77,7 @@ const AdminUsers: React.FC = () => {
           if (field === 'canAccessReuseMatrix') {
               updatePayload.canAccessReuseMatrixLink = newValue;
               updatePayload.canAccessReuseMatrixView = newValue;
+              updatePayload.canAccessReuseMatrixIntersect = newValue;
           }
           
           await UserService.update(user.id, updatePayload);
@@ -132,6 +134,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReuseMatrix(user.canAccessReuseMatrix || false);
       setCanAccessReuseMatrixLink(user.canAccessReuseMatrixLink || false);
       setCanAccessReuseMatrixView(user.canAccessReuseMatrixView || false);
+      setCanAccessReuseMatrixIntersect(user.canAccessReuseMatrixIntersect || false);
       setCanAccessStructure(user.canAccessStructure || false);
       setCanAccessAssignments(user.canAccessAssignments || false);
       setCanAccessBIQueryBuilder(user.canAccessBIQueryBuilder || false);
@@ -187,6 +190,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix,
                 canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
                 canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView,
+                canAccessReuseMatrixIntersect: role === UserRole.ADMIN ? true : canAccessReuseMatrixIntersect,
                 canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
                 canAddStructure: role === UserRole.ADMIN ? true : canAddStructure,
                 canEditStructure: role === UserRole.ADMIN ? true : canEditStructure,
@@ -224,6 +228,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReuseMatrix: role === UserRole.ADMIN ? true : canAccessReuseMatrix,
                 canAccessReuseMatrixLink: role === UserRole.ADMIN ? true : canAccessReuseMatrixLink,
                 canAccessReuseMatrixView: role === UserRole.ADMIN ? true : canAccessReuseMatrixView,
+                canAccessReuseMatrixIntersect: role === UserRole.ADMIN ? true : canAccessReuseMatrixIntersect,
                 canAccessStructure: role === UserRole.ADMIN ? true : canAccessStructure,
                 canAddStructure: role === UserRole.ADMIN ? true : canAddStructure,
                 canEditStructure: role === UserRole.ADMIN ? true : canEditStructure,
@@ -265,6 +270,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReuseMatrix(false);
       setCanAccessReuseMatrixLink(false);
       setCanAccessReuseMatrixView(false);
+      setCanAccessReuseMatrixIntersect(false);
       setCanAccessStructure(false);
       setCanAddStructure(false);
       setCanEditStructure(false);
@@ -456,9 +462,11 @@ const AdminUsers: React.FC = () => {
                                                 if (e.target.checked) {
                                                     setCanAccessReuseMatrixLink(true);
                                                     setCanAccessReuseMatrixView(true);
+                                                    setCanAccessReuseMatrixIntersect(true);
                                                 } else {
                                                     setCanAccessReuseMatrixLink(false);
                                                     setCanAccessReuseMatrixView(false);
+                                                    setCanAccessReuseMatrixIntersect(false);
                                                 }
                                             }}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
@@ -477,6 +485,10 @@ const AdminUsers: React.FC = () => {
                                             <label className="flex items-center gap-2 cursor-pointer group">
                                                 <input type="checkbox" checked={canAccessReuseMatrixView} onChange={(e) => setCanAccessReuseMatrixView(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Visualizar</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReuseMatrixIntersect} onChange={(e) => setCanAccessReuseMatrixIntersect(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Intersección</span>
                                             </label>
                                         </div>
                                     )}
