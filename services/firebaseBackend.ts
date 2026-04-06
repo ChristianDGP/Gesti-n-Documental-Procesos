@@ -9,7 +9,6 @@ import {
   ref, uploadBytes, getDownloadURL, deleteObject 
 } from "firebase/storage";
 import { db, auth, googleProvider, storage } from "./firebaseConfig";
-import { handleFirestoreError, OperationType } from "./firestoreErrorHandler";
 import { 
   User, Document, DocState, DocHistory, UserRole, DocFile, 
   DocType, FullHierarchy, Notification, UserHierarchy, ProcessNode, Referent 
@@ -121,29 +120,18 @@ export const getStatusInfo = (doc: Document) => {
 
 export const ReferentService = {
   getAll: async (): Promise<Referent[]> => {
-    try {
-      const q = query(collection(db, "referents"), orderBy("name"));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Referent));
-    } catch (e) {
-      handleFirestoreError(e, OperationType.LIST, "referents");
-      return [];
-    }
+    const q = query(collection(db, "referents"), orderBy("name"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Referent));
   },
   create: async (data: Omit<Referent, 'id'>): Promise<Referent> => {
-    try {
-      const q = query(collection(db, "referents"), where("email", "==", data.email));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-          throw new Error("REFERENT_ALREADY_EXISTS");
-      }
-      const docRef = await addDoc(collection(db, "referents"), data);
-      return { ...data, id: docRef.id } as Referent;
-    } catch (e) {
-      if (e instanceof Error && e.message === "REFERENT_ALREADY_EXISTS") throw e;
-      handleFirestoreError(e, OperationType.CREATE, "referents");
-      throw e;
+    const q = query(collection(db, "referents"), where("email", "==", data.email));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+        throw new Error("REFERENT_ALREADY_EXISTS");
     }
+    const docRef = await addDoc(collection(db, "referents"), data);
+    return { ...data, id: docRef.id } as Referent;
   },
   update: async (id: string, data: Partial<Referent>): Promise<void> => {
     if (data.email) {
@@ -249,7 +237,6 @@ export const UserService = {
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, active: (doc.data() as any).active ?? true } as User));
     } catch (e) {
-        handleFirestoreError(e, OperationType.LIST, "users");
         return [];
     }
   },
@@ -305,14 +292,9 @@ export const HistoryService = {
 
 export const DocumentService = {
   getAll: async (): Promise<Document[]> => {
-    try {
-      const q = query(collection(db, "documents"), orderBy("updatedAt", "desc"));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Document));
-    } catch (e) {
-      handleFirestoreError(e, OperationType.LIST, "documents");
-      return [];
-    }
+    const q = query(collection(db, "documents"), orderBy("updatedAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Document));
   },
   getById: async (id: string): Promise<Document | null> => {
     const docRef = doc(db, "documents", id);
@@ -881,17 +863,3 @@ export const DatabaseService = {
     return { created: createdCount, historyMatched: historyMatchedCount };
   }
 };
-
-import { getDocFromServer } from "firebase/firestore";
-
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log("Firestore connection successful.");
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is offline.");
-    }
-  }
-}
-testConnection();

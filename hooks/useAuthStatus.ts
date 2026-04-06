@@ -5,8 +5,6 @@ import { doc, getDoc, setDoc, deleteDoc, query, collection, where, getDocs, upda
 import { User, UserRole } from '../types';
 import { UserService } from '../services/firebaseBackend';
 
-import { handleFirestoreError, OperationType } from '../services/firestoreErrorHandler';
-
 export const useAuthStatus = () => {
     const [user, setUser] = useState<User | null>(null);
     const [cargando, setCargando] = useState(true);
@@ -21,13 +19,7 @@ export const useAuthStatus = () => {
             if (firebaseUser) {
                 try {
                     const userRef = doc(db, "users", firebaseUser.uid);
-                    let userSnap;
-                    try {
-                        userSnap = await getDoc(userRef);
-                    } catch (e) {
-                        handleFirestoreError(e, OperationType.GET, `users/${firebaseUser.uid}`);
-                        return;
-                    }
+                    const userSnap = await getDoc(userRef);
                     const email = firebaseUser.email || '';
                     
                     const adminEmails = ['admin@empresa.com'];
@@ -48,11 +40,7 @@ export const useAuthStatus = () => {
                         if (shouldBeAdmin && userData.role !== UserRole.ADMIN) {
                             console.log("Upgrading user to ADMIN.");
                             const updatedUser = { ...userData, role: UserRole.ADMIN, organization: 'Administración Sistema' };
-                            try {
-                                await updateDoc(userRef, { role: UserRole.ADMIN, organization: 'Administración Sistema' });
-                            } catch (e) {
-                                handleFirestoreError(e, OperationType.UPDATE, `users/${firebaseUser.uid}`);
-                            }
+                            await updateDoc(userRef, { role: UserRole.ADMIN, organization: 'Administración Sistema' });
                             setUser(updatedUser);
                         } else {
                             setUser(userData);
@@ -62,16 +50,12 @@ export const useAuthStatus = () => {
                         let oldDocRef = null;
 
                         if (email) {
-                            try {
-                                const q = query(collection(db, "users"), where("email", "==", email));
-                                const querySnapshot = await getDocs(q);
-                                if (!querySnapshot.empty) {
-                                    const docFound = querySnapshot.docs[0];
-                                    existingProfile = docFound.data() as User;
-                                    oldDocRef = docFound.ref;
-                                }
-                            } catch (e) {
-                                handleFirestoreError(e, OperationType.LIST, "users");
+                            const q = query(collection(db, "users"), where("email", "==", email));
+                            const querySnapshot = await getDocs(q);
+                            if (!querySnapshot.empty) {
+                                const docFound = querySnapshot.docs[0];
+                                existingProfile = docFound.data() as User;
+                                oldDocRef = docFound.ref;
                             }
                         }
 
@@ -85,13 +69,9 @@ export const useAuthStatus = () => {
                             };
                             
                             const safeUser = JSON.parse(JSON.stringify(migratedUser));
-                            try {
-                                await setDoc(userRef, safeUser);
-                                await UserService.migrateLegacyReferences(existingProfile.id, firebaseUser.uid);
-                                await deleteDoc(oldDocRef);
-                            } catch (e) {
-                                handleFirestoreError(e, OperationType.WRITE, `users/${firebaseUser.uid}`);
-                            }
+                            await setDoc(userRef, safeUser);
+                            await UserService.migrateLegacyReferences(existingProfile.id, firebaseUser.uid);
+                            await deleteDoc(oldDocRef);
                             setUser(migratedUser);
                         } else {
                             const newUser: User = {
@@ -106,11 +86,7 @@ export const useAuthStatus = () => {
                             };
 
                             const safeNewUser = JSON.parse(JSON.stringify(newUser));
-                            try {
-                                await setDoc(userRef, safeNewUser);
-                            } catch (e) {
-                                handleFirestoreError(e, OperationType.WRITE, `users/${firebaseUser.uid}`);
-                            }
+                            await setDoc(userRef, safeNewUser);
                             setUser(newUser);
                         }
                     }

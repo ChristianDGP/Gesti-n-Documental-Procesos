@@ -23,7 +23,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
       if (isAdminOrCoord) return 'LINK';
       if (user.canAccessReuseMatrixLink) return 'LINK';
       if (user.canAccessReuseMatrixView) return 'VIEW';
-      if (user.canAccessReuseMatrixIntersect) return 'INTERSECT';
+      if (user.canAccessReuseMatrix) return 'INTERSECT';
       return 'LINK';
   });
 
