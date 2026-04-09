@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HierarchyService, UserService, NotificationService } from '../services/firebaseBackend';
+import { HierarchyService, UserService, NotificationService, DocumentService } from '../services/firebaseBackend';
 import { User, FullHierarchy, ProcessNode, DocType, UserRole } from '../types';
 import { 
   FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2
@@ -70,6 +70,27 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
           await loadData();
       } catch (e: any) {
           alert("Error: " + e.message);
+      } finally {
+          setSeeding(false);
+      }
+  };
+
+  const handleSyncMetadata = async () => {
+      if (!window.confirm("¿Deseas sincronizar los estados de todos los documentos basados en sus versiones? Esta acción corregirá estados inconsistentes.")) return;
+      setSeeding(true);
+      try {
+          const docs = await DocumentService.getAll();
+          let count = 0;
+          for (const d of docs) {
+              const autoInfo = (window as any).determineStateFromVersion ? (window as any).determineStateFromVersion(d.version) : null;
+              // We use syncMetadata which already has the logic
+              await DocumentService.syncMetadata(d.id, user);
+              count++;
+          }
+          alert(`Sincronización completada. Se procesaron ${count} documentos.`);
+          await loadData();
+      } catch (e: any) {
+          alert("Error en sincronización: " + e.message);
       } finally {
           setSeeding(false);
       }
@@ -210,9 +231,14 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div><h1 className="text-2xl font-bold text-slate-900">Gestor de Asignaciones</h1><p className="text-slate-500">Administre analistas responsables y prioridades técnicas.</p></div>
         {user.role === UserRole.ADMIN && (
-            <button onClick={handleSeedDefaults} disabled={seeding} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-slate-900 transition-all">
-                {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Restablecer Matriz
-            </button>
+            <div className="flex gap-2">
+                <button onClick={handleSyncMetadata} disabled={seeding} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-indigo-700 transition-all">
+                    {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Sincronizar Metadatos
+                </button>
+                <button onClick={handleSeedDefaults} disabled={seeding} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-slate-900 transition-all">
+                    {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Restablecer Matriz
+                </button>
+            </div>
         )}
       </div>
 

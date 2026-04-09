@@ -33,9 +33,9 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         const parts = v.split('.');
         if (parts.length === 3) return { state: DocState.REFERENT_REVIEW, progress: 80 };
         if (parts.length === 2) {
-            // Si tiene 2 partes y el segundo dígito es impar, es Revisión Interna
-            const n = parseInt(parts[1]);
-            if (!isNaN(n) && n % 2 !== 0) return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+            // Si empieza con V0, es Revisión Interna (v0.n)
+            if (parts[0] === 'V0') return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+            // Si empieza con V1 o superior, es Enviado a Referente (v1.n)
             return { state: DocState.SENT_TO_REFERENT, progress: 80 };
         }
     }
