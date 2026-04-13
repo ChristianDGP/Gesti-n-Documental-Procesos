@@ -78,6 +78,28 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
 
   const isNodeExpanded = (nodeId: string) => expandedNodes.has(nodeId) || treeSearchTerm.length > 0;
 
+  // Helper to get the most advanced document for a microprocess
+  const getMicroprocessCurrentState = (project: string, microName: string) => {
+    const stages = ['AS IS', 'FCE', 'PM', 'TO BE', 'PR'];
+    let bestDoc: any = null;
+    let bestScore = -1;
+
+    stages.forEach((stage, index) => {
+        const key = `${normalizeHeader(project)}|${normalizeHeader(microName)}|${normalizeHeader(stage)}`;
+        const doc = docMap[key];
+        if (doc && doc.state !== DocState.NOT_STARTED) {
+            // Score based on stage order and state progress
+            const score = (index + 1) * 1000 + STATE_CONFIG[doc.state].progress;
+            if (score > bestScore) {
+                bestScore = score;
+                bestDoc = doc;
+            }
+        }
+    });
+
+    return bestDoc || { state: DocState.NOT_STARTED, version: '-', updatedAt: new Date(0).toISOString(), docType: 'AS IS' };
+  };
+
   const hasMatch = (proj: string, macro?: string, process?: string) => {
     if (!treeSearchTerm) return true;
     const term = treeSearchTerm.toLowerCase();
@@ -564,10 +586,28 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                 <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
                                                 {reu.name}
                                             </h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{reu.macro}</span>
-                                                <span className="text-slate-300">•</span>
-                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{reu.process}</span>
+                                            <div className="flex items-center gap-3 mt-1">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{reu.macro}</span>
+                                                    <span className="text-slate-300">•</span>
+                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{reu.process}</span>
+                                                </div>
+                                                
+                                                {/* Estado Actual del REU */}
+                                                {(() => {
+                                                    const doc = getMicroprocessCurrentState('REU', reu.name);
+                                                    const config = STATE_CONFIG[doc.state as DocState];
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${config.color} shadow-sm`}>
+                                                                {config.label.split('(')[0]}
+                                                            </div>
+                                                            {doc.version && doc.version !== '-' && (
+                                                                <span className="text-[8px] font-mono text-slate-400">{doc.version}</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -606,10 +646,23 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                                     {isExpanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
                                                                     <div className="min-w-0 flex-1">
                                                                         <p className="text-xs font-bold text-slate-700 truncate">{usage.name}</p>
-                                                                        <div className="flex items-center gap-1 mt-0.5">
-                                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{usage.proj}</span>
-                                                                            <span className="text-slate-200">/</span>
-                                                                            <span className="text-[9px] font-medium text-slate-400 truncate">{usage.macro}</span>
+                                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                                            <div className="flex items-center gap-1">
+                                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{usage.proj}</span>
+                                                                                <span className="text-slate-200">/</span>
+                                                                                <span className="text-[9px] font-medium text-slate-400 truncate">{usage.macro}</span>
+                                                                            </div>
+                                                                            
+                                                                            {/* Badge de Estado Actual del Proceso Base */}
+                                                                            {(() => {
+                                                                                const doc = getMicroprocessCurrentState(usage.proj, usage.name);
+                                                                                const config = STATE_CONFIG[doc.state as DocState];
+                                                                                return (
+                                                                                    <div className={`px-1.5 py-0.5 rounded-md text-[8px] font-bold border ${config.color} opacity-80`}>
+                                                                                        {config.label.split('(')[0]}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -770,13 +823,21 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                                 </span>
                                                             </div>
 
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {linkedReus.map(reu => (
-                                                                    <div key={reu!.id} className="flex items-center gap-1.5 bg-white border border-indigo-100 px-2 py-1 rounded-lg shadow-sm">
-                                                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                                                                        <span className="text-[10px] font-medium text-slate-600">{reu!.name}</span>
-                                                                    </div>
-                                                                ))}
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                {linkedReus.map(reu => {
+                                                                    const doc = getMicroprocessCurrentState('REU', reu!.name);
+                                                                    const config = STATE_CONFIG[doc.state as DocState];
+                                                                    
+                                                                    return (
+                                                                        <div key={reu!.id} className="flex items-center gap-1.5 bg-white border border-indigo-100 px-2 py-1 rounded-lg shadow-sm">
+                                                                            <div className={`w-1.5 h-1.5 rounded-full ${config.color.split(' ')[0]}`}></div>
+                                                                            <span className="text-[10px] font-medium text-slate-600">{reu!.name}</span>
+                                                                            <div className={`px-1 py-0.5 rounded text-[7px] font-bold border ${config.color} ml-1`}>
+                                                                                {config.label.split('(')[0]}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     );
@@ -837,12 +898,20 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
 
                                                                                                     {linkedReus.length > 0 ? (
                                                                                                         <div className="flex flex-wrap gap-2">
-                                                                                                            {linkedReus.map(reu => (
-                                                                                                                <div key={reu!.id} className="flex items-center gap-1.5 bg-white border border-indigo-100 px-2 py-1 rounded-lg shadow-sm">
-                                                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                                                                                                                    <span className="text-[10px] font-medium text-slate-600">{reu!.name}</span>
-                                                                                                                </div>
-                                                                                                            ))}
+                                                                                                            {linkedReus.map(reu => {
+                                                                                                                const doc = getMicroprocessCurrentState('REU', reu!.name);
+                                                                                                                const config = STATE_CONFIG[doc.state as DocState];
+                                                                                                                
+                                                                                                                return (
+                                                                                                                    <div key={reu!.id} className="flex items-center gap-1.5 bg-white border border-indigo-100 px-2 py-1 rounded-lg shadow-sm">
+                                                                                                                        <div className={`w-1.5 h-1.5 rounded-full ${config.color.split(' ')[0]}`}></div>
+                                                                                                                        <span className="text-[10px] font-medium text-slate-600">{reu!.name}</span>
+                                                                                                                        <div className={`px-1 py-0.5 rounded text-[7px] font-bold border ${config.color} ml-1`}>
+                                                                                                                            {config.label.split('(')[0]}
+                                                                                                                        </div>
+                                                                                                                    </div>
+                                                                                                                );
+                                                                                                            })}
                                                                                                         </div>
                                                                                                     ) : (
                                                                                                         <p className="text-[9px] text-slate-400 italic">Sin componentes reutilizables vinculados.</p>
