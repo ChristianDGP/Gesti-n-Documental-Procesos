@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History, Link as LinkIcon } from 'lucide-react';
 import { User, UserRole, DocState, Document, Notification } from '../types';
-import { NotificationService } from '../services/firebaseBackend';
+import { NotificationService, IntegrityService } from '../services/firebaseBackend';
 import { toast } from 'sonner';
 
 interface LayoutProps {
@@ -15,6 +15,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
+  const [integrityCount, setIntegrityCount] = useState(0);
   const lastNotifId = useRef<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (!user?.id) return;
     
     // Establishing reliable real-time connection for notification badge and toasts
-    const unsubscribe = NotificationService.subscribeToNotifications(user.id, (notifs) => {
+    const unsubscribeNotifs = NotificationService.subscribeToNotifications(user.id, (notifs) => {
         const unread = notifs.filter(n => !n.isRead);
         setInboxCount(unread.length);
         
@@ -57,9 +58,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             }
         }
     });
+
+    // Subscribe to integrity inconsistencies count
+    const unsubscribeIntegrity = IntegrityService.subscribeToInconsistencyCount((count) => {
+        setIntegrityCount(count);
+    });
     
     return () => {
-        if (unsubscribe) unsubscribe();
+        if (unsubscribeNotifs) unsubscribeNotifs();
+        if (unsubscribeIntegrity) unsubscribeIntegrity();
     };
   }, [user?.id, navigate]); 
 
@@ -129,7 +136,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
               <>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 {canAccessGantt && <NavItem to="/admin/gantt" icon={CalendarRange} label="Diagrama Gantt" />}
-                {canAccessLog && <NavItem to="/admin/events" icon={History} label="Log de Eventos" />}
+                {canAccessLog && <NavItem to="/admin/events" icon={History} label="Log de Eventos" badge={integrityCount} />}
                 {(canAccessStructure || canAccessAssignments || canAccessReuseMatrix) && (
                     <>
                         {canAccessStructure && <NavItem to="/admin/structure" icon={Network} label="Estructura" />}
@@ -148,7 +155,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             )}
             <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Mi Cuenta</div>
             {!isGuest && <NavItem to="/manual" icon={BookOpen} label="Manual de Usuario" />}
-            {isAdminOrCoord && <NavItem to="/nomenclature" icon={FileText} label="Guía de Nomenclatura" />}
             <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
           </nav>
           <div className="p-4 border-t border-slate-800 flex-shrink-0 bg-slate-950/20">

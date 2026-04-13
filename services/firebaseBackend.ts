@@ -722,6 +722,62 @@ export const HierarchyService = {
   }
 };
 
+export const IntegrityService = {
+    subscribeToInconsistencyCount: (callback: (count: number) => void) => {
+        let docs: Document[] = [];
+        let matrix: any[] = [];
+
+        const updateCount = () => {
+            let count = 0;
+            matrix.forEach(node => {
+                if (node.name && node.name.length > 35) count++;
+            });
+
+            docs.forEach(doc => {
+                const expectedInfo = determineStateFromVersion(doc.version);
+                const expectedState = expectedInfo.state;
+                const expectedPending = [
+                    DocState.INTERNAL_REVIEW, 
+                    DocState.SENT_TO_REFERENT, 
+                    DocState.REFERENT_REVIEW, 
+                    DocState.SENT_TO_CONTROL, 
+                    DocState.CONTROL_REVIEW
+                ].includes(expectedState);
+
+                const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
+                
+                const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
+                const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
+                const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
+                const isTooLong = fullNomenclature.length > 60;
+
+                if (isInconsistent || isTooLong) {
+                    const currentHash = `${doc.version}|${doc.state}${isTooLong ? '|TOOLONG' : ''}`;
+                    if (doc.ignoredInconsistency !== currentHash) {
+                        count++;
+                    }
+                }
+            });
+            callback(count);
+        };
+
+        const unsubDocs = onSnapshot(collection(db, "documents"), (snap) => {
+            docs = snap.docs.map(d => ({ ...d.data(), id: d.id } as Document));
+            updateCount();
+        });
+
+        const unsubMatrix = onSnapshot(collection(db, "process_matrix"), (snap) => {
+            matrix = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            updateCount();
+        });
+
+        return () => {
+            unsubDocs();
+            unsubMatrix();
+        };
+    }
+};
+
 export const DatabaseService = {
   exportData: async (): Promise<string> => {
     const collections = ["users", "documents", "history", "process_matrix", "notifications", "referents"];
