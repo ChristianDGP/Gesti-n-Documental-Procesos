@@ -148,6 +148,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             )}
             <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Mi Cuenta</div>
             {!isGuest && <NavItem to="/manual" icon={BookOpen} label="Manual de Usuario" />}
+            {isAdminOrCoord && <NavItem to="/nomenclature" icon={FileText} label="Guía de Nomenclatura" />}
             <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
           </nav>
           <div className="p-4 border-t border-slate-800 flex-shrink-0 bg-slate-950/20">

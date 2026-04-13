@@ -25,17 +25,25 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
     if (v.endsWith('ACG') || v === 'PR') return { state: DocState.APPROVED, progress: 100 };
     
     if (v.endsWith('AR')) {
-        if (/^V\d+\.\d+\.\d+AR$/.test(v)) return { state: DocState.CONTROL_REVIEW, progress: 90 };
+        if (/^V\d+\.\d+\.\d+AR$/.test(v)) {
+            const parts = v.split('.');
+            const i = parseInt(parts[2].replace('AR', ''));
+            return { state: i % 2 !== 0 ? DocState.CONTROL_REVIEW : DocState.REJECTED, progress: 90 };
+        }
         return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     }
     
     if (v.startsWith('V')) {
         const parts = v.split('.');
-        if (parts.length === 3) return { state: DocState.REFERENT_REVIEW, progress: 80 };
+        if (parts.length === 3) {
+            const i = parseInt(parts[2]);
+            return { state: i % 2 !== 0 ? DocState.REFERENT_REVIEW : DocState.REJECTED, progress: 80 };
+        }
         if (parts.length === 2) {
-            // Si empieza con V0, es Revisión Interna (v0.n)
-            if (parts[0] === 'V0') return { state: DocState.INTERNAL_REVIEW, progress: 60 };
-            // Si empieza con V1 o superior, es Enviado a Referente (v1.n)
+            const n = parseInt(parts[1]);
+            if (parts[0] === 'V0') {
+                return { state: n % 2 !== 0 ? DocState.INTERNAL_REVIEW : DocState.REJECTED, progress: 60 };
+            }
             return { state: DocState.SENT_TO_REFERENT, progress: 80 };
         }
     }

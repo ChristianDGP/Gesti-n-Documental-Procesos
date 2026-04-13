@@ -130,13 +130,26 @@ export const parseDocumentFilename = (
       } else if (vUpper.startsWith('V')) {
           const parts = vUpper.split('.');
           if (parts.length > 2) {
-              result.estado = 'Revisión Interna Referente';
-              result.porcentaje = 80;
+              const iStr = parts[2].replace('AR', '');
+              const i = parseInt(iStr);
+              if (!isNaN(i) && i % 2 !== 0) {
+                  result.estado = vUpper.endsWith('AR') ? 'Revisión Interna Control' : 'Revisión Interna Referente';
+                  result.porcentaje = vUpper.endsWith('AR') ? 90 : 80;
+              } else {
+                  result.estado = 'Rechazado';
+                  result.porcentaje = 30;
+              }
           } else {
+              const major = parseInt(parts[0].substring(1));
               const n = parseInt(parts[1]);
-              if (!isNaN(n) && n % 2 !== 0) {
-                  result.estado = 'Revisión Interna';
-                  result.porcentaje = 60;
+              if (major === 0) {
+                  if (!isNaN(n) && n % 2 !== 0) {
+                      result.estado = 'Revisión Interna';
+                      result.porcentaje = 60;
+                  } else {
+                      result.estado = 'Rechazado';
+                      result.porcentaje = 30;
+                  }
               } else {
                   result.estado = 'Enviado a Referente';
                   result.porcentaje = 80;
@@ -186,7 +199,10 @@ export const validateCoordinatorRules = (
         if (m) return { major: parseInt(m[1]), n: parseInt(m[2]), i: null, ar: true, acg: false, type: 'vN.nAR' };
         
         m = vUpper.match(/^V(\d+)\.(\d+)$/);
-        if (m) return { major: parseInt(m[1]), n: parseInt(m[2]), i: null, ar: false, acg: false, type: 'vN.n' };
+        if (m) {
+            const major = parseInt(m[1]);
+            return { major, n: parseInt(m[2]), i: null, ar: false, acg: false, type: major === 0 ? 'v0.n' : 'v1.n' };
+        }
         
         m = vUpper.match(/^V(\d+)\.(\d+)ACG$/);
         if (m) return { major: parseInt(m[1]), n: parseInt(m[2]), i: null, ar: false, acg: true, type: 'vN.nACG' };
@@ -209,7 +225,7 @@ export const validateCoordinatorRules = (
                     return { valid: false, error: 'Aprobación requiere vN.n.i (Referente), vN.n (Consolidar) o PR (Final).' };
                 }
             } else {
-                if (incoming.type !== 'vN.n') return { valid: false, error: 'Aprobación requiere vN.n (Ej: v1.0).' };
+                if (incoming.type !== 'v1.n') return { valid: false, error: 'Aprobación requiere v1.n (Ej: v1.0).' };
             }
             return { valid: true };
         } else {

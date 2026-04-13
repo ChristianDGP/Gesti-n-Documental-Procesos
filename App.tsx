@@ -20,6 +20,7 @@ import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
 import Profile from './views/Profile';
 import ManualAnalista from './views/ManualAnalista';
+import NomenclatureGuide from './views/NomenclatureGuide';
 import { UserRole } from './types'; 
 import { logoutUser } from './services/firebaseAuthService'; 
 import { useAuthStatus } from './hooks/useAuthStatus'; 
@@ -70,6 +71,7 @@ const App: React.FC = () => {
                                     <Route path="/doc/:id" element={<DocumentDetail user={user} />} />
                                     <Route path="/profile" element={<Profile user={user} onUpdate={() => window.location.reload()} />} /> 
                                     <Route path="/manual" element={<ManualAnalista />} />
+                                    <Route path="/nomenclature" element={<NomenclatureGuide user={user} />} />
                                     
                                     <Route 
                                         path="/admin/referents" 
