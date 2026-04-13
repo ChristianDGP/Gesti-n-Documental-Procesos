@@ -39,8 +39,10 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [matrixKeyToUpdate, setMatrixKeyToUpdate] = useState<string | null>(null);
 
   // Permissions
-  const canAssignDocs = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canAssignDefinedDocs;
-  const canManageActions = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canManageAssignments;
+  const roleUpper = (user.role || '').toString().toUpperCase();
+  const isAdminOrCoord = roleUpper === 'ADMIN' || roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
+  const canAssignDocs = isAdminOrCoord || user.canAssignDefinedDocs;
+  const canManageActions = isAdminOrCoord || user.canManageAssignments;
 
   useEffect(() => {
     loadData();

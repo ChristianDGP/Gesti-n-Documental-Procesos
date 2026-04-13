@@ -501,14 +501,13 @@ export const DocumentService = {
       };
       const displayAction = actionLabels[action] || action;
       
-      if (customVersion) {
+    if (customVersion) {
         newVersion = customVersion;
         const info = determineStateFromVersion(customVersion);
         newState = info.state;
-      }
-      
-      if (action === 'APPROVE') hasPending = false;
-      else if (action === 'REJECT') { hasPending = false; newState = determineStateFromVersion(newVersion).state; }
+    }
+    
+    if (action === 'APPROVE' || action === 'REJECT') hasPending = false;
       
       const { progress: newProgress } = determineStateFromVersion(newVersion);
       await updateDoc(docRef, { 

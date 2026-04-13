@@ -319,7 +319,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Actualizando dashboard...</div>;
 
-  const isGuest = user.role === UserRole.GUEST;
+  const roleUpper = (user.role || '').toString().toUpperCase();
+  const isGuest = roleUpper === 'GUEST';
+  const isAdminOrCoord = roleUpper === 'ADMIN' || roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
 
   if (isSystemEmpty) {
       return (
@@ -327,7 +329,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6"><Database size={40} className="text-indigo-600" /></div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">Sistema sin Inicializar</h2>
               <p className="text-slate-500 max-w-md mb-8">La matriz de procesos está vacía. Cargue la estructura de procesos para comenzar.</p>
-              {(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR) && (
+              {isAdminOrCoord && (
                   <Link to="/admin/assignments" className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-md transition-transform active:scale-95">
                       <Database size={18} className="mr-2" /> Ir a Carga de Datos
                   </Link>
@@ -347,7 +349,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 flex items-center justify-center shadow-sm font-medium transition-colors">
                 <FileSpreadsheet size={18} className="mr-2 text-green-600"/> <span className="hidden md:inline">Exportar Excel</span><span className="md:hidden">Excel</span>
             </button>
-            {user.role === UserRole.ANALYST && <Link to="/new" className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center shadow-sm font-medium"><Plus size={18} className="mr-2"/> Nueva Solicitud</Link>}
+            {roleUpper === 'ANALYST' && <Link to="/new" className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center shadow-sm font-medium"><Plus size={18} className="mr-2"/> Nueva Solicitud</Link>}
         </div>
       </div>
 

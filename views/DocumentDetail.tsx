@@ -322,7 +322,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       }
       
       if (action === 'APPROVE' || action === 'REJECT') {
-          if (action === 'REJECT' && !comment) { 
+          if (action === 'REJECT' && !comment.trim()) { 
               alert('Agrega una observación para el rechazo.'); 
               isProcessing.current = false; 
               return; 
@@ -348,7 +348,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       
       const now = Date.now();
       if (now - lastExecutionTime.current < 3000) return;
-      if (!doc || !pendingAction || !responseFile || !isFileValid || isProcessing.current) return;
+      if (!doc || !pendingAction || isProcessing.current) return;
+      
+      if (!responseFile || !isFileValid) {
+          alert(`Debe cargar un archivo válido para ${pendingAction === 'APPROVE' ? 'aprobar' : 'rechazar'}.`);
+          return;
+      }
       
       isProcessing.current = true;
       lastExecutionTime.current = now;
@@ -463,8 +468,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const isAssignee = doc.assignees && doc.assignees.includes(user.id);
   const isAuthor = doc.authorId === user.id;
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
-  const isCoordinatorOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
-  const isAdmin = user.role === UserRole.ADMIN;
+  const roleUpper = (user.role || '').toString().toUpperCase();
+  const isCoordinatorOrAdmin = roleUpper === 'ADMIN' || roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
+  const isAdmin = roleUpper === 'ADMIN';
   const canEditMaster = isAdmin || user.canEditMasterData;
   const canEdit = !isGuest && (isAnalystAssigned || isCoordinatorOrAdmin);
   const isDocActive = doc.state !== DocState.APPROVED;
