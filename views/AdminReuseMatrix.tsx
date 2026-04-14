@@ -230,7 +230,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
 
   // Map of REU ID to list of microprocesses using it
   const reuUsageMap = useMemo(() => {
-      const map: Record<string, { proj: string, macro: string, process: string, name: string, id: string }[]> = {};
+      const map: Record<string, { proj: string, macro: string, process: string, name: string, id: string, active: boolean, requiredTypes: string[] }[]> = {};
       
       reuMicroprocesses.forEach(reu => {
           map[reu.id] = [];
@@ -249,7 +249,9 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                       macro,
                                       process,
                                       name: node.name,
-                                      id: node.docId
+                                      id: node.docId,
+                                      active: node.active !== false,
+                                      requiredTypes: node.requiredTypes || ['AS IS', 'FCE', 'PM', 'TO BE']
                                   });
                               }
                           });
@@ -504,7 +506,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                                                     {isProcExpanded && (
                                                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-4 animate-fadeIn">
                                                                                             {hierarchy[proj][macro][process]
-                                                                                                .filter(node => !treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase()))
+                                                                                                .filter(node => node.active !== false && (!treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase())))
                                                                                                 .map(node => {
                                                                                                 const isLinked = linkedProcessIds.has(node.docId);
                                                                                                 const isSaving = savingId === node.docId;
@@ -631,7 +633,9 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                             <p className="text-xs text-slate-400 italic text-center py-4">Este componente no está vinculado a ningún microproceso.</p>
                                         ) : (
                                             <div className="grid grid-cols-1 gap-3">
-                                                {usages.map(usage => {
+                                                {usages
+                                                    .filter(u => u.active) // Only show active microprocesses in View
+                                                    .map(usage => {
                                                     const usageKey = `${reu.id}-${usage.id}`;
                                                     const isExpanded = expandedUsages.has(usageKey);
                                                     
@@ -672,6 +676,20 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                                     {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => {
                                                                         const key = `${normalizeHeader(usage.proj)}|${normalizeHeader(usage.name)}|${normalizeHeader(type)}`;
                                                                         const doc = docMap[key];
+                                                                        const isRequired = usage.requiredTypes.includes(type);
+                                                                        
+                                                                        if (!isRequired) {
+                                                                            return (
+                                                                                <div 
+                                                                                    key={type} 
+                                                                                    className="w-2.5 h-2.5 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center"
+                                                                                    title={`${type}: No requerido`}
+                                                                                >
+                                                                                    <div className="w-1 h-px bg-slate-300"></div>
+                                                                                </div>
+                                                                            );
+                                                                        }
+
                                                                         const statusInfo = getStatusInfo(doc || { state: DocState.NOT_STARTED, createdAt: new Date().toISOString(), expectedEndDate: DEFAULT_EXECUTIVE_DEADLINE } as any);
                                                                         
                                                                         return (
@@ -699,21 +717,25 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                                                 {['AS IS', 'FCE', 'PM', 'TO BE'].map(type => {
                                                                                     const key = `${normalizeHeader(usage.proj)}|${normalizeHeader(usage.name)}|${normalizeHeader(type)}`;
                                                                                     const doc = docMap[key];
+                                                                                    const isRequired = usage.requiredTypes.includes(type);
                                                                                     const state = doc?.state || DocState.NOT_STARTED;
                                                                                     const config = STATE_CONFIG[state];
                                                                                     
                                                                                     return (
-                                                                                        <div key={type} className="flex flex-col gap-1 bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
+                                                                                        <div key={type} className={`flex flex-col gap-1 p-2 rounded-lg border shadow-sm ${isRequired ? 'bg-white border-slate-100' : 'bg-slate-50/50 border-slate-200 opacity-60'}`}>
                                                                                             <div className="flex items-center justify-between">
                                                                                                 <span className="text-[8px] font-black text-slate-400">{type}</span>
-                                                                                                {doc && (
+                                                                                                {isRequired && doc && (
                                                                                                     <span className="text-[8px] font-mono text-slate-400">{config.progress}%</span>
                                                                                                 )}
+                                                                                                {!isRequired && (
+                                                                                                    <span className="text-[7px] font-bold text-slate-400 uppercase">N/A</span>
+                                                                                                )}
                                                                                             </div>
-                                                                                            <div className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold truncate ${config.color}`}>
-                                                                                                {config.label.split('(')[0]}
+                                                                                            <div className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold truncate ${isRequired ? config.color : 'bg-slate-100 text-slate-400'}`}>
+                                                                                                {isRequired ? config.label.split('(')[0] : 'No Requerido'}
                                                                                             </div>
-                                                                                            {doc && (
+                                                                                            {isRequired && doc && (
                                                                                                 <div className="text-[7px] text-slate-400 mt-1 truncate">
                                                                                                     Act: {new Date(doc.updatedAt).toLocaleDateString()}
                                                                                                 </div>
@@ -773,11 +795,11 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                 <div className="space-y-4">
                     {otherProjects.filter(p => {
                         if (!showOnlyIntersections) return hasMatch(p);
-                        // If showOnlyIntersections, check if project has any linked microprocess
+                        // If showOnlyIntersections, check if project has any linked microprocess that is ACTIVE
                         const projData = hierarchy[p];
                         return Object.values(projData).some(macroData => 
                             Object.values(macroData).some(nodes => 
-                                nodes.some(node => (node.reusableLinks?.length || 0) > 0 && (!treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase())))
+                                nodes.some(node => node.active !== false && (node.reusableLinks?.length || 0) > 0 && (!treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase())))
                             )
                         );
                     }).map(proj => {
@@ -806,7 +828,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                             <div className="grid grid-cols-1 gap-2">
                                                 {Object.values(hierarchy[proj]).flatMap(macroData => 
                                                     Object.values(macroData).flatMap(nodes => 
-                                                        nodes.filter(node => (node.reusableLinks?.length || 0) > 0 && (!treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase())))
+                                                        nodes.filter(node => node.active !== false && (node.reusableLinks?.length || 0) > 0 && (!treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase())))
                                                     )
                                                 ).map(node => {
                                                     const linkedReus = (node.reusableLinks || []).map(id => reuMicroprocesses.find(r => r.id === id)).filter(Boolean);
@@ -880,7 +902,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                                             {isProcExpanded && (
                                                                                 <div className="grid grid-cols-1 gap-2 ml-4">
                                                                                     {hierarchy[proj][macro][process]
-                                                                                        .filter(node => !treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase()))
+                                                                                        .filter(node => node.active !== false && (!treeSearchTerm || node.name.toLowerCase().includes(treeSearchTerm.toLowerCase())))
                                                                                         .map(node => {
                                                                                             const linkedReus = (node.reusableLinks || []).map(id => reuMicroprocesses.find(r => r.id === id)).filter(Boolean);
                                                                                             
