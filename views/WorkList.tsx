@@ -19,6 +19,14 @@ interface Props {
 
 type SortOption = 'microprocess' | 'state' | 'updatedAt' | 'default';
 
+const reviewStates = [
+    DocState.INTERNAL_REVIEW, 
+    DocState.SENT_TO_REFERENT, 
+    DocState.REFERENT_REVIEW, 
+    DocState.SENT_TO_CONTROL, 
+    DocState.CONTROL_REVIEW
+];
+
 const WorkList: React.FC<Props> = ({ user }) => {
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,14 +78,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
         const myWorkList: Document[] = [];
         const hierarchyKeys = Object.keys(hierarchy);
         const isCoordOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
-        const reviewStates = [
-            DocState.INTERNAL_REVIEW, 
-            DocState.SENT_TO_REFERENT, 
-            DocState.REFERENT_REVIEW, 
-            DocState.SENT_TO_CONTROL, 
-            DocState.CONTROL_REVIEW
-        ];
-
+        
         hierarchyKeys.forEach(proj => {
             Object.keys(hierarchy[proj]).forEach(macro => {
                 Object.keys(hierarchy[proj][macro]).forEach(proc => {
@@ -175,17 +176,25 @@ const WorkList: React.FC<Props> = ({ user }) => {
       }
       return filtered.sort((a, b) => {
           if (sortConfig.key === 'default') {
-              // 1. Prioridad por Solicitud Pendiente
+              // 1. Prioridad Máxima: Solicitudes Pendientes (Alerta Roja)
               if (a.hasPendingRequest !== b.hasPendingRequest) {
                   return a.hasPendingRequest ? -1 : 1;
               }
+
+              // 2. Prioridad Media: Estados de Revisión/Seguimiento
+              const aIsReview = reviewStates.includes(a.state);
+              const bIsReview = reviewStates.includes(b.state);
+              if (aIsReview !== bIsReview) {
+                  return aIsReview ? -1 : 1;
+              }
               
-              // 2. Si ambos tienen solicitud pendiente -> Antiguo a Reciente (ASC)
-              if (a.hasPendingRequest) {
+              // 3. Dentro de cada grupo:
+              // Si es Prioritario (Solicitud o Revisión) -> Antiguo a Reciente (ASC) para no olvidar lo rezagado
+              if (a.hasPendingRequest || aIsReview) {
                   return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
               }
               
-              // 3. Si ninguno tiene solicitud pendiente -> Reciente a Antiguo (DESC)
+              // Si no es prioritario -> Reciente a Antiguo (DESC)
               return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
           }
 

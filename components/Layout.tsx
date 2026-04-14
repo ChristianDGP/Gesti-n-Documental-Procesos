@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History, Link as LinkIcon } from 'lucide-react';
 import { User, UserRole, DocState, Document, Notification } from '../types';
-import { NotificationService, IntegrityService } from '../services/firebaseBackend';
+import { NotificationService, IntegrityService, DocumentService } from '../services/firebaseBackend';
 import { toast } from 'sonner';
 
 interface LayoutProps {
@@ -59,9 +59,21 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         }
     });
 
-    // Subscribe to integrity inconsistencies count
-    const unsubscribeIntegrity = IntegrityService.subscribeToInconsistencyCount((count) => {
+    // Subscribe to integrity inconsistencies count and auto-sync
+    const unsubscribeIntegrity = IntegrityService.subscribeToInconsistencies(({ count, inconsistentDocs }) => {
         setIntegrityCount(count);
+        
+        // Auto-sync stale documents (30+ days) if user is Admin or Coordinator
+        const roleUpper = (user.role || '').toString().toUpperCase();
+        const isAdminOrCoordLocal = roleUpper === 'ADMIN' || roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
+        
+        if (isAdminOrCoordLocal && inconsistentDocs.length > 0) {
+            inconsistentDocs.forEach(doc => {
+                // We call syncMetadata and let DocumentService.syncMetadata handle the logic 
+                // of whether it needs update (it will check the 30-day rule).
+                DocumentService.syncMetadata(doc.id, user).catch(err => console.error("Auto-sync error:", err));
+            });
+        }
     });
     
     return () => {

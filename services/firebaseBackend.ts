@@ -342,7 +342,7 @@ export const DocumentService = {
   },
   create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any, existingId?: string): Promise<Document> => {
     const state = initialState || DocState.INITIATED;
-    const isSubmission = [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(state);
+    const isSubmission = [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW].includes(state);
     const version = initialVersion || '0.0';
     const info = determineStateFromVersion(version);
     const progress = initialProgress !== undefined ? initialProgress : info.progress;
@@ -415,7 +415,7 @@ export const DocumentService = {
       const docRef = doc(db, "documents", docId);
       const restoredVersion = previousAction.version || '0.0';
       const info = determineStateFromVersion(restoredVersion);
-      await updateDoc(docRef, { state: previousAction.newState, version: restoredVersion, progress: info.progress, updatedAt: previousAction.timestamp, hasPendingRequest: [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(previousAction.newState), ignoredInconsistency: null as any });
+      await updateDoc(docRef, { state: previousAction.newState, version: restoredVersion, progress: info.progress, updatedAt: previousAction.timestamp, hasPendingRequest: [DocState.INTERNAL_REVIEW].includes(previousAction.newState), ignoredInconsistency: null as any });
       await deleteDoc(lastAction._ref);
       return false;
   },
@@ -438,13 +438,14 @@ export const DocumentService = {
           progress = autoInfo.progress;
       }
       
+      const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(state) && 
+                      (new Date().getTime() - new Date(data.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
+
       const shouldHavePending = [
           DocState.INTERNAL_REVIEW, 
-          DocState.SENT_TO_REFERENT, 
           DocState.REFERENT_REVIEW, 
-          DocState.SENT_TO_CONTROL, 
           DocState.CONTROL_REVIEW
-      ].includes(state);
+      ].includes(state) || isStale;
 
       const needsUpdate = data.state !== state || 
                           data.progress !== progress || 
@@ -513,6 +514,11 @@ export const DocumentService = {
         newVersion = customVersion;
         const info = determineStateFromVersion(customVersion);
         newState = info.state;
+        hasPending = [
+            DocState.INTERNAL_REVIEW, 
+            DocState.REFERENT_REVIEW, 
+            DocState.CONTROL_REVIEW
+        ].includes(newState);
     }
     
     if (action === 'APPROVE' || action === 'REJECT') hasPending = false;
@@ -723,12 +729,14 @@ export const HierarchyService = {
 };
 
 export const IntegrityService = {
-    subscribeToInconsistencyCount: (callback: (count: number) => void) => {
+    subscribeToInconsistencies: (callback: (data: { count: number, inconsistentDocs: Document[] }) => void) => {
         let docs: Document[] = [];
         let matrix: any[] = [];
 
-        const updateCount = () => {
+        const updateData = () => {
             let count = 0;
+            const inconsistentDocs: Document[] = [];
+
             matrix.forEach(node => {
                 if (node.name && node.name.length > 35) count++;
             });
@@ -736,13 +744,14 @@ export const IntegrityService = {
             docs.forEach(doc => {
                 const expectedInfo = determineStateFromVersion(doc.version);
                 const expectedState = expectedInfo.state;
+                const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(expectedState) && 
+                                (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
+
                 const expectedPending = [
                     DocState.INTERNAL_REVIEW, 
-                    DocState.SENT_TO_REFERENT, 
                     DocState.REFERENT_REVIEW, 
-                    DocState.SENT_TO_CONTROL, 
                     DocState.CONTROL_REVIEW
-                ].includes(expectedState);
+                ].includes(expectedState) || isStale;
 
                 const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
                 
@@ -755,20 +764,21 @@ export const IntegrityService = {
                     const currentHash = `${doc.version}|${doc.state}${isTooLong ? '|TOOLONG' : ''}`;
                     if (doc.ignoredInconsistency !== currentHash) {
                         count++;
+                        inconsistentDocs.push(doc);
                     }
                 }
             });
-            callback(count);
+            callback({ count, inconsistentDocs });
         };
 
         const unsubDocs = onSnapshot(collection(db, "documents"), (snap) => {
             docs = snap.docs.map(d => ({ ...d.data(), id: d.id } as Document));
-            updateCount();
+            updateData();
         });
 
         const unsubMatrix = onSnapshot(collection(db, "process_matrix"), (snap) => {
             matrix = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-            updateCount();
+            updateData();
         });
 
         return () => {
