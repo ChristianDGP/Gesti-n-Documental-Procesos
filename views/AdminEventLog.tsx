@@ -93,13 +93,14 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
         return documents.filter(doc => {
             const expectedInfo = determineStateFromVersion(doc.version);
             const expectedState = expectedInfo.state;
+            const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(expectedState) && 
+                            (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
+
             const expectedPending = [
                 DocState.INTERNAL_REVIEW, 
-                DocState.SENT_TO_REFERENT, 
                 DocState.REFERENT_REVIEW, 
-                DocState.SENT_TO_CONTROL, 
                 DocState.CONTROL_REVIEW
-            ].includes(expectedState);
+            ].includes(expectedState) || isStale;
 
             const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
             
@@ -325,7 +326,14 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                 </tr>
                             ) : filteredInconsistent.map(doc => {
                                 const info = determineStateFromVersion(doc.version);
-                                const isPendingMismatch = doc.hasPendingRequest !== [DocState.INTERNAL_REVIEW, DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(info.state);
+                                const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(info.state) && 
+                                                (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
+                                const expectedPending = [
+                                    DocState.INTERNAL_REVIEW, 
+                                    DocState.REFERENT_REVIEW, 
+                                    DocState.CONTROL_REVIEW
+                                ].includes(info.state) || isStale;
+                                const isPendingMismatch = doc.hasPendingRequest !== expectedPending;
                                 const currentManualState = manualStates[doc.id] || doc.state;
                                 
                                 return (
