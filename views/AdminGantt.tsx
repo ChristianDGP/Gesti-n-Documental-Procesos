@@ -84,6 +84,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
             const initialProjects: Record<string, boolean> = {};
             
             Object.keys(fullHierarchy).forEach(proj => {
+                if (proj === 'REU') return; // Excluir proyecto REU del Gantt
                 initialProjects[proj] = true; // Por defecto expandidos
                 Object.keys(fullHierarchy[proj]).forEach(macro => {
                     Object.keys(fullHierarchy[proj][macro]).forEach(proc => {
@@ -310,7 +311,6 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                             <option value="">TODOS</option>
                             <option value="HPC">HPC</option>
                             <option value="HSR">HSR</option>
-                            <option value="REU">REU</option>
                         </select>
                     </div>
                     <div className="space-y-1.5">
