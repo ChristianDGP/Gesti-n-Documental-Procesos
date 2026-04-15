@@ -891,7 +891,20 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col min-h-[550px]">
             <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                <h3 className="font-bold text-slate-800 text-sm">Historial Completo</h3>
+                <div className="flex items-center gap-3">
+                    {isAdmin && history.length > 0 && (
+                        <input 
+                            type="checkbox" 
+                            checked={history.length > 0 && selectedHistoryIds.length === history.length}
+                            onChange={() => {
+                                if (selectedHistoryIds.length === history.length) setSelectedHistoryIds([]);
+                                else setSelectedHistoryIds(history.map(h => h.id));
+                            }}
+                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                    )}
+                    <h3 className="font-bold text-slate-800 text-sm">Historial Completo</h3>
+                </div>
                 {isAdmin && selectedHistoryIds.length > 0 && (
                     <button 
                         onClick={handleDeleteSelectedHistory}
