@@ -287,6 +287,13 @@ export const HistoryService = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as DocHistory));
   },
+  delete: async (ids: string[]): Promise<void> => {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+          batch.delete(doc(db, "history", id));
+      });
+      await batch.commit();
+  },
   log: async (docId: string, user: User, action: string, prev: DocState, next: DocState, comment: string, version?: string, customTimestamp?: string) => {
     const entryId = `hist-${docId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newEntry: DocHistory = { 

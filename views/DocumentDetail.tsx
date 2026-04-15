@@ -48,6 +48,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [detectedVersion, setDetectedVersion] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
 
   // Estado para detectar si hay una versión más nueva
   const [latestDocInfo, setLatestDocInfo] = useState<{ id: string, version: string } | null>(null);
@@ -383,6 +384,20 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
       } finally {
         isProcessing.current = false;
         setActionLoading(false);
+      }
+  };
+
+  const handleDeleteSelectedHistory = async () => {
+      if (selectedHistoryIds.length === 0 || !doc) return;
+      setActionLoading(true);
+      try {
+          await HistoryService.delete(selectedHistoryIds);
+          setSelectedHistoryIds([]);
+          await loadData(doc.id);
+      } catch (e: any) {
+          alert("Error al eliminar registros: " + e.message);
+      } finally {
+          setActionLoading(false);
       }
   };
 
@@ -875,7 +890,18 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         </div>
         
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col min-h-[550px]">
-            <h3 className="font-bold text-slate-800 mb-6 border-b border-slate-100 pb-4 text-sm">Historial Completo</h3>
+            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                <h3 className="font-bold text-slate-800 text-sm">Historial Completo</h3>
+                {isAdmin && selectedHistoryIds.length > 0 && (
+                    <button 
+                        onClick={handleDeleteSelectedHistory}
+                        disabled={actionLoading}
+                        className="text-red-500 hover:text-red-700 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg border border-red-100 transition-colors shadow-sm disabled:opacity-50"
+                    >
+                        Eliminar ({selectedHistoryIds.length})
+                    </button>
+                )}
+            </div>
             
             <div className="flex-1 overflow-y-auto pr-3 custom-scrollbar">
                 {history.length === 0 ? (
@@ -886,27 +912,40 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 ) : (
                   <div className="space-y-10 pl-5 border-l-[1.5px] border-slate-100 relative ml-2">
                       {history.map((h) => (
-                          <div key={h.id} className="relative group animate-fadeIn">
-                              <div className="absolute -left-[23px] top-2 h-3 w-3 rounded-full bg-slate-300 border-2 border-white shadow-sm ring-4 ring-white group-hover:bg-indigo-500 transition-colors"></div>
-                              <div className="text-[11px] font-bold text-slate-400 mb-1 flex items-center gap-1.5 uppercase tracking-tighter">
-                                  {formatDate(h.timestamp)}
-                              </div>
-                              <div className="text-[13px] text-slate-700 mb-2">
-                                  <span className="font-black text-slate-900">{h.action}</span>
-                                  <span className="mx-1.5 font-medium text-slate-400 text-xs">por</span>
-                                  <span className="font-black text-slate-800">{h.userName}</span>
-                              </div>
-                              <div className="mb-2.5">
-                                  <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-black border border-slate-200 uppercase tracking-tighter">
-                                      Versión: {formatVersionForDisplay(h.version || '-')}
-                                  </span>
-                              </div>
-                              {h.comment && (
-                                  <div className="bg-slate-50/80 border border-slate-100 rounded-lg p-3.5 text-xs italic text-slate-600 leading-relaxed shadow-sm relative overflow-hidden">
-                                      <div className="absolute top-0 left-0 w-1 h-full bg-slate-200/50"></div>
-                                      "{h.comment}"
-                                  </div>
+                          <div key={h.id} className="relative group animate-fadeIn flex items-start gap-3">
+                              {isAdmin && (
+                                  <input 
+                                      type="checkbox" 
+                                      checked={selectedHistoryIds.includes(h.id)}
+                                      onChange={(e) => {
+                                          if (e.target.checked) setSelectedHistoryIds([...selectedHistoryIds, h.id]);
+                                          else setSelectedHistoryIds(selectedHistoryIds.filter(id => id !== h.id));
+                                      }}
+                                      className="mt-1 w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                  />
                               )}
+                              <div className="relative">
+                                  <div className="absolute -left-[35px] top-2 h-3 w-3 rounded-full bg-slate-300 border-2 border-white shadow-sm ring-4 ring-white group-hover:bg-indigo-500 transition-colors"></div>
+                                  <div className="text-[11px] font-bold text-slate-400 mb-1 flex items-center gap-1.5 uppercase tracking-tighter">
+                                      {formatDate(h.timestamp)}
+                                  </div>
+                                  <div className="text-[13px] text-slate-700 mb-2">
+                                      <span className="font-black text-slate-900">{h.action}</span>
+                                      <span className="mx-1.5 font-medium text-slate-400 text-xs">por</span>
+                                      <span className="font-black text-slate-800">{h.userName}</span>
+                                  </div>
+                                  <div className="mb-2.5">
+                                      <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-black border border-slate-200 uppercase tracking-tighter">
+                                          Versión: {formatVersionForDisplay(h.version || '-')}
+                                      </span>
+                                  </div>
+                                  {h.comment && (
+                                      <div className="bg-slate-50/80 border border-slate-100 rounded-lg p-3.5 text-xs italic text-slate-600 leading-relaxed shadow-sm relative overflow-hidden">
+                                          <div className="absolute top-0 left-0 w-1 h-full bg-slate-200/50"></div>
+                                          "{h.comment}"
+                                      </div>
+                                  )}
+                              </div>
                           </div>
                       ))}
                   </div>
