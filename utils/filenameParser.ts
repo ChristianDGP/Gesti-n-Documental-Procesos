@@ -136,7 +136,7 @@ export const parseDocumentFilename = (
                   result.estado = vUpper.endsWith('AR') ? 'Revisión Interna Control' : 'Revisión Interna Referente';
                   result.porcentaje = vUpper.endsWith('AR') ? 90 : 80;
               } else {
-                  result.estado = 'Rechazado';
+                  result.estado = 'En Proceso';
                   result.porcentaje = 30;
               }
           } else {
@@ -147,7 +147,7 @@ export const parseDocumentFilename = (
                       result.estado = 'Revisión Interna';
                       result.porcentaje = 60;
                   } else {
-                      result.estado = 'Rechazado';
+                      result.estado = 'En Proceso';
                       result.porcentaje = 30;
                   }
               } else {

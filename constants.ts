@@ -12,7 +12,6 @@ export const STATE_CONFIG: Record<DocState, { label: string; color: string; prog
   [DocState.SENT_TO_CONTROL]: { label: 'Enviado a Control (v1.nAR)', color: 'bg-orange-100 text-orange-800', progress: 90 },
   [DocState.CONTROL_REVIEW]: { label: 'Revisión Interna Control (v1.n.iAR)', color: 'bg-pink-100 text-pink-800', progress: 90 },
   [DocState.APPROVED]: { label: 'Aprobado Final (v1.nACG)', color: 'bg-green-100 text-green-800', progress: 100 },
-  [DocState.REJECTED]: { label: 'Rechazado', color: 'bg-red-100 text-red-800', progress: 0 },
 };
 
 // Mock Users for Simulation

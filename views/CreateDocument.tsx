@@ -23,8 +23,7 @@ const STATE_LEVELS: Record<DocState, number> = {
     [DocState.REFERENT_REVIEW]: 4,
     [DocState.SENT_TO_CONTROL]: 5,
     [DocState.CONTROL_REVIEW]: 5,
-    [DocState.APPROVED]: 6,
-    [DocState.REJECTED]: 0 // Special case
+    [DocState.APPROVED]: 6
 };
 
 const REQUEST_TYPE_LEVELS: Record<RequestType, number> = {
@@ -325,7 +324,7 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   };
 
   const shouldShowOption = (type: RequestType): boolean => {
-      if (!existingDoc || existingDoc.state === DocState.REJECTED) return true;
+      if (!existingDoc) return true;
       const optionLevel = REQUEST_TYPE_LEVELS[type];
       return optionLevel >= existingDocLevel;
   };

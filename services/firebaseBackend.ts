@@ -28,7 +28,7 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         if (/^V\d+\.\d+\.\d+AR$/.test(v)) {
             const parts = v.split('.');
             const i = parseInt(parts[2].replace('AR', ''));
-            return { state: i % 2 !== 0 ? DocState.CONTROL_REVIEW : DocState.REJECTED, progress: 90 };
+            return { state: i % 2 !== 0 ? DocState.CONTROL_REVIEW : DocState.IN_PROCESS, progress: 90 };
         }
         return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     }
@@ -37,12 +37,12 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         const parts = v.split('.');
         if (parts.length === 3) {
             const i = parseInt(parts[2]);
-            return { state: i % 2 !== 0 ? DocState.REFERENT_REVIEW : DocState.REJECTED, progress: 80 };
+            return { state: i % 2 !== 0 ? DocState.REFERENT_REVIEW : DocState.IN_PROCESS, progress: 80 };
         }
         if (parts.length === 2) {
             const n = parseInt(parts[1]);
             if (parts[0] === 'V0') {
-                return { state: n % 2 !== 0 ? DocState.INTERNAL_REVIEW : DocState.REJECTED, progress: 60 };
+                return { state: n % 2 !== 0 ? DocState.INTERNAL_REVIEW : DocState.IN_PROCESS, progress: 60 };
             }
             return { state: DocState.SENT_TO_REFERENT, progress: 80 };
         }
