@@ -235,6 +235,16 @@ export const NotificationService = {
         const batch = writeBatch(db);
         snapshot.docs.forEach(d => batch.update(d.ref, { isRead: true }));
         await batch.commit();
+    },
+    getByUserId: async (userId: string): Promise<Notification[]> => {
+        const q = query(collection(db, "notifications"), where("userId", "==", userId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Notification)).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    },
+    getAll: async (): Promise<Notification[]> => {
+        const q = query(collection(db, "notifications"));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Notification)).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
     }
 };
 

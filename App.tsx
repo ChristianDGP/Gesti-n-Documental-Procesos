@@ -14,6 +14,7 @@ import AdminBI from './views/AdminBI';
 import AdminReferents from './views/AdminReferents';
 import AdminGantt from './views/AdminGantt';
 import AdminEventLog from './views/AdminEventLog';
+import AdminInboxManager from './views/AdminInboxManager';
 import AdminReuseMatrix from './views/AdminReuseMatrix';
 import Reports from './views/Reports'; 
 import Buffer from './views/Buffer';
@@ -114,6 +115,7 @@ const App: React.FC = () => {
                                             <Route path="/admin/users" element={<AdminUsers />} />
                                             <Route path="/admin/database" element={<AdminDatabase />} />
                                             <Route path="/admin/events" element={<AdminEventLog user={user} />} />
+                                            <Route path="/admin/inbox-manager" element={<AdminInboxManager user={user} />} />
                                         </>
                                     )}
                                     <Route 

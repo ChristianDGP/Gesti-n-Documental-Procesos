@@ -161,6 +161,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                     <>
                         <NavItem to="/admin/database" icon={Database} label="Base de Datos" />
                         <NavItem to="/admin/users" icon={Users} label="Usuarios" />
+                        <NavItem to="/admin/inbox-manager" icon={Inbox} label="Gestión Bandeja" />
                     </>
                 )}
               </>
