@@ -210,6 +210,9 @@ export const NotificationService = {
     markAsRead: async (notifId: string) => {
         await updateDoc(doc(db, "notifications", notifId), { isRead: true });
     },
+    delete: async (notifId: string) => {
+        await deleteDoc(doc(db, "notifications", notifId));
+    },
     update: async (notifId: string, updates: Partial<Notification>) => {
         await updateDoc(doc(db, "notifications", notifId), updates);
     },

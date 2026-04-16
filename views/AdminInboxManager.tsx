@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserService, NotificationService, HistoryService } from '../services/firebaseBackend';
 import { migrateUserIds } from '../services/dataMigration';
 import { User, Notification } from '../types';
-import { Search, Mail, RefreshCw, User as UserIcon, AlertTriangle, Database } from 'lucide-react';
+import { Search, Mail, RefreshCw, User as UserIcon, AlertTriangle, Database, Trash2, Send, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -167,24 +167,36 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
                                 <td className="p-3 text-xs text-slate-700">{users.find(u => u.id === n.userId)?.name || `Desconocido (${n.userId})`}</td>
                                 <td className="p-3 text-xs font-medium">{n.title}</td>
                                 <td className="p-3 text-xs text-slate-600">{n.message}</td>
-                                <td className="p-3 text-center flex flex-col gap-1 items-center">
+                                <td className="p-3 text-center flex gap-2 justify-center">
                                     <button 
                                         onClick={() => handleResend(n)}
-                                        className="text-indigo-600 hover:text-indigo-800 font-bold text-xs"
+                                        className="text-indigo-600 hover:text-indigo-800"
+                                        title="Reenviar"
                                     >
-                                        Reenviar
+                                        <Send size={16} />
                                     </button>
-                                    {!users.find(u => u.id === n.userId) && (
-                                        <button 
-                                            onClick={() => {
-                                                setReassigningNotif(n);
-                                                setSelectedNewUserId('');
-                                            }}
-                                            className="text-orange-600 hover:text-orange-800 font-bold text-[10px]"
-                                        >
-                                            Reasignar
-                                        </button>
-                                    )}
+                                    <button 
+                                        onClick={() => {
+                                            setReassigningNotif(n);
+                                            setSelectedNewUserId('');
+                                        }}
+                                        className="text-orange-600 hover:text-orange-800"
+                                        title="Reasignar"
+                                    >
+                                        <RotateCcw size={16} />
+                                    </button>
+                                    <button 
+                                        onClick={async () => {
+                                            if (confirm('¿Estás seguro de eliminar esta notificación?')) {
+                                                await NotificationService.delete(n.id);
+                                                toast.success("Notificación eliminada");
+                                            }
+                                        }}
+                                        className="text-red-600 hover:text-red-800"
+                                        title="Eliminar"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </td>
                             </tr>
                         ))}
