@@ -77,7 +77,8 @@ const WorkList: React.FC<Props> = ({ user }) => {
 
         const myWorkList: Document[] = [];
         const hierarchyKeys = Object.keys(hierarchy);
-        const isCoordOrAdmin = user.role === UserRole.COORDINATOR || user.role === UserRole.ADMIN;
+        const roleUpper = (user.role || '').toString().toUpperCase();
+        const isCoordOrAdmin = roleUpper === 'ADMIN' || roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
         
         hierarchyKeys.forEach(proj => {
             Object.keys(hierarchy[proj]).forEach(macro => {
@@ -96,9 +97,9 @@ const WorkList: React.FC<Props> = ({ user }) => {
                             if (realDocMap.has(key)) {
                                 const realDoc = realDocMap.get(key)!;
                                 const isAssigned = node.assignees && node.assignees.includes(user.id);
-                                const isPendingReview = isCoordOrAdmin && reviewStates.includes(realDoc.state);
+                                const isPendingRequest = isCoordOrAdmin && realDoc.hasPendingRequest;
 
-                                if ((isAssigned || isPendingReview) && realDoc.state !== DocState.APPROVED) {
+                                if (((isAssigned && !isCoordOrAdmin) || isPendingRequest) && realDoc.state !== DocState.APPROVED) {
                                     myWorkList.push({
                                         ...realDoc,
                                         macroprocess: macro,
@@ -109,7 +110,7 @@ const WorkList: React.FC<Props> = ({ user }) => {
                                 }
                             } else {
                                 const isAssigned = node.assignees && node.assignees.includes(user.id);
-                                if (isAssigned) {
+                                if (isAssigned && !isCoordOrAdmin) {
                                     myWorkList.push({
                                         id: `virtual-${key}-${Date.now()}`,
                                         title: `${node.name} - ${type}`,
