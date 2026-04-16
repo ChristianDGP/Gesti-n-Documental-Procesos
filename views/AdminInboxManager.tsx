@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { UserService, NotificationService, HistoryService } from '../services/firebaseBackend';
+import { migrateUserIds } from '../services/dataMigration';
 import { User, Notification } from '../types';
-import { Search, Mail, RefreshCw, User as UserIcon, AlertTriangle } from 'lucide-react';
+import { Search, Mail, RefreshCw, User as UserIcon, AlertTriangle, Database } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -26,7 +27,10 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
     const displayedNotifications = showAll ? filteredNotifications : filteredNotifications.slice(0, 20);
 
     useEffect(() => {
-        UserService.getAll().then(setUsers);
+        UserService.getAll().then(users => {
+            console.log("Fetched users:", users);
+            setUsers(users);
+        });
         NotificationService.getAll().then(setNotifications);
     }, []);
 
@@ -68,9 +72,32 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
         }
     };
 
+    const runMigration = async () => {
+        if (!confirm("¿Está seguro de que desea ejecutar la migración de IDs de usuario? Esto actualizará las notificaciones antiguas.")) return;
+        setLoading(true);
+        try {
+            const count = await migrateUserIds();
+            toast.success(`Migración completada. ${count} notificaciones actualizadas.`);
+            NotificationService.getAll().then(setNotifications);
+        } catch (error) {
+            toast.error("Error al ejecutar la migración");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="p-6 space-y-6">
-            <h1 className="text-2xl font-bold text-slate-900">Gestión de Bandeja de Entrada</h1>
+            <div className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold text-slate-900">Gestión de Bandeja de Entrada</h1>
+                <button
+                    onClick={runMigration}
+                    className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                    <Database size={16} />
+                    Ejecutar Migración de IDs
+                </button>
+            </div>
             
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-2 gap-4">
                 <div>
@@ -135,7 +162,7 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
                             <tr key={n.id}>
                                 <td className="p-3 text-xs text-slate-500">{new Date(n.timestamp).toLocaleString()}</td>
                                 <td className="p-3 text-xs font-bold text-slate-700">{n.actorName}</td>
-                                <td className="p-3 text-xs text-slate-700">{users.find(u => u.id === n.userId)?.name || 'Desconocido'}</td>
+                                <td className="p-3 text-xs text-slate-700">{users.find(u => u.id === n.userId)?.name || `Desconocido (${n.userId})`}</td>
                                 <td className="p-3 text-xs font-medium">{n.title}</td>
                                 <td className="p-3 text-xs text-slate-600">{n.message}</td>
                                 <td className="p-3 text-center">

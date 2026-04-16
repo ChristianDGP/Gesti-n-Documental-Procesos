@@ -253,7 +253,7 @@ export const UserService = {
     try {
         const q = query(collection(db, "users"));
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, active: (doc.data() as any).active ?? true } as User));
+        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
     } catch (e) {
         return [];
     }
