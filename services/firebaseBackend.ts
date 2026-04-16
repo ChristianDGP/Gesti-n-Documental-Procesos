@@ -161,6 +161,13 @@ export const ReferentService = {
 export const NotificationService = {
     create: async (userId: string, docId: string, type: Notification['type'], title: string, message: string, actorName: string) => {
         if (!userId || String(userId).trim() === '') return;
+        
+        const userExists = await UserService.exists(String(userId).trim());
+        if (!userExists) {
+            console.warn(`Intento de crear notificación para usuario inválido: ${userId}. Notificación ignorada.`);
+            return;
+        }
+
         try {
             const notif: Omit<Notification, 'id'> = {
                 userId: String(userId).trim(), 
@@ -202,6 +209,9 @@ export const NotificationService = {
     },
     markAsRead: async (notifId: string) => {
         await updateDoc(doc(db, "notifications", notifId), { isRead: true });
+    },
+    update: async (notifId: string, updates: Partial<Notification>) => {
+        await updateDoc(doc(db, "notifications", notifId), updates);
     },
     updateMultipleReadStatus: async (notifIds: string[], isRead: boolean) => {
         if (notifIds.length === 0) return;
@@ -272,6 +282,11 @@ export const UserService = {
       return userData;
   },
   delete: async (id: string) => { await deleteDoc(doc(db, "users", id)); },
+  exists: async (id: string): Promise<boolean> => {
+      const docRef = doc(db, "users", id);
+      const snapshot = await getDoc(docRef);
+      return snapshot.exists();
+  },
   migrateLegacyReferences: async (oldId: string, newId: string) => {
       const qMatrix = query(collection(db, "process_matrix"), where("assignees", "array-contains", oldId));
       const snapMatrixDocs = await getDocs(qMatrix);

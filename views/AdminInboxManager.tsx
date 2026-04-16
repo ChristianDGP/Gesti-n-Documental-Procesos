@@ -16,6 +16,8 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
     const [showAll, setShowAll] = useState(true);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(false);
+    const [reassigningNotif, setReassigningNotif] = useState<Notification | null>(null);
+    const [selectedNewUserId, setSelectedNewUserId] = useState<string>('');
 
     // Get unique actors from notifications
     const actors = Array.from(new Set(notifications.map(n => n.actorName))).sort();
@@ -165,13 +167,24 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
                                 <td className="p-3 text-xs text-slate-700">{users.find(u => u.id === n.userId)?.name || `Desconocido (${n.userId})`}</td>
                                 <td className="p-3 text-xs font-medium">{n.title}</td>
                                 <td className="p-3 text-xs text-slate-600">{n.message}</td>
-                                <td className="p-3 text-center">
+                                <td className="p-3 text-center flex flex-col gap-1 items-center">
                                     <button 
                                         onClick={() => handleResend(n)}
                                         className="text-indigo-600 hover:text-indigo-800 font-bold text-xs"
                                     >
                                         Reenviar
                                     </button>
+                                    {!users.find(u => u.id === n.userId) && (
+                                        <button 
+                                            onClick={() => {
+                                                setReassigningNotif(n);
+                                                setSelectedNewUserId('');
+                                            }}
+                                            className="text-orange-600 hover:text-orange-800 font-bold text-[10px]"
+                                        >
+                                            Reasignar
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -179,6 +192,42 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
                 </table>
             </div>
 
+            {reassigningNotif && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white p-6 rounded-lg w-full max-w-sm">
+                        <h2 className="text-lg font-bold mb-4">Reasignar Notificación</h2>
+                        <p className="text-sm mb-4">Selecciona el nuevo usuario para la notificación:</p>
+                        <select 
+                            className="w-full border rounded p-2 mb-4"
+                            value={selectedNewUserId}
+                            onChange={(e) => setSelectedNewUserId(e.target.value)}
+                        >
+                            <option value="">Seleccionar usuario...</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                        <div className="flex justify-end gap-2">
+                            <button 
+                                className="px-4 py-2 border rounded text-xs hover:bg-slate-50"
+                                onClick={() => setReassigningNotif(null)}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                className="px-4 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700"
+                                onClick={async () => {
+                                    if (selectedNewUserId) {
+                                        await NotificationService.update(reassigningNotif.id, { userId: selectedNewUserId });
+                                        setReassigningNotif(null);
+                                        toast.success("Notificación reasignada exitosamente");
+                                    }
+                                }}
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
