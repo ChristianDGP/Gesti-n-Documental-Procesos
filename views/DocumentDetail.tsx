@@ -191,9 +191,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         const d = await DocumentService.getById(docId);
         if (d) {
             setDoc(d);
-            // Si veníamos con location.state, lo limpiamos de history para que al refrescar no pise la data fresca
+            // Clear location state to ensure fresh data and prevent reverts on navigation
             if (location.state?.docData) {
-                window.history.replaceState({}, '');
+                navigate(location.pathname, { replace: true, state: {} });
             }
             await loadAuxiliaryData(docId, d);
         } else {
@@ -626,9 +626,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                 </p>
                 <div className="flex items-center gap-2">
                     <div className="flex-1 bg-slate-100 rounded-full h-2 min-w-[80px] overflow-hidden border border-slate-200">
-                        <div className="bg-indigo-600 h-full rounded-full shadow-[0_0_8px_rgba(79,70,229,0.3)] transition-all duration-500" style={{ width: `${config.progress}%` }}></div>
+                        <div className="bg-indigo-600 h-full rounded-full shadow-[0_0_8px_rgba(79,70,229,0.3)] transition-all duration-500" style={{ width: `${doc.progress}%` }}></div>
                     </div>
-                    <span className="font-black text-slate-800">{config.progress}%</span>
+                    <span className="font-black text-slate-800">{doc.progress}%</span>
                 </div>
             </div>
             
