@@ -36,13 +36,24 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
     if (v.startsWith('V')) {
         const parts = v.split('.');
         if (parts.length === 3) {
-            const i = parseInt(parts[2]);
-            return { state: i % 2 !== 0 ? DocState.REFERENT_REVIEW : DocState.IN_PROCESS, progress: 80 };
+            const iStr = parts[2].replace('AR', '');
+            const i = parseInt(iStr);
+            if (!isNaN(i) && i % 2 !== 0) {
+                return { 
+                    state: v.endsWith('AR') ? DocState.CONTROL_REVIEW : DocState.REFERENT_REVIEW, 
+                    progress: v.endsWith('AR') ? 90 : 80 
+                };
+            }
+            return { state: DocState.IN_PROCESS, progress: 30 };
         }
         if (parts.length === 2) {
+            const major = parseInt(parts[0].substring(1));
             const n = parseInt(parts[1]);
-            if (parts[0] === 'V0') {
-                return { state: n % 2 !== 0 ? DocState.INTERNAL_REVIEW : DocState.IN_PROCESS, progress: 60 };
+            if (major === 0) {
+                if (!isNaN(n) && n % 2 !== 0) {
+                    return { state: DocState.INTERNAL_REVIEW, progress: 60 };
+                }
+                return { state: DocState.IN_PROCESS, progress: 30 };
             }
             return { state: DocState.SENT_TO_REFERENT, progress: 80 };
         }
@@ -53,6 +64,14 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
     if (/^0\.\d+$/.test(v)) return { state: DocState.IN_PROCESS, progress: 30 };
     
     return { state: DocState.IN_PROCESS, progress: 30 };
+};
+
+export const getInconsistencyHash = (doc: Document): string => {
+    const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
+    const typeCode = typeMap[doc.docType || ''] || doc.docType || '';
+    const fullNomenclature = `${doc.project} - ${doc.microprocess} - ${typeCode} - ${doc.version}`;
+    const isTooLong = fullNomenclature.length > 60;
+    return `${doc.version || ''}|${doc.state || ''}${isTooLong ? '|TOOLONG' : ''}`;
 };
 
 // UI helper
@@ -461,6 +480,12 @@ export const DocumentService = {
       if(!docSnap.exists()) return;
       const data = docSnap.data() as Document;
       
+      const currentHash = getInconsistencyHash(data);
+      if (!forcedState && data.ignoredInconsistency === currentHash) {
+          // Si el hash coincidece, significa que el administrador marcó esta inconsistencia como válida/ignorada
+          return;
+      }
+
       let state: DocState;
       let progress: number;
 
@@ -494,7 +519,10 @@ export const DocumentService = {
               updatedAt: new Date().toISOString(),
               ignoredInconsistency: null as any
           });
-          await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección ${forcedState ? 'manual' : 'automática'}: ${state} / ${progress}% / Alerta: ${shouldHavePending}`, data.version);
+          
+          if (forcedState) {
+            await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección manual: ${state} / ${progress}% / Alerta: ${shouldHavePending}`, data.version);
+          }
       }
   },
 
@@ -504,9 +532,14 @@ export const DocumentService = {
       if(!docSnap.exists()) throw new Error("Documento no encontrado");
       const currentData = docSnap.data() as Document;
 
+      const finalState = updates.state !== undefined ? updates.state : currentData.state;
+      const finalVersion = updates.version !== undefined ? updates.version : currentData.version;
+      
+      const inconsistencyHash = getInconsistencyHash({ ...currentData, state: finalState, version: finalVersion } as Document);
+
       const finalUpdates: any = {
           updatedAt: updates.updatedAt || new Date().toISOString(),
-          ignoredInconsistency: null as any
+          ignoredInconsistency: inconsistencyHash
       };
 
       if (updates.state !== undefined) finalUpdates.state = updates.state;
@@ -796,7 +829,7 @@ export const IntegrityService = {
                 const isTooLong = fullNomenclature.length > 60;
 
                 if (isInconsistent || isTooLong) {
-                    const currentHash = `${doc.version}|${doc.state}${isTooLong ? '|TOOLONG' : ''}`;
+                    const currentHash = getInconsistencyHash(doc);
                     if (doc.ignoredInconsistency !== currentHash) {
                         count++;
                         inconsistentDocs.push(doc);
@@ -850,6 +883,28 @@ export const DatabaseService = {
         }
       }
     }
+  },
+
+  clearAutomaticHistoryLogs: async (): Promise<number> => {
+    const historyRef = collection(db, 'history');
+    const q = query(historyRef, where('action', '==', 'Sincronización Sistema'));
+    const snapshot = await getDocs(q);
+    
+    let deletedCount = 0;
+    const batch = writeBatch(db);
+    
+    snapshot.docs.forEach((d) => {
+      const data = d.data();
+      if (data.comment && data.comment.includes('automática')) {
+        batch.delete(d.ref);
+        deletedCount++;
+      }
+    });
+    
+    if (deletedCount > 0) {
+      await batch.commit();
+    }
+    return deletedCount;
   },
 
   fullSystemResetAndImport: async (

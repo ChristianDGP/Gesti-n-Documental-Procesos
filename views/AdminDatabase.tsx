@@ -204,6 +204,33 @@ const AdminDatabase: React.FC = () => {
             </button>
         </div>
 
+        {/* Card 3: Cleanup History */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-600">
+                <Clock size={24} />
+            </div>
+            <h2 className="text-lg font-bold text-slate-800 mb-2">Limpieza de Historial</h2>
+            <p className="text-sm text-slate-500 mb-6">
+                Elimina los registros de sincronización automática generados por el sistema.
+            </p>
+            <button 
+                onClick={async () => {
+                    if (window.confirm('¿Seguro que desea eliminar los mensajes de corrección automática del historial?')) {
+                        try {
+                            const count = await DatabaseService.clearAutomaticHistoryLogs();
+                            alert(`Limpieza completada. Se eliminaron ${count} registros.`);
+                        } catch (e: any) {
+                            alert('Error: ' + e.message);
+                        }
+                    }
+                }}
+                className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+            >
+                <RefreshCw size={18} className="mr-2" />
+                Limpiar Logs Automáticos
+            </button>
+        </div>
+
         {/* MAIN CARD: FULL SYSTEM RESET */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-red-200 md:col-span-2 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
