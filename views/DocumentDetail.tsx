@@ -191,6 +191,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
         const d = await DocumentService.getById(docId);
         if (d) {
             setDoc(d);
+            // Si veníamos con location.state, lo limpiamos de history para que al refrescar no pise la data fresca
+            if (location.state?.docData) {
+                window.history.replaceState({}, '');
+            }
             await loadAuxiliaryData(docId, d);
         } else {
             setDoc(null);
@@ -457,8 +461,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           });
           setShowMasterEdit(false);
           setMasterComment('');
+          alert("Cambios maestros aplicados con éxito. Refrescando datos...");
           await loadData(doc.id);
       } catch (e: any) {
+          console.error("Error completo en edición maestra:", e);
           alert("Error en edición maestra: " + e.message);
       } finally {
           setActionLoading(false);
