@@ -21,7 +21,8 @@ export const parseDocumentFilename = (
     result.errores.push(`El nombre del archivo excede 60 caracteres.`);
   }
 
-  const parts = filenameBase.split(' - ');
+  // Split by common hyphen types and trim each part
+  const parts = filenameBase.split(/ [-–—] /).map(p => p.trim());
 
   if (parts.length < 4) {
     result.errores.push('Formato incorrecto. Use: "PROYECTO - Microproceso - TIPO - Versión".');
@@ -29,7 +30,7 @@ export const parseDocumentFilename = (
   }
 
   const proyecto = parts[0].toUpperCase();
-  const version = parts[parts.length - 1].toUpperCase();
+  const version = parts[parts.length - 1].toUpperCase().replace(/\s/g, ''); // Remove any internal spaces in version
   const tipoCodigo = parts[parts.length - 2].toUpperCase();
   const microproceso = parts.slice(1, parts.length - 2).join(' - ');
 
@@ -64,11 +65,11 @@ export const parseDocumentFilename = (
 
   result.nomenclatura = version;
 
-  const regexInitiated = /^0\.0$/;              
-  const regexInProcess = /^0\.(\d+)$/;          
-  const regexInternal = /^V(\d+)\.(\d+)$/;          
-  const regexReferent = /^V(\d+)\.(\d+)\.(\d+)$/;   
-  const regexControl = /^V(\d+)\.(\d+)\.(\d+)AR$/;  
+  const regexInitiated = /^0\.0$/i;              
+  const regexInProcess = /^0\.(\d+)$/i;          
+  const regexInternal = /^V(\d+)\.(\d+)$/i;          
+  const regexReferent = /^V(\d+)\.(\d+)\.(\d+)$/i;   
+  const regexControl = /^V(\d+)\.(\d+)\.(\d+)AR$/i;  
 
   if (expectedRequestType) {
       if (expectedRequestType === 'INITIATED') {

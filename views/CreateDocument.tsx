@@ -326,7 +326,14 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
   const shouldShowOption = (type: RequestType): boolean => {
       if (!existingDoc) return true;
       const optionLevel = REQUEST_TYPE_LEVELS[type];
-      return optionLevel >= existingDocLevel;
+      
+      // Allow re-submitting current level or any higher level
+      let effectiveDocLevel = existingDocLevel;
+      // If we are in "Enviado a...", we should be able to upload for "Revisión Interna..."
+      if (existingDoc.state === DocState.SENT_TO_REFERENT) effectiveDocLevel = 4;
+      if (existingDoc.state === DocState.SENT_TO_CONTROL) effectiveDocLevel = 5;
+
+      return optionLevel >= effectiveDocLevel;
   };
 
   if (initializing) return <div className="p-8 text-center text-slate-500">Cargando permisos...</div>;
