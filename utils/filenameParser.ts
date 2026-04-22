@@ -201,14 +201,14 @@ export const validateCoordinatorRules = (
         m = vUpper.match(/^V(\d+)\.(\d+)$/);
         if (m) {
             const major = parseInt(m[1]);
-            return { major, n: parseInt(m[2]), i: null, ar: false, acg: false, type: major === 0 ? 'v0.n' : 'v1.n' };
+            return { major, n: parseInt(m[2]), i: null, ar: false, acg: false, type: 'vN.n' };
         }
         
         m = vUpper.match(/^V(\d+)\.(\d+)ACG$/);
         if (m) return { major: parseInt(m[1]), n: parseInt(m[2]), i: null, ar: false, acg: true, type: 'vN.nACG' };
         
         m = vUpper.match(/^0\.(\d+)$/);
-        if (m) return { major: 0, n: parseInt(m[1]), i: null, ar: false, acg: false, type: 'v0.n' };
+        if (m) return { major: 0, n: parseInt(m[1]), i: null, ar: false, acg: false, type: 'vN.n' };
         
         return null;
     };
@@ -225,11 +225,11 @@ export const validateCoordinatorRules = (
                     return { valid: false, error: 'Aprobación requiere vN.n.i (Referente), vN.n (Consolidar) o PR (Final).' };
                 }
             } else {
-                if (incoming.type !== 'v1.n') return { valid: false, error: 'Aprobación requiere v1.n (Ej: v1.0).' };
+                if (incoming.type !== 'vN.n' || incoming.major !== 1) return { valid: false, error: 'Aprobación requiere v1.n (Ej: v1.0).' };
             }
             return { valid: true };
         } else {
-            if (incoming.type !== 'v0.n') return { valid: false, error: 'Rechazo requiere v0.n.' };
+            if (incoming.type !== 'vN.n' || incoming.major !== 0) return { valid: false, error: 'Rechazo requiere v0.n.' };
             if (incoming.n! % 2 !== 0) return { valid: false, error: `Para rechazar, "n" (${incoming.n}) debe ser PAR (ej: v0.2, v0.4).` };
             return { valid: true };
         }
