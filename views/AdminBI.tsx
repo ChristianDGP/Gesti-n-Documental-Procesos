@@ -124,7 +124,24 @@ const AdminBI: React.FC<AdminBIProps> = ({ hideHeader = false }) => {
         };
       });
       setDocuments(enrichedDocs);
-      setHistory(hist);
+
+      // Enrich History with Document context
+      const enrichedHist = hist.map(h => {
+        const doc = enrichedDocs.find(d => d.id === h.documentId);
+        if (doc) {
+          return {
+            ...h,
+            project: doc.project,
+            macroprocess: doc.macroprocess,
+            process: doc.process,
+            microprocess: doc.microprocess,
+            docType: doc.docType,
+            title: doc.title
+          };
+        }
+        return h;
+      });
+      setHistory(enrichedHist);
       
       // Flatten hierarchy and enrich with current status from Documents
       const flatHier: any[] = [];
@@ -175,7 +192,7 @@ const AdminBI: React.FC<AdminBIProps> = ({ hideHeader = false }) => {
     if (src === 'DOCUMENTS') {
       setSelectedColumns(['project', 'macroprocess', 'process', 'microprocess', 'docType', 'version', 'state', 'progress', 'authorName', 'updatedAt']);
     } else if (src === 'HISTORY') {
-      setSelectedColumns(['documentId', 'userName', 'action', 'previousState', 'newState', 'version', 'comment', 'timestamp']);
+      setSelectedColumns(['project', 'microprocess', 'docType', 'userName', 'action', 'previousState', 'newState', 'version', 'timestamp']);
     } else if (src === 'HIERARCHY') {
       setSelectedColumns(['project', 'macroprocess', 'process', 'microprocess', 'assignees', 'referents']);
     }
@@ -221,6 +238,9 @@ const AdminBI: React.FC<AdminBIProps> = ({ hideHeader = false }) => {
       ];
     } else if (source === 'HISTORY') {
       return [
+        { key: 'project', label: 'Proyecto' },
+        { key: 'microprocess', label: 'Microproceso' },
+        { key: 'docType', label: 'Tipo Documento' },
         { key: 'userName', label: 'Usuario' },
         { key: 'action', label: 'Acción' },
         { key: 'newState', label: 'Estado Nuevo' },
@@ -246,8 +266,8 @@ const AdminBI: React.FC<AdminBIProps> = ({ hideHeader = false }) => {
       ];
     } else if (source === 'HISTORY') {
       return [
-        'id', 'documentId', 'userId', 'userName', 'action', 'previousState', 
-        'newState', 'version', 'comment', 'timestamp'
+        'id', 'documentId', 'project', 'macroprocess', 'process', 'microprocess', 'docType', 'title', 
+        'userId', 'userName', 'action', 'previousState', 'newState', 'version', 'comment', 'timestamp'
       ];
     } else {
       return [
