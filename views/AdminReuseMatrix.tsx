@@ -631,9 +631,17 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                             const usages = reuUsageMap[reu.id] || [];
                             return (
                                 <div key={reu.id} className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                                    <button 
+                                    <div 
                                         onClick={() => toggleReusable(reu.id)}
                                         className="w-full p-4 bg-slate-50/50 hover:bg-slate-50 border-b border-slate-100 flex justify-between items-center text-left transition-colors cursor-pointer"
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                toggleReusable(reu.id);
+                                            }
+                                        }}
                                     >
                                         <div>
                                             <h4 className="font-bold text-slate-900 flex items-center gap-2">
@@ -683,7 +691,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                 <ExternalLink size={14} />
                                             </button>
                                         </div>
-                                    </button>
+                                    </div>
                                     
                                     <AnimatePresence>
                                         {expandedReusables.has(reu.id) && (
