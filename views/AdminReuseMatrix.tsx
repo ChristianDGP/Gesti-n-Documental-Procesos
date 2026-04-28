@@ -34,6 +34,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
 
   // View expansion state for usages
   const [expandedUsages, setExpandedUsages] = useState<Set<string>>(new Set());
+  const [expandedReusables, setExpandedReusables] = useState<Set<string>>(new Set());
 
   const toggleUsage = (reuId: string, usageId: string) => {
     const key = `${reuId}-${usageId}`;
@@ -43,6 +44,38 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
     } else {
       newExpanded.add(key);
     }
+    setExpandedUsages(newExpanded);
+  };
+
+  const expandAllReusables = (reuMicroprocesses: any[]) => {
+    const newExpanded = new Set<string>();
+    reuMicroprocesses.forEach((reu) => newExpanded.add(reu.id));
+    setExpandedReusables(newExpanded);
+  };
+
+  const collapseAllReusables = () => {
+    setExpandedReusables(new Set());
+  };
+
+  const toggleReusable = (reuId: string) => {
+    const newExpanded = new Set(expandedReusables);
+    if (newExpanded.has(reuId)) {
+        newExpanded.delete(reuId);
+    } else {
+        newExpanded.add(reuId);
+    }
+    setExpandedReusables(newExpanded);
+  };
+
+  const expandAllUsages = (reuId: string, usages: any[]) => {
+    const newExpanded = new Set(expandedUsages);
+    usages.forEach(u => newExpanded.add(`${reuId}-${u.id}`));
+    setExpandedUsages(newExpanded);
+  };
+
+  const collapseAllUsages = (reuId: string, usages: any[]) => {
+    const newExpanded = new Set(expandedUsages);
+    usages.forEach(u => newExpanded.delete(`${reuId}-${u.id}`));
     setExpandedUsages(newExpanded);
   };
 
@@ -563,15 +596,31 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                         </h3>
                         <p className="text-xs text-slate-500 mt-1">Vista rápida de todos los componentes REU y sus microprocesos vinculados.</p>
                     </div>
-                    <div className="relative w-full md:w-80">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input 
-                            type="text" 
-                            placeholder="Buscar por nombre de REU..." 
-                            value={viewSearchTerm}
-                            onChange={(e) => setViewSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 w-full md:w-auto">
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => expandAllReusables(reuMicroprocesses)}
+                                className="px-3 py-2 text-xs font-bold font-mono text-slate-500 hover:text-indigo-600 bg-white border border-slate-200 hover:border-indigo-200 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                                EXPANDIR TODO
+                            </button>
+                            <button 
+                                onClick={collapseAllReusables}
+                                className="px-3 py-2 text-xs font-bold font-mono text-slate-500 hover:text-indigo-600 bg-white border border-slate-200 hover:border-indigo-200 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                                CONTRAER TODO
+                            </button>
+                        </div>
+                        <div className="relative w-full md:w-80">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input 
+                                type="text" 
+                                placeholder="Buscar por nombre de REU..." 
+                                value={viewSearchTerm}
+                                onChange={(e) => setViewSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -582,13 +631,20 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                             const usages = reuUsageMap[reu.id] || [];
                             return (
                                 <div key={reu.id} className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+                                    <button 
+                                        onClick={() => toggleReusable(reu.id)}
+                                        className="w-full p-4 bg-slate-50/50 hover:bg-slate-50 border-b border-slate-100 flex justify-between items-center text-left transition-colors cursor-pointer"
+                                    >
                                         <div>
                                             <h4 className="font-bold text-slate-900 flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                                {expandedReusables.has(reu.id) ? (
+                                                    <ChevronDown size={16} className="text-indigo-500" />
+                                                ) : (
+                                                    <ChevronRight size={16} className="text-indigo-500" />
+                                                )}
                                                 {reu.name}
                                             </h4>
-                                            <div className="flex items-center gap-3 mt-1">
+                                            <div className="flex items-center gap-3 mt-1 ml-6">
                                                 <div className="flex items-center gap-1">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{reu.macro}</span>
                                                     <span className="text-slate-300">•</span>
@@ -612,7 +668,7 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                 })()}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-4 border-l border-slate-200 pl-4" onClick={(e) => e.stopPropagation()}>
                                             <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${usages.length > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'}`}>
                                                 {usages.length} VÍNCULOS
                                             </span>
@@ -627,8 +683,17 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                 <ExternalLink size={14} />
                                             </button>
                                         </div>
-                                    </div>
-                                    <div className="p-4">
+                                    </button>
+                                    
+                                    <AnimatePresence>
+                                        {expandedReusables.has(reu.id) && (
+                                            <motion.div 
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="p-4">
                                         {usages.length === 0 ? (
                                             <p className="text-xs text-slate-400 italic text-center py-4">Este componente no está vinculado a ningún microproceso.</p>
                                         ) : (
@@ -753,7 +818,10 @@ const AdminReuseMatrix: React.FC<Props> = ({ user }) => {
                                                 })}
                                             </div>
                                         )}
-                                    </div>
+                                        </div>
+                                    </motion.div>
+                                    )}
+                                    </AnimatePresence>
                                 </div>
                             );
                         })}
