@@ -30,6 +30,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     
     // Estado para manejar la selección manual de estados en la tabla
     const [manualStates, setManualStates] = useState<Record<string, DocState>>({});
+    const [togglingId, setTogglingId] = useState<string | null>(null);
     
     const canAudit = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canAuditEvents;
 
@@ -95,13 +96,11 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
             const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(expectedState) && 
                             (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
 
-            const expectedPending = [
-                DocState.INTERNAL_REVIEW, 
-                DocState.REFERENT_REVIEW, 
-                DocState.CONTROL_REVIEW
-            ].includes(expectedState) || isStale;
+            // La expectativa del sistema es que si hay una alerta, sea por estancamiento o porque es un estado de revisión.
+            // Pero si hasPendingRequest es false en un estado de revisión, lo aceptamos como un "rechazo procesado".
+            const expectedPending = isStale ? true : doc.hasPendingRequest;
 
-            const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
+            const isInconsistent = doc.state !== expectedState || (isStale && !doc.hasPendingRequest);
             
             // Nueva validación: Longitud de nomenclatura > 60
             const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
@@ -172,6 +171,22 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
 
     const handleManualStateChange = (docId: string, newState: DocState) => {
         setManualStates(prev => ({ ...prev, [docId]: newState }));
+    };
+
+    const handleTogglePending = async (docId: string, currentStatus: boolean) => {
+        if (togglingId) return;
+        setTogglingId(docId);
+        try {
+            await DocumentService.masterUpdate(docId, user, { 
+                hasPendingRequest: !currentStatus,
+                comment: `Cambio manual de Alerta de Gestión (Solicitud Pendiente) a ${!currentStatus ? 'ACTIVA' : 'INACTIVA'} vía Log de Eventos.`
+            });
+            await loadData();
+        } catch (e: any) {
+            alert("Error al cambiar estado de solicitud: " + e.message);
+        } finally {
+            setTogglingId(null);
+        }
     };
 
     if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando integridad de la base de datos...</div>;
@@ -302,12 +317,8 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                 const info = determineStateFromVersion(doc.version);
                                 const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(info.state) && 
                                                 (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
-                                const expectedPending = [
-                                    DocState.INTERNAL_REVIEW, 
-                                    DocState.REFERENT_REVIEW, 
-                                    DocState.CONTROL_REVIEW
-                                ].includes(info.state) || isStale;
-                                const isPendingMismatch = doc.hasPendingRequest !== expectedPending;
+                                
+                                const isPendingMismatch = isStale && !doc.hasPendingRequest;
                                 const currentManualState = manualStates[doc.id] || doc.state;
                                 
                                 return (
@@ -348,12 +359,24 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                 </select>
                                                 <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                                             </div>
-                                            {doc.hasPendingRequest && (
-                                                <div className="mt-1 text-[8px] font-black text-blue-600 uppercase tracking-tighter flex items-center gap-1 ml-1">
-                                                    <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div>
-                                                    Alerta de Gestión Registrada
-                                                </div>
-                                            )}
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <label className="flex items-center gap-2 cursor-pointer group/check">
+                                                    <div className="relative flex items-center justify-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={doc.hasPendingRequest || false}
+                                                            onChange={() => handleTogglePending(doc.id, !!doc.hasPendingRequest)}
+                                                            disabled={!canAudit || togglingId === doc.id}
+                                                            className="peer sr-only"
+                                                        />
+                                                        <div className={`w-8 h-4 rounded-full transition-colors duration-200 ease-in-out ${doc.hasPendingRequest ? 'bg-blue-600' : 'bg-slate-300'} peer-disabled:opacity-50`}></div>
+                                                        <div className={`absolute left-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 ease-in-out transform ${doc.hasPendingRequest ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                                    </div>
+                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${doc.hasPendingRequest ? 'text-blue-700' : 'text-slate-500'}`}>
+                                                        {togglingId === doc.id ? 'Ajustando...' : (doc.hasPendingRequest ? 'SOLICITUD: ACTIVA' : 'SOLICITUD: INACTIVA')}
+                                                    </span>
+                                                </label>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-black text-slate-600">

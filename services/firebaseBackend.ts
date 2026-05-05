@@ -499,15 +499,13 @@ export const DocumentService = {
       const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(state) && 
                       (new Date().getTime() - new Date(data.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
 
-      const shouldHavePending = [
-          DocState.INTERNAL_REVIEW, 
-          DocState.REFERENT_REVIEW, 
-          DocState.CONTROL_REVIEW
-      ].includes(state) || isStale;
+      // La solicitud pendiente solo es "true" si el sistema detecta una anomalía de estancamiento (stale)
+      // No debe forzarse por el estado de revisión, ya que eso depende de si el analista solicitó o si el coordinador ya actuó.
+      const shouldHavePending = isStale ? true : data.hasPendingRequest;
 
       const needsUpdate = data.state !== state || 
                           data.progress !== progress || 
-                          data.hasPendingRequest !== shouldHavePending;
+                          (isStale && !data.hasPendingRequest);
 
       if (needsUpdate) {
           await updateDoc(docRef, { 

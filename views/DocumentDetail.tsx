@@ -499,15 +499,12 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   // NUEVA LÓGICA DE DETECCIÓN DE INCONSISTENCIA (INCLUYE PENDING STATUS)
   const expectedInfo = determineStateFromVersion(doc.version);
   const expectedState = expectedInfo.state;
-  const expectedPending = [
-      DocState.INTERNAL_REVIEW, 
-      DocState.SENT_TO_REFERENT, 
-      DocState.REFERENT_REVIEW, 
-      DocState.SENT_TO_CONTROL, 
-      DocState.CONTROL_REVIEW
-  ].includes(expectedState);
-  
-  const isInconsistent = !doc.id.startsWith('virtual-') && (doc.state !== expectedState || doc.hasPendingRequest !== expectedPending);
+  const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(expectedState) && 
+                  (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
+
+  // La solicitud pendiente solo es "esperada" si es stale. 
+  // Para los estados de revisión, confiamos en hasPendingRequest actual como el estado de la solicitud.
+  const isInconsistent = !doc.id.startsWith('virtual-') && (doc.state !== expectedState || (isStale && !doc.hasPendingRequest));
 
   const canReview = isCoordinatorOrAdmin && [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(doc.state);
 
