@@ -26,9 +26,7 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
     
     if (v.endsWith('AR')) {
         if (/^V\d+\.\d+\.\d+AR$/.test(v)) {
-            const parts = v.split('.');
-            const i = parseInt(parts[2].replace('AR', ''));
-            return { state: i % 2 !== 0 ? DocState.CONTROL_REVIEW : DocState.IN_PROCESS, progress: 90 };
+            return { state: DocState.CONTROL_REVIEW, progress: 90 };
         }
         return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     }
@@ -38,7 +36,7 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         if (parts.length === 3) {
             const iStr = parts[2].replace('AR', '');
             const i = parseInt(iStr);
-            if (!isNaN(i) && i % 2 !== 0) {
+            if (!isNaN(i)) {
                 return { 
                     state: v.endsWith('AR') ? DocState.CONTROL_REVIEW : DocState.REFERENT_REVIEW, 
                     progress: v.endsWith('AR') ? 90 : 80 
@@ -50,10 +48,7 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
             const major = parseInt(parts[0].substring(1));
             const n = parseInt(parts[1]);
             if (major === 0) {
-                if (!isNaN(n) && n % 2 !== 0) {
-                    return { state: DocState.INTERNAL_REVIEW, progress: 60 };
-                }
-                return { state: DocState.IN_PROCESS, progress: 30 };
+                return { state: DocState.INTERNAL_REVIEW, progress: 60 };
             }
             return { state: DocState.SENT_TO_REFERENT, progress: 80 };
         }
@@ -427,23 +422,44 @@ export const DocumentService = {
         finalDocData = { ...newDocData, id: docRef.id } as Document;
     }
 
-    // Si es una carga de revisión (como v0.1), notificar a supervisores
+    // Si es una carga de revisión (como v0.1) o una respuesta por parte del coordinador (v0.2), notificar a quien corresponda
     if (isSubmission) {
         const allUsers = await UserService.getAll();
-        const supervisors = allUsers.filter(u => {
-            const role = String(u.role || '').toUpperCase();
-            return (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') && u.id !== author.id;
-        });
-
-        const projectName = hierarchy?.project || '';
-        const docType = hierarchy?.docType || '';
+        
+        const projectName = hierarchy?.project || finalDocData?.project || '';
+        const docType = hierarchy?.docType || finalDocData?.docType || '';
         const microName = hierarchy?.micro || title.split(' - ')[0];
+        
+        const authorRole = String(author.role || '').toUpperCase();
+        const isCoordinator = authorRole === 'ADMIN' || authorRole === 'COORDINATOR' || authorRole === 'COORDINADOR';
+        
+        const recipientIds = new Set<string>();
+
+        if (isCoordinator) {
+            // Si el Coordinador sube un archivo durante la revisión (ej. v0.4 par como respuesta/rechazo), notificar al analista
+            const assignees = finalDocData?.assignees || [];
+            assignees.forEach(uid => recipientIds.add(uid));
+            if (finalDocData?.authorId) recipientIds.add(finalDocData.authorId);
+        } else {
+            // Si el Analista sube un archivo (ej. v0.1 impar como solicitud), notificar a los supervisores
+            allUsers.forEach(u => {
+                const role = String(u.role || '').toUpperCase();
+                if (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') {
+                    recipientIds.add(u.id);
+                }
+            });
+        }
+        
+        // Evitar auto-notificarse
+        recipientIds.delete(author.id);
+
         const notifTitle = `Nueva Carga: ${projectName ? projectName + ' - ' : ''}${microName}${docType ? ' - ' : ''}${docType}`;
         const displayVersion = formatVersionForDisplay(version);
-        const notifMsg = `${author.name} ha cargado la versión ${displayVersion} para revisión.`;
+        const actionText = isCoordinator ? 'ha devuelto con correcciones' : 'ha solicitado revisión de';
+        const notifMsg = `${author.name} ${actionText} la versión ${displayVersion}.`;
         
-        const notificationPromises = supervisors.map(s => 
-            NotificationService.create(s.id, finalDocId, 'UPLOAD', notifTitle, notifMsg, author.name)
+        const notificationPromises = Array.from(recipientIds).map(uid => 
+            NotificationService.create(uid, finalDocId, 'UPLOAD', notifTitle, notifMsg, author.name)
         );
         await Promise.all(notificationPromises);
     }
