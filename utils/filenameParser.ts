@@ -133,24 +133,16 @@ export const parseDocumentFilename = (
           if (parts.length > 2) {
               const iStr = parts[2].replace('AR', '');
               const i = parseInt(iStr);
-              if (!isNaN(i) && i % 2 !== 0) {
-                  result.estado = vUpper.endsWith('AR') ? 'Revisión Interna Control' : 'Revisión Interna Referente';
-                  result.porcentaje = vUpper.endsWith('AR') ? 90 : 80;
-              } else {
-                  result.estado = 'En Proceso';
-                  result.porcentaje = 30;
-              }
+              // Los rechazos mantienen el estado correspondiente y su progreso
+              result.estado = vUpper.endsWith('AR') ? 'Revisión Interna Control' : 'Revisión Interna Referente';
+              result.porcentaje = vUpper.endsWith('AR') ? 90 : 80;
           } else {
               const major = parseInt(parts[0].substring(1));
               const n = parseInt(parts[1]);
               if (major === 0) {
-                  if (!isNaN(n) && n % 2 !== 0) {
-                      result.estado = 'Revisión Interna';
-                      result.porcentaje = 60;
-                  } else {
-                      result.estado = 'En Proceso';
-                      result.porcentaje = 30;
-                  }
+                  // Los rechazos mantienen el estado de revisión interna y su progreso
+                  result.estado = 'Revisión Interna';
+                  result.porcentaje = 60;
               } else {
                   result.estado = 'Enviado a Referente';
                   result.porcentaje = 80;

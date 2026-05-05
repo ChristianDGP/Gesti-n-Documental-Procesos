@@ -28,7 +28,8 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         if (/^V\d+\.\d+\.\d+AR$/.test(v)) {
             const parts = v.split('.');
             const i = parseInt(parts[2].replace('AR', ''));
-            return { state: i % 2 !== 0 ? DocState.CONTROL_REVIEW : DocState.IN_PROCESS, progress: 90 };
+            // Los rechazos (i par) ahora mantienen el estado de revisión y el progreso
+            return { state: DocState.CONTROL_REVIEW, progress: 90 };
         }
         return { state: DocState.SENT_TO_CONTROL, progress: 90 };
     }
@@ -38,22 +39,19 @@ export const determineStateFromVersion = (version: string): { state: DocState, p
         if (parts.length === 3) {
             const iStr = parts[2].replace('AR', '');
             const i = parseInt(iStr);
-            if (!isNaN(i) && i % 2 !== 0) {
-                return { 
-                    state: v.endsWith('AR') ? DocState.CONTROL_REVIEW : DocState.REFERENT_REVIEW, 
-                    progress: v.endsWith('AR') ? 90 : 80 
-                };
-            }
-            return { state: DocState.IN_PROCESS, progress: 30 };
+            // Los rechazos mantienen el estado correspondiente y su progreso
+            return { 
+                state: v.endsWith('AR') ? DocState.CONTROL_REVIEW : DocState.REFERENT_REVIEW, 
+                progress: v.endsWith('AR') ? 90 : 80 
+            };
         }
         if (parts.length === 2) {
             const major = parseInt(parts[0].substring(1));
             const n = parseInt(parts[1]);
             if (major === 0) {
-                if (!isNaN(n) && n % 2 !== 0) {
-                    return { state: DocState.INTERNAL_REVIEW, progress: 60 };
-                }
-                return { state: DocState.IN_PROCESS, progress: 30 };
+                const n = parseInt(parts[1]);
+                // Los rechazos mantienen el estado de revisión interna y su progreso
+                return { state: DocState.INTERNAL_REVIEW, progress: 60 };
             }
             return { state: DocState.SENT_TO_REFERENT, progress: 80 };
         }

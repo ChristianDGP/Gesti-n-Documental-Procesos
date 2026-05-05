@@ -24,7 +24,6 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [hierarchy, setHierarchy] = useState<FullHierarchy | null>(null);
     const [loading, setLoading] = useState(true);
-    const [syncingAll, setSyncingAll] = useState(false);
     const [syncingId, setSyncingId] = useState<string | null>(null);
     const [discardingId, setDiscardingId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -169,22 +168,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
         }
     };
 
-    const handleSyncAll = async () => {
-        if (filteredInconsistent.length === 0) return;
-        if (!window.confirm(`¿Está seguro de sincronizar automáticamente los ${filteredInconsistent.length} documentos? El sistema aplicará la lógica de nomenclatura institucional a todos ellos.`)) return;
-        
-        setSyncingAll(true);
-        try {
-            const promises = filteredInconsistent.map(d => DocumentService.syncMetadata(d.id, user));
-            await Promise.all(promises);
-            await loadData();
-            alert("Sincronización masiva completada con éxito.");
-        } catch (e: any) {
-            alert("Error en sincronización masiva: " + e.message);
-        } finally {
-            setSyncingAll(false);
-        }
-    };
+
 
     const handleManualStateChange = (docId: string, newState: DocState) => {
         setManualStates(prev => ({ ...prev, [docId]: newState }));
@@ -204,16 +188,6 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                     </h1>
                     <p className="text-slate-500">Buffer de inconsistencias detectadas automáticamente en metadatos y estructura.</p>
                 </div>
-                {inconsistentDocs.length > 0 && canAudit && (
-                    <button 
-                        onClick={handleSyncAll}
-                        disabled={syncingAll}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-100 hover:bg-amber-700 transition-all active:scale-95 disabled:opacity-50"
-                    >
-                        {syncingAll ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                        Sincronización Masiva ({inconsistentDocs.length})
-                    </button>
-                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
