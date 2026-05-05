@@ -81,6 +81,21 @@ export const formatVersionForDisplay = (v: string): string => {
     return v;
 };
 
+export const isEvenVersion = (version: string): boolean => {
+    const v = (version || '').trim().toUpperCase();
+    if (!v || v === '-' || v === '0') return false;
+    const parts = v.split('.');
+    if (parts.length === 3) {
+        const i = parseInt(parts[2].replace('AR', ''));
+        return !isNaN(i) && i % 2 === 0;
+    }
+    if (parts.length === 2) {
+        const n = parseInt(parts[1]);
+        return !isNaN(n) && n % 2 === 0;
+    }
+    return false;
+};
+
 export const normalizeHeader = (header: string): string => {
     if (!header) return '';
     return header.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/^"|"$/g, ''); 
@@ -519,6 +534,24 @@ export const DocumentService = {
           if (forcedState) {
             await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección manual: ${state} / ${progress}% / Alerta: ${shouldHavePending}`, data.version);
           }
+
+          // Notificar si el estado cambió o si se activó una alerta
+          if (state !== data.state || (shouldHavePending && !data.hasPendingRequest)) {
+              const allUsers = await UserService.getAll();
+              const supervisors = allUsers.filter(u => {
+                  const role = String(u.role || '').toUpperCase();
+                  return (role === 'ADMIN' || role === 'COORDINATOR' || role === 'COORDINADOR') && u.id !== user.id;
+              });
+
+              const microName = data.microprocess || data.title.split(' - ')[0];
+              const displayVersion = formatVersionForDisplay(data.version);
+              const notifTitle = `Sincronización Metadatos: ${data.project} - ${microName}`;
+              const notifMsg = `Se ha sincronizado el documento a estado ${STATE_CONFIG[state].label} (${displayVersion}). Alerta: ${shouldHavePending ? 'ACTIVA' : 'INACTIVA'}.`;
+              
+              await Promise.all(supervisors.map(s => 
+                  NotificationService.create(s.id, docId, 'COMMENT', notifTitle, notifMsg, user.name)
+              ));
+          }
       }
   },
 
@@ -817,7 +850,8 @@ export const IntegrityService = {
                     DocState.CONTROL_REVIEW
                 ].includes(expectedState) || isStale;
 
-                const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
+                const isEvenAndPending = isEvenVersion(doc.version) && doc.hasPendingRequest;
+                const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending || isEvenAndPending;
                 
                 const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
                 const typeCode = typeMap[doc.docType || ''] || doc.docType || '';

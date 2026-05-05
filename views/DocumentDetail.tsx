@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader, determineStateFromVersion, formatVersionForDisplay } from '../services/firebaseBackend';
+import { DocumentService, HistoryService, UserService, HierarchyService, ReferentService, normalizeHeader, determineStateFromVersion, formatVersionForDisplay, isEvenVersion } from '../services/firebaseBackend';
 import { Document, User, DocHistory, UserRole, DocState, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename, validateCoordinatorRules, getCoordinatorRuleHint } from '../utils/filenameParser';
@@ -504,7 +504,9 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   // La solicitud pendiente solo es "esperada" si es stale. 
   // Para los estados de revisión, confiamos en hasPendingRequest actual como el estado de la solicitud.
-  const isInconsistent = !doc.id.startsWith('virtual-') && (doc.state !== expectedState || (isStale && !doc.hasPendingRequest));
+  // Pero un "par" con solicitud activa es una inconsistencia según requerimiento del usuario.
+  const isEvenAndPending = isEvenVersion(doc.version) && doc.hasPendingRequest;
+  const isInconsistent = !doc.id.startsWith('virtual-') && (doc.state !== expectedState || (isStale && !doc.hasPendingRequest) || isEvenAndPending);
 
   const canReview = isCoordinatorOrAdmin && [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW, DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(doc.state);
 
@@ -557,6 +559,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                       <p className="text-sm font-black text-amber-900 uppercase tracking-tighter">Inconsistencia Detectada en Metadatos</p>
                       <p className="text-xs text-amber-800 font-medium">
                           La versión "{formatVersionForDisplay(doc.version)}" no coincide con el estado o la alerta de gestión actual.
+                          {isEvenVersion(doc.version) && doc.hasPendingRequest && <span className="block font-black mt-1">Detectada alerta activa en revisión/rechazo (v.par).</span>}
                       </p>
                   </div>
               </div>
