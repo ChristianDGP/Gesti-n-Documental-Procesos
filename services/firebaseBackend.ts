@@ -511,16 +511,14 @@ export const DocumentService = {
           progress = autoInfo.progress;
       }
       
-      const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(state) && 
-                      (new Date().getTime() - new Date(data.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
-
-      // La solicitud pendiente solo es "true" si el sistema detecta una anomalía de estancamiento (stale)
-      // No debe forzarse por el estado de revisión, ya que eso depende de si el analista solicitó o si el coordinador ya actuó.
-      const shouldHavePending = isStale ? true : data.hasPendingRequest;
+      // La alerta es manual, EXCEPTO en versiones pares (rechazo) donde DEBE estar apagada.
+      const isEvenAndPending = isEvenVersion(data.version) && data.hasPendingRequest;
+      const shouldHavePending = isEvenAndPending ? false : data.hasPendingRequest;
 
       const needsUpdate = data.state !== state || 
                           data.progress !== progress || 
-                          (isStale && !data.hasPendingRequest);
+                          data.hasPendingRequest !== shouldHavePending ||
+                          isEvenAndPending;
 
       if (needsUpdate) {
           await updateDoc(docRef, { 
@@ -841,13 +839,12 @@ export const IntegrityService = {
             docs.forEach(doc => {
                 const expectedInfo = determineStateFromVersion(doc.version);
                 const expectedState = expectedInfo.state;
-                const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(expectedState) && 
-                                (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
-
-                const expectedPending = isStale ? true : doc.hasPendingRequest;
+                
+                // La alerta es manual. Solo es inconsistente si es versión PAR y tiene alerta ACTIVA.
+                const expectedPending = isEvenVersion(doc.version) ? false : doc.hasPendingRequest;
 
                 const isEvenAndPending = isEvenVersion(doc.version) && doc.hasPendingRequest;
-                const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending || isEvenAndPending;
+                const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending;
                 
                 const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
                 const typeCode = typeMap[doc.docType || ''] || doc.docType || '';

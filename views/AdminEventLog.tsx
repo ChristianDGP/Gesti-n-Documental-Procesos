@@ -93,15 +93,12 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
         return documents.filter(doc => {
             const expectedInfo = determineStateFromVersion(doc.version);
             const expectedState = expectedInfo.state;
-            const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(expectedState) && 
-                            (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
 
-            // La expectativa del sistema es que si hay una alerta, sea por estancamiento o porque es un estado de revisión.
-            // Pero si hasPendingRequest es false en un estado de revisión, lo aceptamos como un "rechazo procesado".
-            const expectedPending = isStale ? true : doc.hasPendingRequest;
+            // La alerta es manual. Solo es inconsistente si es versión PAR y tiene alerta ACTIVA.
+            const expectedPending = isEvenVersion(doc.version) ? false : doc.hasPendingRequest;
+            const isPendingMismatch = doc.hasPendingRequest !== expectedPending;
 
-            const isEvenAndPending = isEvenVersion(doc.version) && doc.hasPendingRequest;
-            const isInconsistent = doc.state !== expectedState || (isStale && !doc.hasPendingRequest) || isEvenAndPending;
+            const isInconsistent = doc.state !== expectedState || isPendingMismatch;
             
             // Nueva validación: Longitud de nomenclatura > 60
             const typeMap: Record<string, string> = { 'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM' };
@@ -316,11 +313,8 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                 </tr>
                             ) : filteredInconsistent.map(doc => {
                                 const info = determineStateFromVersion(doc.version);
-                                const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(info.state) && 
-                                                (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
-                                
                                 const isEvenAndPending = isEvenVersion(doc.version) && doc.hasPendingRequest;
-                                const isPendingMismatch = (isStale && !doc.hasPendingRequest) || isEvenAndPending;
+                                const isPendingMismatch = isEvenAndPending;
                                 const currentManualState = manualStates[doc.id] || doc.state;
                                 
                                 return (
@@ -396,7 +390,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                                 {isPendingMismatch && (
                                                     <div className="flex items-center gap-1.5 text-amber-600 text-[11px] font-bold bg-amber-50/50 px-2 py-1 rounded border border-amber-100">
                                                         <AlertTriangle className="w-3 h-3" />
-                                                        {isEvenAndPending ? 'Alerta en Rechazo (v.par)' : 'Alerta desincronizada'}
+                                                        Alerta en Rechazo (v.par)
                                                     </div>
                                                 )}
                                                 {(() => {
