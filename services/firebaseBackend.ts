@@ -650,6 +650,11 @@ export const DocumentService = {
       if (currentDoc.assignees) {
           currentDoc.assignees.forEach(uid => finalRecipientIds.add(uid));
       }
+
+      // 4. Notificar al Analista Responsable (assignedTo)
+      if (currentDoc.assignedTo) {
+          finalRecipientIds.add(currentDoc.assignedTo);
+      }
       
       // No notificarse a sí mismo
       finalRecipientIds.delete(user.id);
@@ -876,6 +881,55 @@ export const IntegrityService = {
             unsubDocs();
             unsubMatrix();
         };
+    },
+
+    repairRejectionNotifications: async (onProgress: (p: number, s: string) => void): Promise<{ repaired: number }> => {
+        onProgress(10, "Buscando documentos rechazados...");
+        const snap = await getDocs(collection(db, "documents"));
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Document));
+        
+        // Filtrar documentos en versión par (rechazado)
+        const rejectedDocs = docs.filter(doc => isEvenVersion(doc.version) && (doc.assignedTo || (doc.assignees && doc.assignees.length > 0)));
+        
+        let repairedCount = 0;
+        const total = rejectedDocs.length;
+        
+        for (let i = 0; i < total; i++) {
+            const docObj = rejectedDocs[i];
+            const progress = 10 + (i / total) * 80;
+            onProgress(progress, `Analizando: ${docObj.project} - ${docObj.title}...`);
+
+            const recipients = new Set<string>();
+            if (docObj.assignedTo && docObj.assignedTo !== 'system') recipients.add(docObj.assignedTo);
+            if (docObj.assignees) docObj.assignees.forEach(uid => recipients.add(uid));
+
+            for (const uid of recipients) {
+                // Verificar si el usuario ya tiene una notificación para este documento en este estado
+                const notifsSnap = await getDocs(query(
+                    collection(db, "notifications"),
+                    where("documentId", "==", docObj.id),
+                    where("userId", "==", uid)
+                ));
+                
+                const alreadyNotified = notifsSnap.docs.some(n => {
+                    const d = n.data();
+                    return d.title.includes("Rechazo") && d.title.includes(formatVersionForDisplay(docObj.version));
+                });
+
+                if (!alreadyNotified) {
+                    const microName = docObj.microprocess || docObj.title.split(' - ')[0];
+                    const displayVersion = formatVersionForDisplay(docObj.version);
+                    const notifTitle = `Notificación Pendiente: Rechazo ${docObj.project} - ${microName}`;
+                    const notifMsg = `Su documento ha sido rechazado (${displayVersion}). Por favor revise las observaciones en el historial. (Corrección automática de stock)`;
+                    
+                    await NotificationService.create(uid, docObj.id, 'COMMENT', notifTitle, notifMsg, 'Sistema (Reparación)');
+                    repairedCount++;
+                }
+            }
+        }
+        
+        onProgress(100, `Finalizado. Se crearon ${repairedCount} notificaciones recuperadas.`);
+        return { repaired: repairedCount };
     }
 };
 

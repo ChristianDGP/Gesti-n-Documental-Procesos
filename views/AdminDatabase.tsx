@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DatabaseService, SystemConfigService } from '../services/firebaseBackend';
-import { Download, Upload, Database, AlertTriangle, Save, FileSpreadsheet, RefreshCw, CheckSquare, Clock, Search, Hammer, Power } from 'lucide-react';
+import { DatabaseService, SystemConfigService, DocumentService } from '../services/firebaseBackend';
+import { Download, Upload, Database, AlertTriangle, Save, FileSpreadsheet, RefreshCw, CheckSquare, Clock, Search, Hammer, Power, BellRing } from 'lucide-react';
 
 const AdminDatabase: React.FC = () => {
   const navigate = useNavigate();
@@ -37,6 +37,29 @@ const AdminDatabase: React.FC = () => {
   const [resetStatus, setResetStatus] = useState<string>('Esperando inicio...');
   const [userConfirmed, setUserConfirmed] = useState(false); 
   
+  const [isRepairingNotifs, setIsRepairingNotifs] = useState(false);
+  const [repairProgress, setRepairProgress] = useState(0);
+  const [repairStatus, setRepairStatus] = useState('');
+
+  const handleRepairNotifs = async () => {
+    if (!window.confirm('¿Desea crear retroactivamente las notificaciones de rechazo faltantes para los analistas asignados?')) return;
+    
+    setIsRepairingNotifs(true);
+    try {
+        const result = await (DocumentService as any).repairRejectionNotifications((p: number, s: string) => {
+            setRepairProgress(p);
+            setRepairStatus(s);
+        });
+        alert(`Operación exitosa: Se recuperaron ${result.repaired} notificaciones.`);
+    } catch (e: any) {
+        alert("Error: " + e.message);
+    } finally {
+        setIsRepairingNotifs(false);
+        setRepairProgress(0);
+        setRepairStatus('');
+    }
+  };
+
   const [rulesFile, setRulesFile] = useState<File | null>(null);
   const [historyFile, setHistoryFile] = useState<File | null>(null);
   
@@ -279,11 +302,45 @@ const AdminDatabase: React.FC = () => {
                         }
                     }
                 }}
-                className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+                className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium shadow-sm mb-4"
             >
                 <RefreshCw size={18} className="mr-2" />
                 Limpiar Logs Automáticos
             </button>
+        </div>
+
+        {/* Card 4: Repair Notifications */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mb-4 text-indigo-600">
+                <BellRing size={24} />
+            </div>
+            <h2 className="text-lg font-bold text-slate-800 mb-2">Reparar Notificaciones</h2>
+            <p className="text-sm text-slate-500 mb-6">
+                Genera notificaciones de rechazo retroactivas para los analistas asignados que no las recibieron.
+            </p>
+            <button 
+                onClick={handleRepairNotifs}
+                disabled={isRepairingNotifs}
+                className="w-full flex items-center justify-center px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium shadow-sm disabled:opacity-70"
+            >
+                {isRepairingNotifs ? <RefreshCw size={18} className="animate-spin" /> : (
+                    <>
+                        <RefreshCw size={18} className="mr-2" />
+                        Reparar Stock Notif.
+                    </>
+                )}
+            </button>
+            {isRepairingNotifs && (
+                <div className="mt-4 space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold text-indigo-600 uppercase">
+                        <span>{repairStatus}</span>
+                        <span>{Math.round(repairProgress)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-indigo-600 h-full transition-all" style={{ width: `${repairProgress}%` }}></div>
+                    </div>
+                </div>
+            )}
         </div>
 
         {/* MAIN CARD: FULL SYSTEM RESET */}
