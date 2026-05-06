@@ -844,11 +844,7 @@ export const IntegrityService = {
                 const isStale = [DocState.SENT_TO_REFERENT, DocState.SENT_TO_CONTROL].includes(expectedState) && 
                                 (new Date().getTime() - new Date(doc.updatedAt).getTime() > 30 * 24 * 60 * 60 * 1000);
 
-                const expectedPending = [
-                    DocState.INTERNAL_REVIEW, 
-                    DocState.REFERENT_REVIEW, 
-                    DocState.CONTROL_REVIEW
-                ].includes(expectedState) || isStale;
+                const expectedPending = isStale ? true : doc.hasPendingRequest;
 
                 const isEvenAndPending = isEvenVersion(doc.version) && doc.hasPendingRequest;
                 const isInconsistent = doc.state !== expectedState || doc.hasPendingRequest !== expectedPending || isEvenAndPending;

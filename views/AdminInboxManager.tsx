@@ -28,12 +28,29 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
 
     const displayedNotifications = showAll ? filteredNotifications : filteredNotifications.slice(0, 20);
 
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            if (selectedUser) {
+                const data = await NotificationService.getByUserId(selectedUser.id);
+                setNotifications(data);
+            } else {
+                const data = await NotificationService.getAll();
+                setNotifications(data);
+            }
+        } catch (error) {
+            toast.error("Error al cargar datos");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         UserService.getAll().then(users => {
             console.log("Fetched users:", users);
             setUsers(users);
         });
-        NotificationService.getAll().then(setNotifications);
+        loadData();
     }, []);
 
     const fetchNotifications = async (userId: string) => {
@@ -188,8 +205,13 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
                                     <button 
                                         onClick={async () => {
                                             if (confirm('¿Estás seguro de eliminar esta notificación?')) {
-                                                await NotificationService.delete(n.id);
-                                                toast.success("Notificación eliminada");
+                                                try {
+                                                    await NotificationService.delete(n.id);
+                                                    setNotifications(prev => prev.filter(item => item.id !== n.id));
+                                                    toast.success("Notificación eliminada");
+                                                } catch (e) {
+                                                    toast.error("Error al eliminar notificación");
+                                                }
                                             }
                                         }}
                                         className="text-red-600 hover:text-red-800"
@@ -228,9 +250,22 @@ const AdminInboxManager: React.FC<Props> = ({ user }) => {
                                 className="px-4 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700"
                                 onClick={async () => {
                                     if (selectedNewUserId) {
-                                        await NotificationService.update(reassigningNotif.id, { userId: selectedNewUserId });
-                                        setReassigningNotif(null);
-                                        toast.success("Notificación reasignada exitosamente");
+                                        try {
+                                            await NotificationService.update(reassigningNotif.id, { userId: selectedNewUserId });
+                                            // Update local state: if we are viewing a specific user, we might want to remove it
+                                            if (selectedUser && selectedUser.id !== selectedNewUserId) {
+                                                setNotifications(prev => prev.filter(item => item.id !== reassigningNotif.id));
+                                            } else {
+                                                // Just update the user in the list if viewing global or same user
+                                                setNotifications(prev => prev.map(item => 
+                                                    item.id === reassigningNotif.id ? { ...item, userId: selectedNewUserId } : item
+                                                ));
+                                            }
+                                            setReassigningNotif(null);
+                                            toast.success("Notificación reasignada exitosamente");
+                                        } catch (e) {
+                                            toast.error("Error al reasignar notificación");
+                                        }
                                     }
                                 }}
                             >
