@@ -1,15 +1,38 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DatabaseService } from '../services/firebaseBackend';
-import { Download, Upload, Database, AlertTriangle, Save, FileSpreadsheet, RefreshCw, CheckSquare, Clock, Search } from 'lucide-react';
+import { DatabaseService, SystemConfigService } from '../services/firebaseBackend';
+import { Download, Upload, Database, AlertTriangle, Save, FileSpreadsheet, RefreshCw, CheckSquare, Clock, Search, Hammer, Power } from 'lucide-react';
 
 const AdminDatabase: React.FC = () => {
   const navigate = useNavigate();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isMaintenanceActive, setIsMaintenanceActive] = useState(false);
+  const [togglingMaintenance, setTogglingMaintenance] = useState(false);
   
   // RESET & INIT STATE
   const [isResetting, setIsResetting] = useState(false);
+
+  useEffect(() => {
+    const unsub = SystemConfigService.subscribeToMaintenanceMode(setIsMaintenanceActive);
+    return () => unsub();
+  }, []);
+
+  const handleToggleMaintenance = async () => {
+    if (togglingMaintenance) return;
+    const nextState = !isMaintenanceActive;
+    if (nextState && !window.confirm('¿Activar modo mantenimiento? Todos los usuarios (excepto Admin) serán bloqueados de inmediato.')) return;
+    if (!nextState && !window.confirm('¿Desactivar modo mantenimiento? Los usuarios podrán volver a ingresar.')) return;
+
+    setTogglingMaintenance(true);
+    try {
+        await SystemConfigService.setMaintenanceMode(nextState);
+    } catch (e) {
+        alert("Error al cambiar estado de mantenimiento");
+    } finally {
+        setTogglingMaintenance(false);
+    }
+  };
   const [resetProgress, setResetProgress] = useState(0);
   const [resetStatus, setResetStatus] = useState<string>('Esperando inicio...');
   const [userConfirmed, setUserConfirmed] = useState(false); 
@@ -149,6 +172,38 @@ const AdminDatabase: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
+        {/* Card 0: Maintenance Mode */}
+        <div className={`p-6 rounded-xl shadow-sm border transition-all duration-300 ${isMaintenanceActive ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${isMaintenanceActive ? 'bg-amber-500 text-white animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
+                <Hammer size={24} />
+            </div>
+            <h2 className="text-lg font-bold text-slate-800 mb-1">Modo Mantenimiento</h2>
+            <div className="flex items-center gap-2 mb-4">
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${isMaintenanceActive ? 'bg-amber-200 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {isMaintenanceActive ? 'SITIO CERRADO' : 'SITIO OPERATIVO'}
+                </span>
+            </div>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+                Bloquea el acceso a todos los usuarios (Analistas, Coordinadores y Visitas). 
+                Úselo durante actualizaciones críticas o cierres administrativos.
+            </p>
+            <button 
+                onClick={handleToggleMaintenance}
+                disabled={togglingMaintenance}
+                className={`w-full flex items-center justify-center px-4 py-3 rounded-lg transition-all font-black text-xs uppercase tracking-widest shadow-sm disabled:opacity-70
+                    ${isMaintenanceActive 
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white' 
+                        : 'bg-slate-800 hover:bg-slate-900 text-white'}`}
+            >
+                {togglingMaintenance ? <RefreshCw size={18} className="animate-spin" /> : (
+                    <>
+                        <Power size={18} className="mr-2" />
+                        {isMaintenanceActive ? 'Abrir Sitio' : 'Activar Mantenimiento'}
+                    </>
+                )}
+            </button>
+        </div>
+
         {/* Card 1: Backup */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4 text-green-600">

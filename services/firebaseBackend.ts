@@ -1052,3 +1052,29 @@ export const DatabaseService = {
     return { created: createdCount, historyMatched: historyMatchedCount };
   }
 };
+
+export const SystemConfigService = {
+  getMaintenanceMode: async (): Promise<boolean> => {
+    try {
+      const snap = await getDoc(doc(db, "config", "system"));
+      if (!snap.exists()) return false;
+      return !!snap.data().maintenanceMode;
+    } catch {
+      return false;
+    }
+  },
+  setMaintenanceMode: async (enabled: boolean): Promise<void> => {
+    await setDoc(doc(db, "config", "system"), { maintenanceMode: enabled }, { merge: true });
+  },
+  subscribeToMaintenanceMode: (callback: (enabled: boolean) => void) => {
+    return onSnapshot(doc(db, "config", "system"), (snap) => {
+      if (!snap.exists()) {
+        callback(false);
+      } else {
+        callback(!!snap.data().maintenanceMode);
+      }
+    }, (error) => {
+      console.error("Maintenance subscription error:", error);
+    });
+  }
+};

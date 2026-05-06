@@ -3,8 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History, Link as LinkIcon } from 'lucide-react';
 import { User, UserRole, DocState, Document, Notification } from '../types';
-import { NotificationService, IntegrityService, DocumentService } from '../services/firebaseBackend';
+import { NotificationService, IntegrityService, DocumentService, SystemConfigService } from '../services/firebaseBackend';
 import { toast } from 'sonner';
+import { Hammer } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
   const [integrityCount, setIntegrityCount] = useState(0);
+  const [isMaintenanceActive, setIsMaintenanceActive] = useState(false);
   const lastNotifId = useRef<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -24,6 +26,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   useEffect(() => {
     if (!user?.id) return;
+
+    // Maintenance Mode Subscription
+    const unsubscribeMaintenance = SystemConfigService.subscribeToMaintenanceMode((enabled) => {
+        setIsMaintenanceActive(enabled);
+    });
     
     // Establishing reliable real-time connection for notification badge and toasts
     const unsubscribeNotifs = NotificationService.subscribeToNotifications(user.id, (notifs) => {
@@ -67,6 +74,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     return () => {
         if (unsubscribeNotifs) unsubscribeNotifs();
         if (unsubscribeIntegrity) unsubscribeIntegrity();
+        if (unsubscribeMaintenance) unsubscribeMaintenance();
     };
   }, [user?.id, navigate]); 
 
@@ -114,6 +122,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <div>
                 <h1 className="text-xl font-bold tracking-tight text-white">SGD</h1>
                 <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">{isGuest ? 'Visor Institucional' : 'Gestión Documental'}</p>
+                {isMaintenanceActive && user.role === UserRole.ADMIN && (
+                    <div className="mt-2 flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/30 rounded text-[9px] font-black text-amber-500 uppercase tracking-tighter">
+                        <Hammer size={10} className="animate-pulse" />
+                        Sitio en Mantenimiento
+                    </div>
+                )}
             </div>
             <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
                 <X size={24} />
@@ -175,7 +189,31 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             </div>
             <div className="w-6" />
         </header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/50">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/50">
+          {isMaintenanceActive && user.role !== UserRole.ADMIN ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-white rounded-3xl border border-slate-200 shadow-xl max-w-2xl mx-auto my-12 animate-in fade-in zoom-in duration-500">
+               <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mb-8 animate-bounce">
+                  <Hammer size={48} />
+               </div>
+               <h2 className="text-3xl font-black text-slate-900 mb-4 uppercase tracking-tight">Sistema en Mantenimiento</h2>
+               <p className="text-slate-600 font-medium mb-8 leading-relaxed">
+                  Estamos realizando mejoras técnicas para brindarle un mejor servicio. Por favor, intente acceder más tarde. Agradecemos su comprensión.
+               </p>
+               <div className="flex flex-col items-center gap-4">
+                  <div className="px-6 py-2 bg-slate-100 rounded-full text-xs font-black text-slate-500 uppercase tracking-widest border border-slate-200">
+                     Estado: Activo por Administración
+                  </div>
+                  <button 
+                    onClick={onLogout}
+                    className="mt-4 flex items-center gap-2 px-8 py-3 bg-red-600 text-white rounded-xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition-all active:scale-95 shadow-lg shadow-red-100"
+                  >
+                    <LogOut size={18} />
+                    Cerrar Sesión
+                  </button>
+               </div>
+            </div>
+          ) : children}
+        </main>
       </div>
     </div>
   );
