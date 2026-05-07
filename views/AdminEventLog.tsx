@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { DocumentService, HierarchyService, NotificationService, UserService, determineStateFromVersion, formatVersionForDisplay, isEvenVersion } from '../services/firebaseBackend';
 import { Document, User, DocState, FullHierarchy, UserRole, Notification as AppNotification, DocHistory } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, ExternalLink, FileText, Slash, ChevronDown, Layers, BellOff, MessageSquare, Trash2, MailWarning, List } from 'lucide-react';
+import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, ExternalLink, FileText, Slash, ChevronDown, Layers, BellOff, MessageSquare, Trash2, MailWarning, List, Eye, EyeOff } from 'lucide-react';
 
 interface Props {
     user: User;
@@ -50,8 +50,23 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [reassignMap, setReassignMap] = useState<Record<string, string>>({});
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [hiddenAlerts, setHiddenAlerts] = useState<Set<string>>(() => {
+        const saved = localStorage.getItem('adminEventLog_hiddenAlerts');
+        return saved ? new Set(JSON.parse(saved)) : new Set();
+    });
+    const [showHidden, setShowHidden] = useState(false);
     
     const canAudit = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canAuditEvents;
+
+    const toggleHiddenAlert = (id: string) => {
+        setHiddenAlerts(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            localStorage.setItem('adminEventLog_hiddenAlerts', JSON.stringify(Array.from(next)));
+            return next;
+        });
+    };
 
     useEffect(() => {
         loadData();
@@ -105,8 +120,8 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                     const hasNotif = notifications.some(n => 
                         n.documentId === doc.id && 
                         n.userId === uid && 
-                        n.title.includes(eventType) && 
-                        n.title.includes(formatVersionForDisplay(doc.version))
+                        (n.title.includes(eventType) || (n.message && n.message.includes(eventType))) && 
+                        (n.title.includes(formatVersionForDisplay(doc.version)) || (n.message && n.message.includes(formatVersionForDisplay(doc.version))))
                     );
 
                     if (!hasNotif) {
@@ -117,8 +132,8 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                         // para intentar recuperar el nombre de quien realizó la acción (actorName)
                         const peerNotif = notifications.find(n => 
                             n.documentId === doc.id && 
-                            n.title.includes(eventTypeTitle) && 
-                            n.title.includes(displayVersion)
+                            (n.title.includes(eventTypeTitle) || (n.message && n.message.includes(eventTypeTitle))) && 
+                            (n.title.includes(displayVersion) || (n.message && n.message.includes(displayVersion)))
                         );
 
                         inconsistencies.push({
@@ -130,7 +145,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                             userName: usersMap[uid] || 'Usuario Desconocido',
                             senderId: peerNotif ? 'peer-resolved' : 'system',
                             senderName: peerNotif ? peerNotif.actorName : 'Sistema',
-                            title: `Falta alerta de ${eventType}: ${doc.project}`,
+                            title: `Falta alerta de ${eventType}: ${doc.project || doc.title}`,
                             description: `Documento en versión ${displayVersion} no ha notificado al usuario responsable del evento de ${eventType}.`,
                             severity: isRejection ? 'MEDIUM' : 'HIGH',
                             timestamp: doc.updatedAt
@@ -139,6 +154,47 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                 });
             }
         });
+
+        if (hierarchy) {
+            Object.entries(hierarchy).forEach(([project, macros]) => {
+                Object.values(macros).forEach(processes => {
+                    Object.values(processes).forEach(nodes => {
+                        nodes.forEach(node => {
+                            if (node.assignees && node.assignees.length > 0) {
+                                node.assignees.forEach(uid => {
+                                    const hasNotif = notifications.some(n => 
+                                        (n.documentId === node.docId || (n.message && n.message.includes(node.name))) && 
+                                        n.userId === uid && 
+                                        (n.type === 'ASSIGNMENT' || n.title.includes('Asignado') || n.title.toLowerCase().includes('asignación'))
+                                    );
+
+                                    if (!hasNotif) {
+                                        let ts = new Date().toISOString();
+                                        const docObj = documents.find(d => d.id === node.docId);
+                                        if (docObj) ts = docObj.updatedAt;
+
+                                        inconsistencies.push({
+                                            type: 'MISSING_ALERT',
+                                            id: `assign-${node.docId}-${uid}`,
+                                            docId: node.docId,
+                                            docTitle: node.name,
+                                            userId: uid,
+                                            userName: usersMap[uid] || 'Usuario Desconocido',
+                                            senderId: 'system',
+                                            senderName: 'Sistema',
+                                            title: `Falta alerta de Asignación: ${project}`,
+                                            description: `El analista fue asignado al microproceso '${node.name}' pero no existe registro de notificación enviada.`,
+                                            severity: 'MEDIUM',
+                                            timestamp: ts
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                });
+            });
+        }
 
         return inconsistencies.sort((a, b) => {
             const dateA = new Date(a.timestamp).getTime();
@@ -284,29 +340,37 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                     }
                 }
             } else if (type === 'MISSING_ALERT' && payload) {
-                const { docId, userId, title: issueTitle } = payload;
+                const { docId, userId, title: issueTitle, senderName, docTitle } = payload;
+                const isAssignment = issueTitle.includes('Asignación');
                 const docObj = documents.find(d => d.id === docId);
                 
-                // Si hay una reasignación seleccionada, primero corregimos el documento
+                // Si hay una reasignación seleccionada, primero corregimos el documento o asignamos
                 const selectedNewUserId = reassignMap[targetId];
                 let finalUserId = userId;
 
-                if (selectedNewUserId && docObj) {
+                if (selectedNewUserId) {
                     finalUserId = selectedNewUserId;
-                    // Actualizamos el documento para que el error no persista
-                    await DocumentService.masterUpdate(docId, user, {
-                        assignedTo: selectedNewUserId,
-                        comment: `Reasignación automática vía Log de Integridad por ID desconocido.`
-                    });
+                    if (!isAssignment && docObj) {
+                        // Actualizamos el documento para que el error no persista
+                        await DocumentService.masterUpdate(docId, user, {
+                            assignedTo: selectedNewUserId,
+                            comment: `Reasignación automática vía Log de Integridad por ID desconocido.`
+                        });
+                    }
                 }
 
-                if (docObj) {
+                if (isAssignment) {
+                     const notifTitle = `Notificación Recuperada: Asignación`;
+                     const notifMsg = `Se le ha asignado el microproceso: ${docTitle}`;
+                     await NotificationService.create(finalUserId, docId, 'ASSIGNMENT', notifTitle, notifMsg, 'Sistema (Reparación)');
+                } else if (docObj) {
                     const isApproval = issueTitle.includes('Aprobación');
                     const eventTypeLabel = isApproval ? 'Aprobación' : 'Rechazo';
                     const displayVersion = formatVersionForDisplay(docObj.version);
-                    const notifTitle = `Notificación Recuperada: ${eventTypeLabel} ${docObj.project}`;
-                    const notifMsg = `Su documento ha recibido una ${eventTypeLabel.toLowerCase()} (${displayVersion}).`;
-                    await NotificationService.create(finalUserId, docId, isApproval ? 'APPROVAL' : 'REJECTION', notifTitle, notifMsg, 'Sistema (Reparación)');
+                    const notifTitle = `${isApproval ? 'Aprobación' : 'Rechazo'}: ${docObj.project} - ${docObj.title}`;
+                    const customSender = (senderName && senderName !== 'Sistema') ? senderName : (isApproval ? 'Sistema (Aprobación)' : 'Sistema (Rechazo)');
+                    const notifMsg = `${customSender} ha realizado un${isApproval ? 'a' : ''} ${eventTypeLabel.toLowerCase()} en "${docObj.title}" (${displayVersion}).`;
+                    await NotificationService.create(finalUserId, docId, isApproval ? 'APPROVAL' : 'REJECTION', notifTitle, notifMsg, customSender);
                 }
             }
             await loadData();
@@ -325,8 +389,10 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
 
     if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Analizando integridad...</div>;
 
+    const filteredMessagingInconsistencies = messagingInconsistencies.filter(i => showHidden ? true : !hiddenAlerts.has(i.id));
+
     const totalInconsistencies = inconsistentDocs.length + hierarchyInconsistencies.length;
-    const totalMessagingIssues = messagingInconsistencies.length;
+    const totalMessagingIssues = filteredMessagingInconsistencies.length;
 
     return (
         <div className="space-y-6 pb-12 animate-fadeIn max-w-6xl mx-auto">
@@ -564,33 +630,43 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                             <MessageSquare size={18} className="text-indigo-500" />
                             Buffer de Fallos en Notificaciones y Alertas
                         </div>
-                        {messagingInconsistencies.some(i => i.type === 'ORPHAN') && (
-                            <button 
-                                onClick={() => handleRepairMessaging('ORPHAN')}
-                                disabled={repairingPart === 'ORPHAN'}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setShowHidden(!showHidden)}
+                                className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors ${showHidden ? 'bg-indigo-100 text-indigo-700' : 'text-indigo-500 hover:bg-indigo-100'}`}
                             >
-                                <Trash2 size={12} />
-                                Limpiar Huérfanos
+                                {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                                {showHidden ? 'Ocultar Descartados' : 'Mostrar Descartados'}
                             </button>
-                        )}
+                            {messagingInconsistencies.some(i => i.type === 'ORPHAN') && (
+                                <button 
+                                    onClick={() => handleRepairMessaging('ORPHAN')}
+                                    disabled={repairingPart === 'ORPHAN'}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                                >
+                                    <Trash2 size={12} />
+                                    Limpiar Huérfanos
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 border-b">
                                 <tr>
                                     <th className="px-6 py-4 text-left">Documento</th>
-                                    <th className="px-6 py-4 text-left">Evento / Descripción</th>
+                                    <th className="px-6 py-4 text-left">Tipo Evento</th>
+                                    <th className="px-6 py-4 text-left">Descripción</th>
                                     <th className="px-6 py-4 text-left">Envía</th>
                                     <th className="px-6 py-4 text-left">Destinatario</th>
                                     <th className="px-6 py-4 text-left">Fecha</th>
-                                    <th className="px-6 py-4 text-right">Reparación</th>
+                                    <th className="px-6 py-4 text-right">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {messagingInconsistencies.length === 0 ? (
+                                {filteredMessagingInconsistencies.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="py-20 text-center">
+                                        <td colSpan={7} className="py-20 text-center">
                                             <div className="flex flex-col items-center justify-center text-slate-400">
                                                 <CheckCircle2 size={48} className="text-green-200 mb-3" />
                                                 <p className="font-bold text-slate-500">Bandeja Coherente</p>
@@ -598,20 +674,28 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                             </div>
                                         </td>
                                     </tr>
-                                ) : messagingInconsistencies.map((issue, idx) => (
-                                    <tr key={idx} className="hover:bg-indigo-50/20 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-slate-900">{issue.docTitle}</div>
-                                            <div className="text-[10px] text-slate-400 font-mono">{issue.docId}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <div className={`w-2 h-2 rounded-full ${issue.title.includes('Aprobación') ? 'bg-green-500' : 'bg-red-500'}`} />
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-slate-700">{issue.title.includes('Aprobación') ? 'APROBACIÓN' : 'RECHAZO'}</div>
-                                            </div>
-                                            <p className="text-xs text-slate-500">{issue.description}</p>
-                                        </td>
-                                        <td className="px-6 py-4">
+                                ) : filteredMessagingInconsistencies.map((issue, idx) => {
+                                    const eventType = issue.title.includes('Aprobación') ? 'APROBACIÓN' : issue.title.includes('Asignación') ? 'ASIGNACIÓN' : 'RECHAZO';
+                                    const isAssignment = eventType === 'ASIGNACIÓN';
+                                    const isApproval = eventType === 'APROBACIÓN';
+                                    const eventColor = isApproval ? 'bg-green-500' : isAssignment ? 'bg-blue-500' : 'bg-red-500';
+
+                                    return (
+                                        <tr key={idx} className={`transition-colors ${hiddenAlerts.has(issue.id) ? 'bg-slate-50/50 opacity-60' : 'hover:bg-indigo-50/20'}`}>
+                                            <td className="px-6 py-4">
+                                                <div className={`font-bold ${hiddenAlerts.has(issue.id) ? 'text-slate-500' : 'text-slate-900'}`}>{issue.docTitle}</div>
+                                                <div className="text-[10px] text-slate-400 font-mono">{issue.docId}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-2 h-2 rounded-full ${eventColor}`} />
+                                                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-700">{eventType}</div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-xs text-slate-500">{issue.description}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase">{issue.senderName}</span>
                                         </td>
                                         <td className="px-6 py-4">
@@ -647,17 +731,28 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                                             {new Date(issue.timestamp).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <button 
-                                                onClick={() => handleRepairMessaging('MISSING_ALERT', issue)}
-                                                disabled={repairingPart === issue.id}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
-                                            >
-                                                {repairingPart === issue.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                                                Notificar
-                                            </button>
+                                            <div className="flex justify-end gap-2">
+                                                <button 
+                                                    onClick={() => toggleHiddenAlert(issue.id)}
+                                                    className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-all"
+                                                    title={hiddenAlerts.has(issue.id) ? "Restaurar" : "Descartar (Marcar como leído)"}
+                                                >
+                                                    {hiddenAlerts.has(issue.id) ? <Eye size={16} /> : <Slash size={16} />}
+                                                </button>
+                                                {!hiddenAlerts.has(issue.id) && (
+                                                    <button 
+                                                        onClick={() => handleRepairMessaging('MISSING_ALERT', issue)}
+                                                        disabled={repairingPart === issue.id}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
+                                                    >
+                                                        {repairingPart === issue.id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                                                        Notificar
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
-                                ))}
+                                )})}
                             </tbody>
                         </table>
                     </div>
