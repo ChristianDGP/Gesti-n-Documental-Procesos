@@ -553,7 +553,7 @@ export const DocumentService = {
       }
   },
 
-  masterUpdate: async (docId: string, user: User, updates: { state?: DocState, version?: string, progress?: number, hasPendingRequest?: boolean, updatedAt?: string, comment: string }): Promise<void> => {
+  masterUpdate: async (docId: string, user: User, updates: { state?: DocState, version?: string, progress?: number, hasPendingRequest?: boolean, updatedAt?: string, assignedTo?: string, assignees?: string[], comment: string }): Promise<void> => {
       const docRef = doc(db, "documents", docId);
       const docSnap = await getDoc(docRef);
       if(!docSnap.exists()) throw new Error("Documento no encontrado");
@@ -573,6 +573,8 @@ export const DocumentService = {
       if (updates.version !== undefined) finalUpdates.version = updates.version;
       if (updates.progress !== undefined) finalUpdates.progress = updates.progress;
       if (updates.hasPendingRequest !== undefined) finalUpdates.hasPendingRequest = updates.hasPendingRequest;
+      if (updates.assignedTo !== undefined) finalUpdates.assignedTo = updates.assignedTo;
+      if (updates.assignees !== undefined) finalUpdates.assignees = updates.assignees;
 
       await updateDoc(docRef, finalUpdates);
       await HistoryService.log(

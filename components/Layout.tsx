@@ -170,7 +170,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             )}
             <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Mi Cuenta</div>
             {!isGuest && <NavItem to="/manual" icon={BookOpen} label="Manual de Usuario" />}
-            <NavItem to="/profile" icon={Settings} label="Mi Perfil" />
           </nav>
           <div className="p-4 border-t border-slate-800 flex-shrink-0 bg-slate-950/20">
             <button onClick={onLogout} className="w-full flex items-center justify-center space-x-2 bg-slate-800 hover:bg-red-900/40 hover:text-red-200 p-2.5 rounded-lg transition-all text-sm font-semibold border border-transparent hover:border-red-800/50">
