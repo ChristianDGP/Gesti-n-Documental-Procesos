@@ -350,10 +350,32 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
 
                 if (selectedNewUserId) {
                     finalUserId = selectedNewUserId;
-                    if (!isAssignment && docObj) {
-                        // Actualizamos el documento para que el error no persista
+                    if (isAssignment) {
+                        // Actualizamos la estructura de la matriz (process_matrix)
+                        let allAssignees: string[] = [];
+                        if (hierarchy) {
+                            Object.entries(hierarchy).forEach(([project, macros]) => {
+                                Object.values(macros).forEach(processes => {
+                                    Object.values(processes).forEach(nodes => {
+                                        const node = nodes.find(n => n.docId === docId);
+                                        if (node && node.assignees) allAssignees = [...node.assignees];
+                                    });
+                                });
+                            });
+                        }
+                        
+                        const newMatrixAssignees = allAssignees.filter(u => u !== userId);
+                        if (!newMatrixAssignees.includes(selectedNewUserId)) newMatrixAssignees.push(selectedNewUserId);
+                        
+                        await HierarchyService.updateMatrixAssignment(docId, newMatrixAssignees);
+                    } else if (docObj) {
+                        // Actualizamos el documento, eliminando el usuario antiguo tanto de assignedTo como de assignees
+                        const tempAssignees = docObj.assignees ? docObj.assignees.filter(u => u !== userId) : [];
+                        if (!tempAssignees.includes(selectedNewUserId)) tempAssignees.push(selectedNewUserId);
+
                         await DocumentService.masterUpdate(docId, user, {
-                            assignedTo: selectedNewUserId,
+                            assignedTo: docObj.assignedTo === userId ? selectedNewUserId : docObj.assignedTo,
+                            assignees: tempAssignees,
                             comment: `Reasignación automática vía Log de Integridad por ID desconocido.`
                         });
                     }
