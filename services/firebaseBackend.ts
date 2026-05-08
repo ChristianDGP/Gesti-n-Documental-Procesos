@@ -407,6 +407,53 @@ export const DocumentService = {
       const docRef = doc(db, "documents", docId);
       await updateDoc(docRef, { ignoredInconsistency: `${version}|${state}` });
   },
+  recalibrateAllUpdatedAt: async (): Promise<number> => {
+      const docsSnap = await getDocs(collection(db, "documents"));
+      const histSnap = await getDocs(collection(db, "history"));
+      
+      const historyByDocId: Record<string, DocHistory[]> = {};
+      histSnap.forEach(d => {
+          const hist = d.data() as DocHistory;
+          if (!historyByDocId[hist.documentId]) historyByDocId[hist.documentId] = [];
+          historyByDocId[hist.documentId].push(hist);
+      });
+
+      const batch = writeBatch(db);
+      let updatedCount = 0;
+
+      for (const d of docsSnap.docs) {
+          const docData = d.data() as Document;
+          const docHist = historyByDocId[d.id] || [];
+          
+          docHist.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          
+          const structuralLog = docHist.find(h => 
+              h.action !== 'Observación' && 
+              h.action !== 'Comentario' &&
+              h.action !== 'Reasignación Automática' &&
+              !(h.action === 'Sincronización Sistema' && h.previousState === h.newState)
+          );
+
+          if (structuralLog) {
+              if (docData.updatedAt !== structuralLog.timestamp) {
+                  batch.update(d.ref, { updatedAt: structuralLog.timestamp });
+                  updatedCount++;
+              }
+          } else if (docHist.length > 0) {
+              // Si no hay log estructural pero hay logs (raro), tomamos el más antiguo (asumiendo que fue la creación)
+              const firstLog = docHist[docHist.length - 1];
+              if (docData.updatedAt !== firstLog.timestamp) {
+                  batch.update(d.ref, { updatedAt: firstLog.timestamp });
+                  updatedCount++;
+              }
+          }
+      }
+
+      if (updatedCount > 0) {
+          await batch.commit();
+      }
+      return updatedCount;
+  },
   create: async (title: string, description: string, author: User, initialState?: DocState, initialVersion?: string, initialProgress?: number, file?: File, hierarchy?: any, existingId?: string): Promise<Document> => {
     const state = initialState || DocState.INITIATED;
     const isSubmission = [DocState.INTERNAL_REVIEW, DocState.REFERENT_REVIEW, DocState.CONTROL_REVIEW].includes(state);
@@ -521,13 +568,15 @@ export const DocumentService = {
                           isEvenAndPending;
 
       if (needsUpdate) {
-          await updateDoc(docRef, { 
+          const syncUpdates: any = { 
               state, 
               progress, 
               hasPendingRequest: shouldHavePending,
-              updatedAt: new Date().toISOString(),
               ignoredInconsistency: null as any
-          });
+          };
+          if (data.state !== state) syncUpdates.updatedAt = new Date().toISOString();
+          
+          await updateDoc(docRef, syncUpdates);
           
           if (forcedState) {
             await HistoryService.log(docId, user, 'Sincronización Sistema', data.state, state, `Corrección manual: ${state} / ${progress}% / Alerta: ${shouldHavePending}`, data.version);
@@ -564,10 +613,16 @@ export const DocumentService = {
       
       const inconsistencyHash = getInconsistencyHash({ ...currentData, state: finalState, version: finalVersion } as Document);
 
+      const isStructuralChange = updates.state !== undefined || updates.version !== undefined;
       const finalUpdates: any = {
-          updatedAt: updates.updatedAt || new Date().toISOString(),
           ignoredInconsistency: inconsistencyHash
       };
+
+      if (updates.updatedAt) {
+          finalUpdates.updatedAt = updates.updatedAt;
+      } else if (isStructuralChange) {
+          finalUpdates.updatedAt = new Date().toISOString();
+      }
 
       if (updates.state !== undefined) finalUpdates.state = updates.state;
       if (updates.version !== undefined) finalUpdates.version = updates.version;
@@ -621,14 +676,20 @@ export const DocumentService = {
     if (action === 'APPROVE' || action === 'REJECT') hasPending = false;
       
       const { progress: newProgress } = determineStateFromVersion(newVersion);
-      await updateDoc(docRef, { 
+      const isStructuralChange = newState !== currentDoc.state || newVersion !== currentDoc.version;
+      const updatesToApply: any = { 
           state: newState, 
           version: newVersion, 
           progress: newProgress, 
           hasPendingRequest: hasPending, 
-          updatedAt: new Date().toISOString(),
           ignoredInconsistency: null as any 
-      });
+      };
+      // Solo actualizar updatedAt si hubo cambio real del proceso (estado o versión)
+      if (isStructuralChange) {
+          updatesToApply.updatedAt = new Date().toISOString();
+      }
+      
+      await updateDoc(docRef, updatesToApply);
       await HistoryService.log(docId, user, displayAction, currentDoc.state, newState, comment, newVersion);
 
       // --- LÓGICA DE NOTIFICACIÓN PARA TRANSICIONES ---

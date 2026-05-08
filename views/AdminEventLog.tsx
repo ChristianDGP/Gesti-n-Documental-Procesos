@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { DocumentService, HierarchyService, NotificationService, UserService, determineStateFromVersion, formatVersionForDisplay, isEvenVersion } from '../services/firebaseBackend';
 import { Document, User, DocState, FullHierarchy, UserRole, Notification as AppNotification, DocHistory } from '../types';
 import { STATE_CONFIG } from '../constants';
-import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, ExternalLink, FileText, Slash, ChevronDown, Layers, BellOff, MessageSquare, Trash2, MailWarning, List, Eye, EyeOff } from 'lucide-react';
+import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, ExternalLink, FileText, Slash, ChevronDown, Layers, BellOff, MessageSquare, Trash2, MailWarning, List, Eye, EyeOff, CalendarSync } from 'lucide-react';
 
 interface Props {
     user: User;
@@ -48,6 +48,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [manualStates, setManualStates] = useState<Record<string, DocState>>({});
     const [togglingId, setTogglingId] = useState<string | null>(null);
+    const [recalibrating, setRecalibrating] = useState(false);
     const [reassignMap, setReassignMap] = useState<Record<string, string>>({});
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [hiddenAlerts, setHiddenAlerts] = useState<Set<string>>(() => {
@@ -328,6 +329,20 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
         }
     };
 
+    const handleRecalibrate = async () => {
+        if (!window.confirm("¿Recalcular las fechas de actualización de todos los documentos basándose en el historial de transiciones reales? (Excluye comentarios)")) return;
+        setRecalibrating(true);
+        try {
+            const count = await DocumentService.recalibrateAllUpdatedAt();
+            alert(`Se actualizaron ${count} documentos exitosamente.`);
+            await loadData();
+        } catch (e: any) {
+            alert("Error al recalcular fechas: " + e.message);
+        } finally {
+            setRecalibrating(false);
+        }
+    };
+
     const handleRepairMessaging = async (type: string, payload?: any) => {
         const targetId = payload?.id || type;
         setRepairingPart(targetId);
@@ -451,9 +466,19 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
                         <List size={14} className={sortOrder === 'asc' ? 'rotate-180' : ''} />
                         {sortOrder === 'asc' ? 'Anteriores First' : 'Recientes First'}
                     </button>
+                    <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                    <button 
+                        onClick={handleRecalibrate}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all text-slate-500 hover:text-indigo-600"
+                        title="Forzar un recálculo de las fechas reales de actualización, excluyendo comentarios y observaciones simples."
+                        disabled={recalibrating}
+                    >
+                        {recalibrating ? <Loader2 size={14} className="animate-spin" /> : <CalendarSync size={14} />}
+                        Recalibrar Fechas
+                    </button>
                     <button 
                         onClick={loadData}
-                        className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                        className="p-2 text-slate-400 hover:text-indigo-600 transition-colors ml-1"
                         title="Refrescar"
                     >
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
