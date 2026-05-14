@@ -334,6 +334,35 @@ export const UserService = {
   }
 };
 
+export const AdminConfigService = {
+  getHiddenAlerts: async (): Promise<Set<string>> => {
+      try {
+          const docRef = doc(db, "settings", "admin_alerts");
+          const snap = await getDoc(docRef);
+          if (snap.exists() && snap.data().hiddenIds) {
+              return new Set(snap.data().hiddenIds);
+          }
+          return new Set();
+      } catch (e) {
+          return new Set();
+      }
+  },
+  toggleHiddenAlert: async (id: string, isHidden: boolean): Promise<void> => {
+      const docRef = doc(db, "settings", "admin_alerts");
+      const snap = await getDoc(docRef);
+      let hiddenIds: string[] = [];
+      if (snap.exists() && snap.data().hiddenIds) {
+          hiddenIds = snap.data().hiddenIds;
+      }
+      
+      const set = new Set(hiddenIds);
+      if (isHidden) set.add(id);
+      else set.delete(id);
+      
+      await setDoc(docRef, { hiddenIds: Array.from(set) }, { merge: true });
+  }
+};
+
 export const HistoryService = {
   getHistory: async (docIds: string | string[]): Promise<DocHistory[]> => {
     const ids = Array.isArray(docIds) ? docIds : [docIds];

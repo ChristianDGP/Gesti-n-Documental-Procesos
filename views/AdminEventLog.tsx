@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { DocumentService, HierarchyService, NotificationService, UserService, determineStateFromVersion, formatVersionForDisplay, isEvenVersion } from '../services/firebaseBackend';
+import { DocumentService, HierarchyService, NotificationService, UserService, determineStateFromVersion, formatVersionForDisplay, isEvenVersion, HistoryService, AdminConfigService } from '../services/firebaseBackend';
 import { Document, User, DocState, FullHierarchy, UserRole, Notification as AppNotification, DocHistory } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { History, AlertTriangle, RefreshCw, CheckCircle2, Search, Loader2, Info, ArrowRight, ExternalLink, FileText, Slash, ChevronDown, Layers, BellOff, MessageSquare, Trash2, MailWarning, List, Eye, EyeOff, CalendarSync } from 'lucide-react';
@@ -39,6 +39,7 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [allHistory, setAllHistory] = useState<DocHistory[]>([]);
     const [hierarchy, setHierarchy] = useState<FullHierarchy | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'docs' | 'messages'>('docs');
@@ -51,22 +52,27 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     const [recalibrating, setRecalibrating] = useState(false);
     const [reassignMap, setReassignMap] = useState<Record<string, string>>({});
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-    const [hiddenAlerts, setHiddenAlerts] = useState<Set<string>>(() => {
-        const saved = localStorage.getItem('adminEventLog_hiddenAlerts');
-        return saved ? new Set(JSON.parse(saved)) : new Set();
-    });
+    const [hiddenAlerts, setHiddenAlerts] = useState<Set<string>>(new Set());
     const [showHidden, setShowHidden] = useState(false);
     
     const canAudit = user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || user.canAuditEvents;
 
-    const toggleHiddenAlert = (id: string) => {
+    const toggleHiddenAlert = async (id: string) => {
+        const isCurrentlyHidden = hiddenAlerts.has(id);
+        const nextHiddenState = !isCurrentlyHidden;
+        
         setHiddenAlerts(prev => {
             const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            localStorage.setItem('adminEventLog_hiddenAlerts', JSON.stringify(Array.from(next)));
+            if (nextHiddenState) next.add(id);
+            else next.delete(id);
             return next;
         });
+
+        try {
+            await AdminConfigService.toggleHiddenAlert(id, nextHiddenState);
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     useEffect(() => {
@@ -76,17 +82,21 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [docsData, hierarchyData, notifsData, usersData] = await Promise.all([
+            const [docsData, hierarchyData, notifsData, usersData, historyData, hiddenData] = await Promise.all([
                 DocumentService.getAll(),
                 HierarchyService.getFullHierarchy(),
                 NotificationService.getAll(),
-                UserService.getAll()
+                UserService.getAll(),
+                HistoryService.getAll(),
+                AdminConfigService.getHiddenAlerts()
             ]);
             
             setDocuments(docsData);
             setHierarchy(hierarchyData);
             setNotifications(notifsData);
             setAllUsers(usersData);
+            setAllHistory(historyData);
+            setHiddenAlerts(hiddenData);
             
             const initialManual: Record<string, DocState> = {};
             docsData.forEach(d => {
@@ -107,49 +117,52 @@ const AdminEventLog: React.FC<Props> = ({ user }) => {
             usersMap[u.id] = u.name;
         });
 
-        documents.forEach(doc => {
-            const isRejection = isEvenVersion(doc.version);
-            const isApproval = doc.state === DocState.APPROVED;
-
-            if (isRejection || isApproval) {
+        // Revisar todo el historial por eventos de transición importantes (Aprobación y Rechazo)
+        allHistory.forEach(hist => {
+            if (hist.action === 'Rechazo' || hist.action === 'Aprobación') {
+                const doc = documents.find(d => d.id === hist.documentId);
+                if (!doc) return; // Si el doc fue borrado, ignoramos
+                
                 const recipients = new Set<string>();
+                if (doc.authorId) recipients.add(doc.authorId);
                 if (doc.assignedTo && doc.assignedTo !== 'system') recipients.add(doc.assignedTo);
                 if (doc.assignees) doc.assignees.forEach(uid => recipients.add(uid));
+                
+                // Excluir a quien realizó la acción
+                recipients.delete(hist.userId);
 
                 recipients.forEach(uid => {
-                    const eventType = isRejection ? 'Rechazo' : 'Aprobación';
+                    const eventType = hist.action;
+                    const displayVersion = formatVersionForDisplay(hist.version || '');
                     const hasNotif = notifications.some(n => 
                         n.documentId === doc.id && 
                         n.userId === uid && 
                         (n.title.includes(eventType) || (n.message && n.message.includes(eventType))) && 
-                        (n.title.includes(formatVersionForDisplay(doc.version)) || (n.message && n.message.includes(formatVersionForDisplay(doc.version))))
+                        (n.title.includes(displayVersion) || (n.message && n.message.includes(displayVersion)))
                     );
 
                     if (!hasNotif) {
-                        const eventTypeTitle = isRejection ? 'Rechazo' : 'Aprobación';
-                        const displayVersion = formatVersionForDisplay(doc.version);
-                        
                         // Buscamos si existe alguna notificación de este mismo evento para OTRO usuario
-                        // para intentar recuperar el nombre de quien realizó la acción (actorName)
                         const peerNotif = notifications.find(n => 
                             n.documentId === doc.id && 
-                            (n.title.includes(eventTypeTitle) || (n.message && n.message.includes(eventTypeTitle))) && 
+                            n.userId !== uid &&
+                            (n.title.includes(eventType) || (n.message && n.message.includes(eventType))) && 
                             (n.title.includes(displayVersion) || (n.message && n.message.includes(displayVersion)))
                         );
 
                         inconsistencies.push({
                             type: 'MISSING_ALERT',
-                            id: `${doc.id}-${uid}-${eventType}`,
+                            id: `${hist.id}-${uid}-${eventType}`, // Usamos el ID del historial para que sea único e inmutable en el tiempo
                             docId: doc.id,
                             docTitle: doc.title,
                             userId: uid,
                             userName: usersMap[uid] || 'Usuario Desconocido',
-                            senderId: peerNotif ? 'peer-resolved' : 'system',
-                            senderName: peerNotif ? peerNotif.actorName : 'Sistema',
+                            senderId: hist.userId,
+                            senderName: hist.userName,
                             title: `Falta alerta de ${eventType}: ${doc.project || doc.title}`,
-                            description: `Documento en versión ${displayVersion} no ha notificado al usuario responsable del evento de ${eventType}.`,
-                            severity: isRejection ? 'MEDIUM' : 'HIGH',
-                            timestamp: doc.updatedAt
+                            description: `Documento en versión ${displayVersion} no notificó a este usuario involucrado responsable del evento de ${eventType}.`,
+                            severity: eventType === 'Rechazo' ? 'MEDIUM' : 'HIGH',
+                            timestamp: hist.timestamp // Usar la fecha del evento, no la del doc, para solucionar el bug de fecha cambiante
                         });
                     }
                 });
