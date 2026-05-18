@@ -401,6 +401,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                 <th className="px-6 py-5 w-64">Microprocesos</th>
                                 <th className="px-6 py-5 w-48">Tipo / Estado</th>
                                 <th className="px-6 py-5 w-24 text-center">Versión</th>
+                                <th className="px-6 py-5 w-24 text-center">Fecha</th>
                                 <th className="px-6 py-5 w-40 text-center">Progreso</th>
                                 <th className="px-6 py-5">
                                     <div className="flex items-center justify-between mb-2">
@@ -419,7 +420,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {Object.keys(groupedData).length === 0 ? (
-                                <tr><td colSpan={6} className="py-24 text-center opacity-30 italic">No se encontraron registros {statusFilter !== 'ALL' ? `con estado "${statusFilter}"` : ''}.</td></tr>
+                                <tr><td colSpan={7} className="py-24 text-center opacity-30 italic">No se encontraron registros {statusFilter !== 'ALL' ? `con estado "${statusFilter}"` : ''}.</td></tr>
                             ) : Object.keys(groupedData).sort().map(project => {
                                 const isProjectExpanded = expandedProjects[project];
                                 const projectMicros = groupedData[project];
@@ -436,6 +437,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                 {isProjectExpanded ? <ChevronDown size={18} className="text-indigo-600" /> : <ChevronRight size={18} className="text-slate-400" />}
                                                 <span className="bg-slate-900 text-white px-2 py-0.5 rounded text-[10px] tracking-widest">{project}</span>
                                             </td>
+                                            <td className="px-6 py-4"></td>
                                             <td className="px-6 py-4"></td>
                                             <td className="px-6 py-4"></td>
                                             <td className="px-6 py-4 text-center">
@@ -478,6 +480,7 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-4 text-center"></td>
+                                                        <td className="px-6 py-4 text-center"></td>
                                                         <td className="px-6 py-4 text-center">
                                                             <span className="text-[10px] font-bold text-slate-500">{microAverageProgress}%</span>
                                                         </td>
@@ -517,6 +520,11 @@ const AdminGantt: React.FC<Props> = ({ user }) => {
                                                                 <td className="px-6 py-3 text-center">
                                                                     <span className="text-[10px] font-mono font-black text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                                                                         {formatVersionForDisplay(doc.version)}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-3 text-center whitespace-nowrap">
+                                                                    <span className="text-[10px] font-mono font-bold text-slate-500">
+                                                                        {doc.state !== DocState.NOT_STARTED && doc.updatedAt && new Date(doc.updatedAt).getTime() !== 0 ? new Date(doc.updatedAt).toLocaleDateString() : '-'}
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-6 py-3 text-center">

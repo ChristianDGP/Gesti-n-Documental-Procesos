@@ -346,6 +346,28 @@ const Reports: React.FC<Props> = ({ user }) => {
         return Object.values(microMap).sort((a, b) => a.project.localeCompare(b.project) || a.macro.localeCompare(b.macro) || a.process.localeCompare(b.process) || a.micro.localeCompare(b.micro));
     }, [closureMonth, unifiedData, history, filterProject, filterAnalyst]);
 
+    const closureSummary = useMemo(() => {
+        const stats = {
+            notStarted: 0,
+            inProcess: 0,
+            referent: 0,
+            control: 0,
+            finished: 0
+        };
+        
+        closureBoardData.forEach(item => {
+            Object.values(item.docs).forEach(doc => {
+                if (doc.state === DocState.NOT_STARTED) stats.notStarted++;
+                else if (doc.state === DocState.APPROVED) stats.finished++;
+                else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) stats.referent++;
+                else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) stats.control++;
+                else stats.inProcess++;
+            });
+        });
+        
+        return stats;
+    }, [closureBoardData]);
+
     const executiveMetrics = useMemo(() => {
         if (!filteredDocs.length) return { stuckDocs: [] as StuckDoc[] };
         const now = new Date().getTime();
@@ -808,6 +830,30 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <div className="flex items-center gap-2"><label className="text-xs font-bold text-slate-400 uppercase">Periodo:</label><select value={closureMonth} onChange={(e) => { setClosureMonth(e.target.value); setClosurePage(1); }} className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 p-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">{generateMonthOptions()}</select></div>
                                 </div>
                             </div>
+                            
+                            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex overflow-x-auto gap-4 custom-scrollbar">
+                                <div className="flex-1 bg-white border border-slate-200 rounded-lg p-3 shadow-sm min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">No Iniciado</p>
+                                    <p className="text-2xl font-black text-slate-700">{closureSummary.notStarted}</p>
+                                </div>
+                                <div className="flex-1 bg-white border border-indigo-200 rounded-lg p-3 shadow-sm min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">En Proceso</p>
+                                    <p className="text-2xl font-black text-indigo-700">{closureSummary.inProcess}</p>
+                                </div>
+                                <div className="flex-1 bg-white border border-amber-200 rounded-lg p-3 shadow-sm min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Referente</p>
+                                    <p className="text-2xl font-black text-amber-700">{closureSummary.referent}</p>
+                                </div>
+                                <div className="flex-1 bg-white border border-orange-200 rounded-lg p-3 shadow-sm min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">Control</p>
+                                    <p className="text-2xl font-black text-orange-700">{closureSummary.control}</p>
+                                </div>
+                                <div className="flex-1 bg-white border border-green-200 rounded-lg p-3 shadow-sm min-w-[120px]">
+                                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-1">Terminados</p>
+                                    <p className="text-2xl font-black text-green-700">{closureSummary.finished}</p>
+                                </div>
+                            </div>
+
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse min-w-[1500px]">
                                     <thead className="text-[10px] text-slate-400 uppercase font-bold bg-slate-50/50">
