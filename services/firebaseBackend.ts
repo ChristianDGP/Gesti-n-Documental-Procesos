@@ -830,6 +830,26 @@ export const HierarchyService = {
       const id = generateMatrixId(project, name);
       await setDoc(doc(db, "process_matrix", id), { project, macroprocess: macro, process, name, assignees, referentIds: [], requiredTypes, active: true });
   },
+  getMacroClassifications: async (): Promise<Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>> => {
+      try {
+          const snap = await getDoc(doc(db, "settings", "macro_classifications"));
+          if (snap.exists()) {
+              return snap.data() as Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>;
+          }
+      } catch (e) {
+          console.error("Error reading macro classifications Settings", e);
+      }
+      return {};
+  },
+  saveMacroClassification: async (macro: string, type: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE') => {
+      const ref = doc(db, "settings", "macro_classifications");
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+          await updateDoc(ref, { [macro]: type });
+      } else {
+          await setDoc(ref, { [macro]: type });
+      }
+  },
   deleteMicroprocess: async (docId: string) => { await deleteDoc(doc(db, "process_matrix", docId)); },
   updateMicroprocessReferents: async (docId: string, referentIds: string[]) => {
       await updateDoc(doc(db, "process_matrix", docId), { referentIds });

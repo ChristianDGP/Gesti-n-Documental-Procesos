@@ -22,6 +22,7 @@ const AdminUsers: React.FC = () => {
   const [canAccessReportGestion, setCanAccessReportGestion] = useState(false);
   const [canAccessReportContinuity, setCanAccessReportContinuity] = useState(false);
   const [canAccessReportMonthly, setCanAccessReportMonthly] = useState(false);
+  const [canAccessReportCoverage, setCanAccessReportCoverage] = useState(false);
   const [canAccessReferents, setCanAccessReferents] = useState(false);
   const [canAccessReferentsByProcess, setCanAccessReferentsByProcess] = useState(false);
   const [canAccessReferentsDirectory, setCanAccessReferentsDirectory] = useState(false);
@@ -53,7 +54,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessReuseMatrixIntersect' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog' | 'canAccessBIQueryBuilder') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReportCoverage' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessReuseMatrixIntersect' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog' | 'canAccessBIQueryBuilder') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       
@@ -65,6 +66,7 @@ const AdminUsers: React.FC = () => {
               updatePayload.canAccessReportGestion = newValue;
               updatePayload.canAccessReportContinuity = newValue;
               updatePayload.canAccessReportMonthly = newValue;
+              updatePayload.canAccessReportCoverage = newValue;
           }
 
           // Lógica de cascada para referentes
@@ -127,6 +129,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportGestion(user.canAccessReportGestion || false);
       setCanAccessReportContinuity(user.canAccessReportContinuity || false);
       setCanAccessReportMonthly(user.canAccessReportMonthly || false);
+      setCanAccessReportCoverage(user.canAccessReportCoverage || false);
       setCanAccessReferents(user.canAccessReferents || false);
       setCanAccessReferentsByProcess(user.canAccessReferentsByProcess || false);
       setCanAccessReferentsDirectory(user.canAccessReferentsDirectory || false);
@@ -182,6 +185,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReportGestion: role === UserRole.ADMIN ? true : canAccessReportGestion,
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
+                canAccessReportCoverage: role === UserRole.ADMIN ? true : canAccessReportCoverage,
                 canAccessBIQueryBuilder: role === UserRole.ADMIN ? true : canAccessBIQueryBuilder,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
                 canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
@@ -220,6 +224,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReportGestion: role === UserRole.ADMIN ? true : canAccessReportGestion,
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
+                canAccessReportCoverage: role === UserRole.ADMIN ? true : canAccessReportCoverage,
                 canAccessBIQueryBuilder: role === UserRole.ADMIN ? true : canAccessBIQueryBuilder,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
                 canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
@@ -262,6 +267,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportGestion(false);
       setCanAccessReportContinuity(false);
       setCanAccessReportMonthly(false);
+      setCanAccessReportCoverage(false);
       setCanAccessBIQueryBuilder(false);
       setCanAccessReferents(false);
       setCanAccessReferentsByProcess(false);
@@ -379,6 +385,10 @@ const AdminUsers: React.FC = () => {
                                             <label className="flex items-center gap-2 cursor-pointer group">
                                                 <input type="checkbox" checked={canAccessReportMonthly} onChange={(e) => setCanAccessReportMonthly(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Cierre Mensual</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReportCoverage} onChange={(e) => setCanAccessReportCoverage(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Cobertura de Procesos</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
                                                 <input type="checkbox" checked={canAccessBIQueryBuilder} onChange={(e) => setCanAccessBIQueryBuilder(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />

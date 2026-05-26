@@ -20,6 +20,7 @@ export interface User {
   canAccessReportGestion?: boolean;
   canAccessReportContinuity?: boolean;
   canAccessReportMonthly?: boolean;
+  canAccessReportCoverage?: boolean;
   canAccessReferents?: boolean;
   canAccessReferentsByProcess?: boolean;
   canAccessReferentsDirectory?: boolean;

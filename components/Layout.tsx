@@ -103,7 +103,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const isGuest = roleUpper === 'GUEST';
   const isAdminOrCoord = roleUpper === 'ADMIN' || roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
   
-  const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly || user.canAccessBIQueryBuilder));
+  const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly || user.canAccessReportCoverage || user.canAccessBIQueryBuilder));
   const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReferents || user.canAccessReferentsByProcess || user.canAccessReferentsDirectory));
   const canAccessGantt = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessGantt);
   const canAccessReuseMatrix = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView || user.canAccessReuseMatrixIntersect));

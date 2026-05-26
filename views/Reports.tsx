@@ -8,7 +8,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown
 } from 'lucide-react';
 
 interface Props {
@@ -54,12 +54,13 @@ const Reports: React.FC<Props> = ({ user }) => {
     
     const location = useLocation();
     
-    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE' | 'BI'>(() => {
-        if (location.state?.tab === 'BI' && (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder)) return 'BI';
+    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE' | 'MAP' | 'BI'>(() => {
+        if (location.state?.tab === 'BI' && ((user.role as any) === UserRole.ADMIN || user.canAccessBIQueryBuilder)) return 'BI';
         if (user.canAccessReportGestion !== false) return 'REPORTS';
         if (user.canAccessReportContinuity !== false) return 'SUMMARY';
         if (user.canAccessReportMonthly !== false) return 'CLOSURE';
-        if (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) return 'BI';
+        if ((user.role as any) === UserRole.ADMIN || user.canAccessReportCoverage) return 'MAP';
+        if ((user.role as any) === UserRole.ADMIN || user.canAccessBIQueryBuilder) return 'BI';
         return 'REPORTS';
     });
     const [chartScale, setChartScale] = useState<ChartScale>('MONTHLY');
@@ -71,22 +72,32 @@ const Reports: React.FC<Props> = ({ user }) => {
         if (activeTab === 'REPORTS' && !isAdmin && user.canAccessReportGestion === false) {
              if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
              else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
              else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
         if (activeTab === 'SUMMARY' && !isAdmin && user.canAccessReportContinuity === false) {
              if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
              else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
              else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
         if (activeTab === 'CLOSURE' && !isAdmin && user.canAccessReportMonthly === false) {
              if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
              else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
+             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        }
+        if (activeTab === 'MAP' && !isAdmin && !user.canAccessReportCoverage) {
+             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
+             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
              else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
         if (activeTab === 'BI' && !isAdmin && !user.canAccessBIQueryBuilder) {
              if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
              else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
              else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
         }
     }, [user, activeTab]);
 
@@ -94,7 +105,40 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
     const [activeType, setActiveType] = useState<string | null>(null);
 
+    const [macroClassifications, setMacroClassifications] = useState<Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>>({});
+
+    const getMacroCategory = (macroName: string): 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE' => {
+        if (macroClassifications[macroName]) {
+            return macroClassifications[macroName];
+        }
+        const name = macroName.toLowerCase();
+        const STRATEGIC_KEYWORDS = ["relaciones", "publicas", "proyectos", "agenda", "estrategia", "calidad", "planificacion", "direccion", "informes", "mesa de ayuda", "reuniones", "coordinacion", "convenios"];
+        const SUPPORT_KEYWORDS = ["mantenimiento", "equipos", "infraestructura", "roperia", "remuneracion", "compras", "bodegas", "remuneraciones", "capacitacion", "contratacion", "trato laboral", "beneficios", "liquidacion", "recaudacion", "activos", "finanzas", "contabilidad", "auditoria", "reportes", "reclutamiento", "personal", "recurs", "humano", "ti", "informatica", "soporte", "tecnico"];
+        
+        if (STRATEGIC_KEYWORDS.some(key => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(key))) {
+            return 'ESTRATEGICO';
+        }
+        if (SUPPORT_KEYWORDS.some(key => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(key))) {
+            return 'SOPORTE';
+        }
+        return 'OPERATIVO';
+    };
+
+    const handleUpdateMacroCategory = async (macroName: string, category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE') => {
+        try {
+            await HierarchyService.saveMacroClassification(macroName, category);
+            setMacroClassifications(prev => ({ ...prev, [macroName]: category }));
+        } catch (e) {
+            console.error("Error setting macro classification", e);
+            alert("Error al guardar la clasificación.");
+        }
+    };
+
+    const [coverageSearch, setCoverageSearch] = useState('');
+    const [coveragePage, setCoveragePage] = useState(1);
+
     const [microDrillDown, setMicroDrillDown] = useState<{ title: string, color: string, items: {name: string, project: string, ids: string[]}[] } | null>(null);
+    const [selectedMacroDetail, setSelectedMacroDetail] = useState<any | null>(null);
 
     const [closureMonth, setClosureMonth] = useState(() => {
         const d = new Date();
@@ -112,16 +156,18 @@ const Reports: React.FC<Props> = ({ user }) => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [d, u, h, hist] = await Promise.all([
+            const [d, u, h, hist, classif] = await Promise.all([
                 DocumentService.getAll(),
                 UserService.getAll(),
                 HierarchyService.getFullHierarchy(),
-                HistoryService.getAll()
+                HistoryService.getAll(),
+                HierarchyService.getMacroClassifications()
             ]);
             setRealDocs(d);
             setUsers(u);
             setHierarchy(h);
             setHistory(hist);
+            setMacroClassifications(classif);
         } catch (error) {
             console.error(error);
         } finally {
@@ -368,6 +414,196 @@ const Reports: React.FC<Props> = ({ user }) => {
         return stats;
     }, [closureBoardData]);
 
+    const coverageAnalytics = useMemo(() => {
+        const groups: Record<string, { 
+            project: string;
+            macroprocess: string;
+            process: string;
+            microprocess: string;
+            docs: Record<string, { state: DocState; version: string; id: string; assignees: string[] }>;
+            totalRequired: number;
+            totalApproved: number;
+            totalInProcess: number;
+        }> = {};
+
+        filteredDocs.forEach(d => {
+            const key = `${d.project}|${d.macroprocess}|${d.process}|${d.microprocess}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    project: d.project || '',
+                    macroprocess: d.macroprocess || '',
+                    process: d.process || '',
+                    microprocess: d.microprocess || '',
+                    docs: {},
+                    totalRequired: 0,
+                    totalApproved: 0,
+                    totalInProcess: 0
+                };
+            }
+            
+            const docType = d.docType || 'AS IS';
+            groups[key].docs[docType] = {
+                state: d.state,
+                version: d.version || '1.0',
+                id: d.id,
+                assignees: d.assignees || []
+            };
+            
+            groups[key].totalRequired++;
+            if (d.state === DocState.APPROVED) {
+                groups[key].totalApproved++;
+            } else if (d.state !== DocState.NOT_STARTED) {
+                groups[key].totalInProcess++;
+            }
+        });
+
+        const list = Object.values(groups).sort((a, b) => 
+            a.project.localeCompare(b.project) || 
+            a.macroprocess.localeCompare(b.macroprocess) || 
+            a.process.localeCompare(b.process) || 
+            a.microprocess.localeCompare(b.microprocess)
+        );
+
+        let totalMicro = list.length;
+        let totalDocsRequired = filteredDocs.length;
+        let totalDocsApproved = filteredDocs.filter(d => d.state === DocState.APPROVED).length;
+        let totalDocsInProcess = filteredDocs.filter(d => d.state !== DocState.APPROVED && d.state !== DocState.NOT_STARTED).length;
+        let totalDocsNotStarted = filteredDocs.filter(d => d.state === DocState.NOT_STARTED).length;
+
+        let microsFullyCovered = 0;
+        let microsPartiallyCovered = 0;
+        let microsNotStarted = 0;
+
+        list.forEach(g => {
+            if (g.totalApproved === g.totalRequired && g.totalRequired > 0) {
+                microsFullyCovered++;
+            } else if (g.totalApproved > 0 || g.totalInProcess > 0) {
+                microsPartiallyCovered++;
+            } else {
+                microsNotStarted++;
+            }
+        });
+
+        const macroRollups: Record<string, { macro: string; total: number; approved: number }> = {};
+        list.forEach(g => {
+            const mKey = `${g.project} - ${g.macroprocess}`;
+            if (!macroRollups[mKey]) {
+                macroRollups[mKey] = { macro: mKey, total: 0, approved: 0 };
+            }
+            macroRollups[mKey].total += g.totalRequired;
+            macroRollups[mKey].approved += g.totalApproved;
+        });
+
+        const macroProgressData = Object.values(macroRollups).map(r => ({
+            name: r.macro,
+            percentage: r.total > 0 ? Math.round((r.approved / r.total) * 100) : 0,
+            approved: r.approved,
+            total: r.total
+        })).sort((a, b) => b.percentage - a.percentage);
+
+        return {
+            list,
+            totalMicro,
+            totalDocsRequired,
+            totalDocsApproved,
+            totalDocsInProcess,
+            totalDocsNotStarted,
+            microsFullyCovered,
+            microsPartiallyCovered,
+            microsNotStarted,
+            macroProgressData
+        };
+    }, [filteredDocs]);
+
+    const processMapData = useMemo(() => {
+        const list = coverageAnalytics.list;
+        const macros: Record<string, {
+            project: string;
+            macroprocess: string;
+            category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE';
+            totalRequired: number;
+            totalApproved: number;
+            totalInProcess: number;
+            microprocesses: typeof list;
+        }> = {};
+        
+        list.forEach(g => {
+            const mKey = `${g.project} - ${g.macroprocess}`;
+            if (!macros[mKey]) {
+                macros[mKey] = {
+                    project: g.project,
+                    macroprocess: g.macroprocess,
+                    category: getMacroCategory(g.macroprocess),
+                    totalRequired: 0,
+                    totalApproved: 0,
+                    totalInProcess: 0,
+                    microprocesses: []
+                };
+            }
+            
+            macros[mKey].totalRequired += g.totalRequired;
+            macros[mKey].totalApproved += g.totalApproved;
+            macros[mKey].totalInProcess += g.totalInProcess;
+            macros[mKey].microprocesses.push(g);
+        });
+        
+        return Object.values(macros);
+    }, [coverageAnalytics.list, macroClassifications]);
+
+    const filteredCoverageList = useMemo(() => {
+        const query = coverageSearch.toLowerCase();
+        if (!query) return coverageAnalytics.list;
+        return coverageAnalytics.list.filter(g => 
+            g.macroprocess.toLowerCase().includes(query) ||
+            g.process.toLowerCase().includes(query) ||
+            g.microprocess.toLowerCase().includes(query)
+        );
+    }, [coverageAnalytics.list, coverageSearch]);
+
+    const totalCoveragePages = Math.ceil(filteredCoverageList.length / 15);
+
+    const displayedCoverage = useMemo(() => {
+        const start = (coveragePage - 1) * 15;
+        return filteredCoverageList.slice(start, start + 15);
+    }, [filteredCoverageList, coveragePage]);
+
+    const handleExportCoverageCSV = () => {
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+        csvContent += "Proyecto,Macroproceso,Proceso,Microproceso,Doc AS IS,Doc FCE,Doc PM,Doc TO BE,Total Requeridos,Total Aprobados,Porcentaje Cobertura\n";
+        
+        coverageAnalytics.list.forEach(g => {
+            const asIsState = g.docs['AS IS']?.state || 'No Iniciado';
+            const fceState = g.docs['FCE']?.state || 'No Iniciado';
+            const pmState = g.docs['PM']?.state || 'No Iniciado';
+            const toBeState = g.docs['TO BE']?.state || 'No Iniciado';
+            const percentage = g.totalRequired > 0 ? Math.round((g.totalApproved / g.totalRequired) * 100) : 0;
+            
+            const row = [
+                `"${g.project.replace(/"/g, '""')}"`,
+                `"${g.macroprocess.replace(/"/g, '""')}"`,
+                `"${g.process.replace(/"/g, '""')}"`,
+                `"${g.microprocess.replace(/"/g, '""')}"`,
+                `"${asIsState}"`,
+                `"${fceState}"`,
+                `"${pmState}"`,
+                `"${toBeState}"`,
+                g.totalRequired,
+                g.totalApproved,
+                `${percentage}%`
+            ].join(",");
+            csvContent += row + "\n";
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Cobertura_Procesos_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const executiveMetrics = useMemo(() => {
         if (!filteredDocs.length) return { stuckDocs: [] as StuckDoc[] };
         const now = new Date().getTime();
@@ -551,6 +787,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                 )}
                 {(user.role === UserRole.ADMIN || user.canAccessReportMonthly !== false) && (
                     <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> Cierre Mensual</button>
+                )}
+                {(user.role === UserRole.ADMIN || user.canAccessReportCoverage) && (
+                    <button onClick={() => setActiveTab('MAP')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'MAP' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Network size={18} /> Mapa de Procesos</button>
                 )}
                 {(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) && (
                     <button onClick={() => setActiveTab('BI')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'BI' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Database size={18} /> Constructor de Consultas (BI)</button>
@@ -886,6 +1125,251 @@ const Reports: React.FC<Props> = ({ user }) => {
                     </section>
                 )}
 
+                {activeTab === 'MAP' && (
+                    <section className="space-y-6 animate-fadeIn">
+                        {/* Summary Header of Process Map */}
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Network size={20} className="text-indigo-600" /> Mapa del Enfoque a Procesos</h3>
+                                <p className="text-xs text-slate-500">Representación visual interactiva orientada al cliente y alineada con la Gestión por Procesos de la organización.</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <button onClick={handleExportCoverageCSV} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-all shadow-sm text-xs font-bold">
+                                    <FileSpreadsheet size={14} className="text-green-600" /> Exportar Cobertura (CSV)
+                                </button>
+                                <div className="flex gap-4 text-xs font-semibold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos ({processMapData.filter(m => m.category === 'ESTRATEGICO').length})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos ({processMapData.filter(m => m.category === 'OPERATIVO').length})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 animate-pulse"></span> <span>Soporte ({processMapData.filter(m => m.category === 'SOPORTE').length})</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Interactive diagram diagram */}
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 overflow-x-auto">
+                            <div className="min-w-[950px] flex gap-4 relative items-stretch">
+                                
+                                {/* LEFT MARGIN: ENTRADA */}
+                                <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
+                                    <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">ENTRADA</div>
+                                    <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] rotate-180 flex items-center justify-center h-full">
+                                        Requisitos esperados por partes interesadas
+                                    </p>
+                                </div>
+
+                                {/* CENTER CONTAINER: VALUES FLOW */}
+                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-6 flex flex-col gap-6 shadow-sm relative">
+                                    
+                                    {/* ROW 1: STRATEGIC */}
+                                    <div className="relative">
+                                        <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos de la Organización
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            {processMapData.filter(m => m.category === 'ESTRATEGICO').length === 0 ? (
+                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría.</div>
+                                            ) : (
+                                                processMapData.filter(m => m.category === 'ESTRATEGICO').map(macro => (
+                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                ))
+                                            )}
+                                        </div>
+                                        {/* Golden Down Arrows */}
+                                        <div className="flex justify-around mt-4">
+                                            {[1, 2, 3].map(i => (
+                                                <div key={i} className="flex flex-col items-center">
+                                                    <ChevronDown className="text-amber-400/80 animate-bounce duration-1000" size={18} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* ROW 2: OPERATIONAL */}
+                                    <div className="relative bg-sky-50/20 p-4 border border-sky-100/50 rounded-xl">
+                                        <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-150 border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor)
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            {processMapData.filter(m => m.category === 'OPERATIVO').length === 0 ? (
+                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría.</div>
+                                            ) : (
+                                                processMapData.filter(m => m.category === 'OPERATIVO').map(macro => (
+                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* ROW 3: SUPPORT */}
+                                    <div className="relative mt-2">
+                                        {/* Purple Up Arrows */}
+                                        <div className="flex justify-around mb-4">
+                                            {[1, 2, 3].map(i => (
+                                                <div key={i} className="flex flex-col items-center">
+                                                    <ChevronDown className="text-purple-400/80 rotate-180 animate-bounce duration-1000" size={18} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            {processMapData.filter(m => m.category === 'SOPORTE').length === 0 ? (
+                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría.</div>
+                                            ) : (
+                                                processMapData.filter(m => m.category === 'SOPORTE').map(macro => (
+                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                {/* RIGHT MARGIN: SALIDA */}
+                                <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
+                                    <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">SALIDA</div>
+                                    <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] flex items-center justify-center h-full">
+                                        Requisitos satisfechos de las partes interesadas
+                                    </p>
+                                </div>
+
+                            </div>
+                        </div>
+                    </section>
+                )}
+
+                {/* selectedMacroDetail BREAKOUT PANEL/DRAWER */}
+                {selectedMacroDetail && (
+                    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+                        <div className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col animate-slideLeft">
+                            {/* Header */}
+                            <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-start">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded w-fit uppercase tracking-widest block">
+                                        {selectedMacroDetail.project} — PROCESO {selectedMacroDetail.category}
+                                    </span>
+                                    <h3 className="text-lg font-black text-slate-900 mt-1">
+                                        {selectedMacroDetail.macroprocess}
+                                    </h3>
+                                    <p className="text-xs text-slate-500">Resumen y estado de avance de la documentación asociada.</p>
+                                </div>
+                                <button 
+                                    onClick={() => setSelectedMacroDetail(null)}
+                                    className="p-1.5 text-slate-450 text-slate-400 hover:text-slate-650 hover:bg-slate-150 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                
+                                {/* Key Indicators */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-150/50 text-center">
+                                        <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wide">Microprocesos</span>
+                                        <span className="text-base font-black text-slate-800">{selectedMacroDetail.microprocesses.length}</span>
+                                    </div>
+                                    <div className="bg-green-50/50 p-3 rounded-xl border border-green-100 text-center">
+                                        <span className="text-[9px] font-bold text-green-500 block uppercase tracking-wide">Aprobados</span>
+                                        <span className="text-base font-black text-green-600">{selectedMacroDetail.totalApproved}</span>
+                                    </div>
+                                    <div className="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 text-center">
+                                        <span className="text-[9px] font-bold text-indigo-500 block uppercase tracking-wide">Docs Requeridos</span>
+                                        <span className="text-base font-black text-indigo-700">{selectedMacroDetail.totalRequired}</span>
+                                    </div>
+                                </div>
+
+                                {/* Flow detail mapping */}
+                                <div className="space-y-3">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Flujos del Macroproceso</h4>
+                                    
+                                    <div className="border border-slate-150 rounded-xl divide-y divide-slate-100 overflow-hidden shadow-sm">
+                                        {selectedMacroDetail.microprocesses.map((micro: any, mIdx: number) => {
+                                            return (
+                                                <div key={micro.microprocess + mIdx} className="p-4 bg-white hover:bg-slate-50/30 transition-colors space-y-3">
+                                                    <div className="flex justify-between items-start gap-2">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest block">{micro.process}</span>
+                                                            <span className="text-xs font-black text-slate-800 leading-tight block mt-0.5">{micro.microprocess}</span>
+                                                        </div>
+                                                        <span className="text-[9px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full select-none">
+                                                            {micro.totalRequired > 0 ? Math.round((micro.totalApproved / micro.totalRequired) * 100) : 0}% avance
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Document Status Columns */}
+                                                    <div className="grid grid-cols-4 gap-2">
+                                                        {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => {
+                                                            const doc = micro.docs[type];
+                                                            if (!doc) {
+                                                                return (
+                                                                    <div key={type} className="bg-slate-50 border border-slate-100 rounded-lg p-2 text-center flex flex-col justify-center h-12">
+                                                                        <span className="text-[9px] text-slate-350 font-black tracking-wider block">{type}</span>
+                                                                        <span className="text-[8px] text-slate-400 font-bold italic mt-0.5">No req.</span>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            const colorClasses: Record<DocState, string> = {
+                                                                [DocState.NOT_STARTED]: 'bg-slate-50 text-slate-400 border-slate-200/60',
+                                                                [DocState.INITIATED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+                                                                [DocState.IN_PROCESS]: 'bg-blue-50 text-blue-600 border-blue-100',
+                                                                [DocState.INTERNAL_REVIEW]: 'bg-sky-50 text-sky-600 border-sky-100',
+                                                                [DocState.SENT_TO_REFERENT]: 'bg-purple-50 text-purple-600 border-purple-100',
+                                                                [DocState.REFERENT_REVIEW]: 'bg-purple-100/70 text-purple-700 border-purple-200/60',
+                                                                [DocState.SENT_TO_CONTROL]: 'bg-orange-50 text-orange-600 border-orange-100',
+                                                                [DocState.CONTROL_REVIEW]: 'bg-orange-100/70 text-orange-700 border-orange-200/60',
+                                                                [DocState.APPROVED]: 'bg-green-50 text-green-650 text-green-600 border-green-200'
+                                                            };
+
+                                                            const labelMap: Record<DocState, string> = {
+                                                                [DocState.NOT_STARTED]: 'Inactivo',
+                                                                [DocState.INITIATED]: 'Iniciado',
+                                                                [DocState.IN_PROCESS]: 'En Proc.',
+                                                                [DocState.INTERNAL_REVIEW]: 'Rev. Int.',
+                                                                [DocState.SENT_TO_REFERENT]: 'Recom.',
+                                                                [DocState.REFERENT_REVIEW]: 'Recom.',
+                                                                [DocState.SENT_TO_CONTROL]: 'Cierre',
+                                                                [DocState.CONTROL_REVIEW]: 'Cierre',
+                                                                [DocState.APPROVED]: 'Aprobado'
+                                                            };
+
+                                                            const styleClass = colorClasses[doc.state as DocState] || 'bg-slate-50 text-slate-400';
+                                                            const label = labelMap[doc.state as DocState] || doc.state;
+
+                                                            return (
+                                                                <div key={type} className={`border rounded-lg p-2 text-center flex flex-col justify-between h-12 ${styleClass}`}>
+                                                                    <span className="text-[9px] font-black tracking-wider block">{type}</span>
+                                                                    <div className="flex justify-between items-center text-[8px] font-mono leading-none font-bold mt-1">
+                                                                        <span className="opacity-75">v{doc.version}</span>
+                                                                        <span className="uppercase font-black text-[7px] tracking-tighter">{label}</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footer closing panel */}
+                            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+                                <button 
+                                    onClick={() => setSelectedMacroDetail(null)}
+                                    className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all rounded-lg shadow-sm"
+                                >
+                                    Cerrar Detalle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {(activeTab === 'BI' && (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder)) && (
                     <section className="animate-fadeIn">
                         <AdminBI hideHeader />
@@ -911,6 +1395,79 @@ const AgileBucket = ({ title, value, icon: Icon, color, onClick }: any) => {
         green: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
     };
     return ( <div onClick={onClick} className={`p-3 rounded-xl border cursor-pointer transition-all active:scale-95 flex flex-col items-center text-center shadow-sm ${colorMap[color]}`}> <div className="p-2 rounded-full bg-white/50 mb-2"><Icon size={18} /></div> <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">{title}</span> <span className="text-xl font-extrabold">{value}</span> </div> );
+};
+
+const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
+    const [showOptions, setShowOptions] = useState(false);
+    const progress = macro.totalRequired > 0 ? Math.round((macro.totalApproved / macro.totalRequired) * 100) : 0;
+    
+    const themeClasses = {
+        'ESTRATEGICO': 'border-amber-200 bg-gradient-to-br from-amber-50/50 to-white hover:border-amber-400',
+        'OPERATIVO': 'border-sky-200 bg-gradient-to-br from-sky-50/50 to-white hover:border-sky-400',
+        'SOPORTE': 'border-purple-200 bg-gradient-to-br from-purple-50/50 to-white hover:border-purple-400'
+    }[macro.category as 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'] || 'border-slate-200 bg-white';
+    
+    const progressColorClasses = {
+        'ESTRATEGICO': 'bg-amber-500',
+        'OPERATIVO': 'bg-sky-500',
+        'SOPORTE': 'bg-purple-500'
+    }[macro.category as 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'] || 'bg-indigo-600';
+
+    const pillBg = {
+        'ESTRATEGICO': 'bg-amber-100 text-amber-700',
+        'OPERATIVO': 'bg-sky-100 text-sky-700',
+        'SOPORTE': 'bg-purple-100 text-purple-700'
+    }[macro.category as 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'] || 'bg-slate-100 text-slate-700';
+
+    return (
+        <div 
+            className={`p-4 rounded-xl border shadow-sm transition-all flex flex-col justify-between cursor-pointer relative group ${themeClasses} hover:shadow min-h-[110px]`}
+            onClick={() => onDetailSelect(macro)}
+        >
+            {/* Quick classification switcher dropdown */}
+            <div 
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions); }}
+            >
+                <div className="px-1.5 py-0.5 rounded bg-slate-100/90 hover:bg-slate-200 transition-all text-[9.5px] font-black text-slate-600 flex items-center gap-0.5">
+                    Mover <ChevronDown size={10} />
+                </div>
+                {showOptions && (
+                    <div className="absolute right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg py-1 w-32 z-30 text-start">
+                        {(['ESTRATEGICO', 'OPERATIVO', 'SOPORTE'] as const).map(cat => (
+                            <button
+                                key={cat}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onTypeSelect(cat);
+                                    setShowOptions(false);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-[9.5px] font-bold uppercase transition-colors hover:bg-slate-50 ${macro.category === cat ? 'text-indigo-600 bg-indigo-50/50' : 'text-slate-600'}`}
+                            >
+                                {cat === 'ESTRATEGICO' ? '👉 Estratégico' : cat === 'OPERATIVO' ? '👉 Operativo' : '👉 Soporte'}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-1.5 pr-8">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block truncate" title={macro.project}>{macro.project}</span>
+                <span className="text-[11px] font-black text-slate-800 line-clamp-2 block leading-snug" title={macro.macroprocess}>{macro.macroprocess}</span>
+            </div>
+
+            <div className="space-y-1.5 mt-3">
+                <div className="flex justify-between items-center text-[9.5px] font-bold font-mono">
+                    <span className="text-slate-500">{macro.totalApproved}/{macro.totalRequired} Docs</span>
+                    <span className={`${pillBg} px-1 rounded`}>{progress}%</span>
+                </div>
+                
+                <div className="w-full bg-slate-200/50 h-1 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all duration-500 ${progressColorClasses}`} style={{ width: `${progress}%` }}></div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default Reports;
