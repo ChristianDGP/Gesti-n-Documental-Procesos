@@ -1282,78 +1282,150 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 </div>
 
                                 {/* Flow detail mapping */}
-                                <div className="space-y-3">
-                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Flujos del Macroproceso</h4>
+                                <div className="space-y-4">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Apertura de Procesos y Microprocesos</h4>
                                     
-                                    <div className="border border-slate-150 rounded-xl divide-y divide-slate-100 overflow-hidden shadow-sm">
-                                        {selectedMacroDetail.microprocesses.map((micro: any, mIdx: number) => {
-                                            return (
-                                                <div key={micro.microprocess + mIdx} className="p-4 bg-white hover:bg-slate-50/30 transition-colors space-y-3">
-                                                    <div className="flex justify-between items-start gap-2">
-                                                        <div>
-                                                            <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest block">{micro.process}</span>
-                                                            <span className="text-xs font-black text-slate-800 leading-tight block mt-0.5">{micro.microprocess}</span>
-                                                        </div>
-                                                        <span className="text-[9px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full select-none">
-                                                            {micro.totalRequired > 0 ? Math.round((micro.totalApproved / micro.totalRequired) * 100) : 0}% avance
-                                                        </span>
-                                                    </div>
+                                    {(() => {
+                                        const pMap: Record<string, {
+                                            processName: string;
+                                            totalRequired: number;
+                                            totalApproved: number;
+                                            items: any[];
+                                        }> = {};
+                                        
+                                        selectedMacroDetail.microprocesses.forEach((m: any) => {
+                                            const pName = m.process || 'Sin Proceso';
+                                            if (!pMap[pName]) {
+                                                pMap[pName] = {
+                                                    processName: pName,
+                                                    totalRequired: 0,
+                                                    totalApproved: 0,
+                                                    items: []
+                                                };
+                                            }
+                                            pMap[pName].totalRequired += m.totalRequired;
+                                            pMap[pName].totalApproved += m.totalApproved;
+                                            pMap[pName].items.push(m);
+                                        });
 
-                                                    {/* Document Status Columns */}
-                                                    <div className="grid grid-cols-4 gap-2">
-                                                        {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => {
-                                                            const doc = micro.docs[type];
-                                                            if (!doc) {
-                                                                return (
-                                                                    <div key={type} className="bg-slate-50 border border-slate-100 rounded-lg p-2 text-center flex flex-col justify-center h-12">
-                                                                        <span className="text-[9px] text-slate-350 font-black tracking-wider block">{type}</span>
-                                                                        <span className="text-[8px] text-slate-400 font-bold italic mt-0.5">No req.</span>
+                                        const processesList = Object.values(pMap);
+
+                                        return (
+                                            <div className="space-y-6">
+                                                {processesList.map((pGroup: any, pIdx: number) => {
+                                                    const pProgress = pGroup.totalRequired > 0 ? Math.round((pGroup.totalApproved / pGroup.totalRequired) * 100) : 0;
+                                                    const isFocused = selectedMacroDetail.focusProcessName === pGroup.processName;
+
+                                                    return (
+                                                        <div 
+                                                            key={pGroup.processName + pIdx} 
+                                                            className={`border rounded-xl overflow-hidden shadow-sm transition-all duration-300 ${
+                                                                isFocused ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md bg-indigo-50/10' : 'border-slate-200 bg-white'
+                                                            }`}
+                                                        >
+                                                            {/* Process level Header breakdown */}
+                                                            <div className={`p-4 flex justify-between items-center ${isFocused ? 'bg-indigo-50/40 border-b border-indigo-100' : 'bg-slate-50 border-b border-slate-100'}`}>
+                                                                <div className="space-y-0.5">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        {isFocused && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>}
+                                                                        <span className="text-xs font-black text-slate-800 uppercase tracking-wide">{pGroup.processName}</span>
                                                                     </div>
-                                                                );
-                                                            }
-
-                                                            const colorClasses: Record<DocState, string> = {
-                                                                [DocState.NOT_STARTED]: 'bg-slate-50 text-slate-400 border-slate-200/60',
-                                                                [DocState.INITIATED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-                                                                [DocState.IN_PROCESS]: 'bg-blue-50 text-blue-600 border-blue-100',
-                                                                [DocState.INTERNAL_REVIEW]: 'bg-sky-50 text-sky-600 border-sky-100',
-                                                                [DocState.SENT_TO_REFERENT]: 'bg-purple-50 text-purple-600 border-purple-100',
-                                                                [DocState.REFERENT_REVIEW]: 'bg-purple-100/70 text-purple-700 border-purple-200/60',
-                                                                [DocState.SENT_TO_CONTROL]: 'bg-orange-50 text-orange-600 border-orange-100',
-                                                                [DocState.CONTROL_REVIEW]: 'bg-orange-100/70 text-orange-700 border-orange-200/60',
-                                                                [DocState.APPROVED]: 'bg-green-50 text-green-650 text-green-600 border-green-200'
-                                                            };
-
-                                                            const labelMap: Record<DocState, string> = {
-                                                                [DocState.NOT_STARTED]: 'Inactivo',
-                                                                [DocState.INITIATED]: 'Iniciado',
-                                                                [DocState.IN_PROCESS]: 'En Proc.',
-                                                                [DocState.INTERNAL_REVIEW]: 'Rev. Int.',
-                                                                [DocState.SENT_TO_REFERENT]: 'Recom.',
-                                                                [DocState.REFERENT_REVIEW]: 'Recom.',
-                                                                [DocState.SENT_TO_CONTROL]: 'Cierre',
-                                                                [DocState.CONTROL_REVIEW]: 'Cierre',
-                                                                [DocState.APPROVED]: 'Aprobado'
-                                                            };
-
-                                                            const styleClass = colorClasses[doc.state as DocState] || 'bg-slate-50 text-slate-400';
-                                                            const label = labelMap[doc.state as DocState] || doc.state;
-
-                                                            return (
-                                                                <div key={type} className={`border rounded-lg p-2 text-center flex flex-col justify-between h-12 ${styleClass}`}>
-                                                                    <span className="text-[9px] font-black tracking-wider block">{type}</span>
-                                                                    <div className="flex justify-between items-center text-[8px] font-mono leading-none font-bold mt-1">
-                                                                        <span className="opacity-75">v{doc.version}</span>
-                                                                        <span className="uppercase font-black text-[7px] tracking-tighter">{label}</span>
-                                                                    </div>
+                                                                    <p className="text-[10px] text-slate-500 font-medium">Contiene {pGroup.items.length} microproceso(s)</p>
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 shadow-sm">
+                                                                        {pProgress}% completitud
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Content - Microprocesses list */}
+                                                            <div className="divide-y divide-slate-100 bg-white">
+                                                                {pGroup.items.map((micro: any, mIdx: number) => {
+                                                                    return (
+                                                                        <div key={micro.microprocess + mIdx} className="p-4 hover:bg-slate-50/30 transition-colors space-y-3">
+                                                                            <div className="flex justify-between items-start gap-2">
+                                                                                <div>
+                                                                                    <span className="text-xs font-extrabold text-slate-700 leading-tight block">{micro.microprocess}</span>
+                                                                                    {micro.assignees && micro.assignees.length > 0 && (
+                                                                                        <p className="text-[9px] text-slate-400 font-bold mt-1">
+                                                                                            Responsables: {micro.assignees.join(', ')}
+                                                                                        </p>
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className="text-[9.5px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full select-none">
+                                                                                    {micro.totalRequired > 0 ? Math.round((micro.totalApproved / micro.totalRequired) * 100) : 0}% avance
+                                                                                </span>
+                                                                            </div>
+
+                                                                            {/* Document Status Columns */}
+                                                                            <div className="grid grid-cols-4 gap-2">
+                                                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => {
+                                                                                    const doc = micro.docs[type];
+                                                                                    if (!doc) {
+                                                                                        return (
+                                                                                            <div key={type} className="bg-slate-50/50 border border-slate-100 rounded-lg p-2 text-center flex flex-col justify-center h-12">
+                                                                                                <span className="text-[9px] text-slate-400 font-black tracking-wider block">{type}</span>
+                                                                                                <span className="text-[8px] text-slate-400 font-bold italic mt-0.5">No req.</span>
+                                                                                            </div>
+                                                                                        );
+                                                                                    }
+
+                                                                                    const colorClasses: Record<DocState, string> = {
+                                                                                        [DocState.NOT_STARTED]: 'bg-slate-50 text-slate-400 border-slate-200/60',
+                                                                                        [DocState.INITIATED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+                                                                                        [DocState.IN_PROCESS]: 'bg-blue-50 text-blue-600 border-blue-105 border-blue-100',
+                                                                                        [DocState.INTERNAL_REVIEW]: 'bg-sky-50 text-sky-600 border-sky-101 border-sky-100',
+                                                                                        [DocState.SENT_TO_REFERENT]: 'bg-purple-50 text-purple-600 border-purple-101 border-purple-100',
+                                                                                        [DocState.REFERENT_REVIEW]: 'bg-purple-100/70 text-purple-700 border-purple-201/60 border-purple-200/60',
+                                                                                        [DocState.SENT_TO_CONTROL]: 'bg-orange-50 text-orange-600 border-orange-101 border-orange-100',
+                                                                                        [DocState.CONTROL_REVIEW]: 'bg-orange-100/70 text-orange-700 border-orange-201/60 border-orange-200/60',
+                                                                                        [DocState.APPROVED]: 'bg-green-50 text-green-655 text-green-650 text-green-600 border-green-200'
+                                                                                    };
+
+                                                                                    const labelMap: Record<DocState, string> = {
+                                                                                        [DocState.NOT_STARTED]: 'Inactivo',
+                                                                                        [DocState.INITIATED]: 'Iniciado',
+                                                                                        [DocState.IN_PROCESS]: 'En Proc.',
+                                                                                        [DocState.INTERNAL_REVIEW]: 'Rev. Int.',
+                                                                                        [DocState.SENT_TO_REFERENT]: 'Recom.',
+                                                                                        [DocState.REFERENT_REVIEW]: 'Recom.',
+                                                                                        [DocState.SENT_TO_CONTROL]: 'Cierre',
+                                                                                        [DocState.CONTROL_REVIEW]: 'Cierre',
+                                                                                        [DocState.APPROVED]: 'Aprobado'
+                                                                                    };
+
+                                                                                    const styleClass = colorClasses[doc.state as DocState] || 'bg-slate-50 text-slate-400';
+                                                                                    const label = labelMap[doc.state as DocState] || doc.state;
+
+                                                                                    return (
+                                                                                        <div 
+                                                                                            key={type} 
+                                                                                            onClick={() => {
+                                                                                                setSelectedMacroDetail(null);
+                                                                                                navigate(`/doc/${doc.id}`);
+                                                                                            }}
+                                                                                            className={`border rounded-lg p-2 text-center flex flex-col justify-between h-12 ${styleClass} cursor-pointer hover:shadow-sm hover:scale-[1.02] transition-all`}
+                                                                                        >
+                                                                                            <span className="text-[9px] font-black tracking-wider block">{type}</span>
+                                                                                            <div className="flex justify-between items-center text-[8px] font-mono leading-none font-bold mt-1">
+                                                                                                <span className="opacity-75">v{doc.version}</span>
+                                                                                                <span className="uppercase font-black text-[7px] tracking-tighter">{label}</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
@@ -1419,9 +1491,30 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
         'SOPORTE': 'bg-purple-100 text-purple-700'
     }[macro.category as 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'] || 'bg-slate-100 text-slate-700';
 
+    const groupedProcesses = useMemo(() => {
+        const pMap: Record<string, {
+            processName: string;
+            totalRequired: number;
+            totalApproved: number;
+        }> = {};
+        macro.microprocesses.forEach((m: any) => {
+            const pName = m.process || 'Sin Proceso';
+            if (!pMap[pName]) {
+                pMap[pName] = {
+                    processName: pName,
+                    totalRequired: 0,
+                    totalApproved: 0
+                };
+            }
+            pMap[pName].totalRequired += m.totalRequired;
+            pMap[pName].totalApproved += m.totalApproved;
+        });
+        return Object.values(pMap);
+    }, [macro.microprocesses]);
+
     return (
         <div 
-            className={`p-4 rounded-xl border shadow-sm transition-all flex flex-col justify-between cursor-pointer relative group ${themeClasses} hover:shadow min-h-[110px]`}
+            className={`p-4 rounded-xl border shadow-sm transition-all flex flex-col justify-between cursor-pointer relative group ${themeClasses} hover:shadow min-h-[180px] h-full`}
             onClick={() => onDetailSelect(macro)}
         >
             {/* Quick classification switcher dropdown */}
@@ -1451,12 +1544,35 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
                 )}
             </div>
 
-            <div className="space-y-1.5 pr-8">
+            <div className="space-y-1 my-1 pr-8">
                 <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block truncate" title={macro.project}>{macro.project}</span>
-                <span className="text-[11px] font-black text-slate-800 line-clamp-2 block leading-snug" title={macro.macroprocess}>{macro.macroprocess}</span>
+                <span className="text-[12px] font-black text-slate-800 line-clamp-2 block leading-snug" title={macro.macroprocess}>{macro.macroprocess}</span>
             </div>
 
-            <div className="space-y-1.5 mt-3">
+            {/* Apertura a nivel de Procesos */}
+            <div className="mt-3.5 pt-2 border-t border-slate-100 space-y-1 flex-1">
+                <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Procesos ({groupedProcesses.length})</span>
+                <div className="space-y-1 max-h-[110px] overflow-y-auto custom-scrollbar pr-0.5">
+                    {groupedProcesses.map((p: any, idx: number) => {
+                        const pProgress = p.totalRequired > 0 ? Math.round((p.totalApproved / p.totalRequired) * 100) : 0;
+                        return (
+                            <div 
+                                key={p.processName + idx}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDetailSelect({ ...macro, focusProcessName: p.processName });
+                                }}
+                                className="flex items-center justify-between text-[10px] bg-slate-50/80 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-150 rounded p-1 transition-all"
+                            >
+                                <span className="font-extrabold text-slate-600 truncate max-w-[155px]" title={p.processName}>{p.processName}</span>
+                                <span className="font-mono font-bold text-[9px] text-indigo-750 text-indigo-650 bg-indigo-50/80 px-1 rounded-sm">{pProgress}%</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="space-y-1.5 mt-4 pt-3 border-t border-slate-100/60">
                 <div className="flex justify-between items-center text-[9.5px] font-bold font-mono">
                     <span className="text-slate-500">{macro.totalApproved}/{macro.totalRequired} Docs</span>
                     <span className={`${pillBg} px-1 rounded`}>{progress}%</span>
