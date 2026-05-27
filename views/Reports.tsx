@@ -789,7 +789,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> Cierre Mensual</button>
                 )}
                 {(user.role === UserRole.ADMIN || user.canAccessReportCoverage) && (
-                    <button onClick={() => setActiveTab('MAP')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'MAP' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Network size={18} /> Mapa de Procesos</button>
+                    <button onClick={() => setActiveTab('MAP')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'MAP' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Network size={18} /> Gestión por Procesos</button>
                 )}
                 {(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) && (
                     <button onClick={() => setActiveTab('BI')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'BI' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Database size={18} /> Constructor de Consultas (BI)</button>
@@ -1130,7 +1130,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                         {/* Summary Header of Process Map */}
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Network size={20} className="text-indigo-600" /> Mapa del Enfoque a Procesos</h3>
+                                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Network size={20} className="text-indigo-600" /> Gestión por Procesos</h3>
                                 <p className="text-xs text-slate-500">Representación visual interactiva orientada al cliente y alineada con la Gestión por Procesos de la organización.</p>
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
