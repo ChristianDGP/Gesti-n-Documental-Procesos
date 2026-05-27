@@ -137,6 +137,8 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [coverageSearch, setCoverageSearch] = useState('');
     const [coveragePage, setCoveragePage] = useState(1);
 
+    const [activeMapProject, setActiveMapProject] = useState<string>('HPC');
+
     const [microDrillDown, setMicroDrillDown] = useState<{ title: string, color: string, items: {name: string, project: string, ids: string[]}[] } | null>(null);
     const [selectedMacroDetail, setSelectedMacroDetail] = useState<any | null>(null);
 
@@ -549,6 +551,30 @@ const Reports: React.FC<Props> = ({ user }) => {
         
         return Object.values(macros);
     }, [coverageAnalytics.list, macroClassifications]);
+
+    const availableMapProjects = useMemo(() => {
+        const projs = Array.from(new Set(processMapData.map(m => m.project).filter(Boolean)))
+            .filter(p => p.toUpperCase() !== 'REU');
+        if (projs.length === 0) return ['HPC', 'HSR'];
+        return projs;
+    }, [processMapData]);
+
+    const filteredProcessMapDataByProject = useMemo(() => {
+        return processMapData.filter(m => m.project === activeMapProject);
+    }, [processMapData, activeMapProject]);
+
+    useEffect(() => {
+        if (filterProject) {
+            setActiveMapProject(filterProject);
+        } else {
+            const hpcProj = availableMapProjects.find(p => p.toUpperCase() === 'HPC');
+            if (hpcProj) {
+                setActiveMapProject(hpcProj);
+            } else if (availableMapProjects.length > 0) {
+                setActiveMapProject(availableMapProjects[0]);
+            }
+        }
+    }, [filterProject, availableMapProjects]);
 
     const filteredCoverageList = useMemo(() => {
         const query = coverageSearch.toLowerCase();
@@ -1138,11 +1164,36 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <FileSpreadsheet size={14} className="text-green-600" /> Exportar Cobertura (CSV)
                                 </button>
                                 <div className="flex gap-4 text-xs font-semibold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos ({processMapData.filter(m => m.category === 'ESTRATEGICO').length})</span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos ({processMapData.filter(m => m.category === 'OPERATIVO').length})</span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 animate-pulse"></span> <span>Soporte ({processMapData.filter(m => m.category === 'SOPORTE').length})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos ({filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').length})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos ({filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').length})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 animate-pulse"></span> <span>Soporte ({filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').length})</span></div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Vistas / Estructuras de Proyectos en Gestión por Procesos */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl w-fit gap-1 border border-slate-200 shadow-sm">
+                            {availableMapProjects.map((proj) => {
+                                const isActive = activeMapProject === proj;
+                                let fullName = proj;
+                                if (proj === 'HPC') fullName = 'Hospital Padre Hurtado (HPC)';
+                                else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
+                                else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
+
+                                return (
+                                    <button
+                                        key={proj}
+                                        onClick={() => setActiveMapProject(proj)}
+                                        className={`px-5 py-2.5 rounded-lg text-xs font-black transition-all ${
+                                            isActive 
+                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/40' 
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        {fullName}
+                                    </button>
+                                );
+                            })}
                         </div>
 
                         {/* Interactive diagram diagram */}
@@ -1163,13 +1214,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     {/* ROW 1: STRATEGIC */}
                                     <div className="relative">
                                         <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos de la Organización
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos ({activeMapProject})
                                         </div>
                                         <div className="grid grid-cols-3 gap-4">
-                                            {processMapData.filter(m => m.category === 'ESTRATEGICO').length === 0 ? (
-                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría.</div>
+                                            {filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').length === 0 ? (
+                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
                                             ) : (
-                                                processMapData.filter(m => m.category === 'ESTRATEGICO').map(macro => (
+                                                filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').map(macro => (
                                                     <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
                                                 ))
                                             )}
@@ -1187,13 +1238,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     {/* ROW 2: OPERATIONAL */}
                                     <div className="relative bg-sky-50/20 p-4 border border-sky-100/50 rounded-xl">
                                         <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-150 border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor)
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor) ({activeMapProject})
                                         </div>
                                         <div className="grid grid-cols-3 gap-4">
-                                            {processMapData.filter(m => m.category === 'OPERATIVO').length === 0 ? (
-                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría.</div>
+                                            {filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').length === 0 ? (
+                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
                                             ) : (
-                                                processMapData.filter(m => m.category === 'OPERATIVO').map(macro => (
+                                                filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').map(macro => (
                                                     <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
                                                 ))
                                             )}
@@ -1211,13 +1262,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             ))}
                                         </div>
                                         <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo
+                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo ({activeMapProject})
                                         </div>
                                         <div className="grid grid-cols-3 gap-4">
-                                            {processMapData.filter(m => m.category === 'SOPORTE').length === 0 ? (
-                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría.</div>
+                                            {filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').length === 0 ? (
+                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
                                             ) : (
-                                                processMapData.filter(m => m.category === 'SOPORTE').map(macro => (
+                                                filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').map(macro => (
                                                     <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
                                                 ))
                                             )}
