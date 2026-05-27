@@ -1160,9 +1160,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 <p className="text-xs text-slate-500">Representación visual interactiva orientada al cliente y alineada con la Gestión por Procesos de la organización.</p>
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
-                                <button onClick={handleExportCoverageCSV} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-all shadow-sm text-xs font-bold">
-                                    <FileSpreadsheet size={14} className="text-green-600" /> Exportar Cobertura (CSV)
-                                </button>
                                 <div className="flex gap-4 text-xs font-semibold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
                                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos ({filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').length})</span></div>
                                     <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos ({filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').length})</span></div>
@@ -1176,7 +1173,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                             {availableMapProjects.map((proj) => {
                                 const isActive = activeMapProject === proj;
                                 let fullName = proj;
-                                if (proj === 'HPC') fullName = 'Hospital Padre Hurtado (HPC)';
+                                if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
                                 else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
                                 else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
 
@@ -1216,15 +1213,21 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos ({activeMapProject})
                                         </div>
-                                        <div className="grid grid-cols-3 gap-4">
-                                            {filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').length === 0 ? (
-                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
-                                            ) : (
-                                                filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').map(macro => (
-                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
-                                                ))
-                                            )}
-                                        </div>
+                                        {(() => {
+                                            const items = filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO');
+                                            const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+                                            return (
+                                                <div className={`grid ${gridClass} gap-4`}>
+                                                    {items.length === 0 ? (
+                                                        <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
+                                                    ) : (
+                                                        items.map(macro => (
+                                                            <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                        ))
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                         {/* Golden Down Arrows */}
                                         <div className="flex justify-around mt-4">
                                             {[1, 2, 3].map(i => (
@@ -1240,15 +1243,21 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-150 border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor) ({activeMapProject})
                                         </div>
-                                        <div className="grid grid-cols-3 gap-4">
-                                            {filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').length === 0 ? (
-                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
-                                            ) : (
-                                                filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').map(macro => (
-                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
-                                                ))
-                                            )}
-                                        </div>
+                                        {(() => {
+                                            const items = filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO');
+                                            const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+                                            return (
+                                                <div className={`grid ${gridClass} gap-4`}>
+                                                    {items.length === 0 ? (
+                                                        <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
+                                                    ) : (
+                                                        items.map(macro => (
+                                                            <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                        ))
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* ROW 3: SUPPORT */}
@@ -1264,15 +1273,21 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo ({activeMapProject})
                                         </div>
-                                        <div className="grid grid-cols-3 gap-4">
-                                            {filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').length === 0 ? (
-                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
-                                            ) : (
-                                                filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').map(macro => (
-                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
-                                                ))
-                                            )}
-                                        </div>
+                                        {(() => {
+                                            const items = filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE');
+                                            const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+                                            return (
+                                                <div className={`grid ${gridClass} gap-4`}>
+                                                    {items.length === 0 ? (
+                                                        <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
+                                                    ) : (
+                                                        items.map(macro => (
+                                                            <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                        ))
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                 </div>
@@ -1601,9 +1616,9 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
             </div>
 
             {/* Apertura a nivel de Procesos */}
-            <div className="mt-3.5 pt-2 border-t border-slate-100 space-y-1 flex-1">
+            <div className="mt-3.5 pt-2 border-t border-slate-100 space-y-1.5 flex-1">
                 <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Procesos ({groupedProcesses.length})</span>
-                <div className="space-y-1 max-h-[110px] overflow-y-auto custom-scrollbar pr-0.5">
+                <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-indigo-200 scrollbar-track-transparent pr-0.5 cursor-grab active:cursor-grabbing">
                     {groupedProcesses.map((p: any, idx: number) => {
                         const pProgress = p.totalRequired > 0 ? Math.round((p.totalApproved / p.totalRequired) * 100) : 0;
                         return (
@@ -1613,10 +1628,16 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
                                     e.stopPropagation();
                                     onDetailSelect({ ...macro, focusProcessName: p.processName });
                                 }}
-                                className="flex items-center justify-between text-[10px] bg-slate-50/80 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-150 rounded p-1 transition-all"
+                                className="flex-shrink-0 w-28 h-20 flex flex-col justify-between text-left p-2.5 bg-slate-50/90 hover:bg-indigo-50/40 border border-slate-200 hover:border-indigo-300 rounded-lg shadow-sm hover:shadow transition-all duration-200 select-none group/item active:scale-95 cursor-pointer relative"
                             >
-                                <span className="font-extrabold text-slate-600 truncate max-w-[155px]" title={p.processName}>{p.processName}</span>
-                                <span className="font-mono font-bold text-[9px] text-indigo-750 text-indigo-650 bg-indigo-50/80 px-1 rounded-sm">{pProgress}%</span>
+                                <span className="font-black text-[9.5px] text-slate-700 leading-tight line-clamp-2" title={p.processName}>
+                                    {p.processName}
+                                </span>
+                                <div className="flex justify-between items-center mt-1">
+                                    <span className="font-mono font-black text-[9px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100/50 shadow-sm leading-none">
+                                        {pProgress}%
+                                    </span>
+                                </div>
                             </div>
                         );
                     })}
