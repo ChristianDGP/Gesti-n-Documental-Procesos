@@ -560,8 +560,71 @@ const Reports: React.FC<Props> = ({ user }) => {
     }, [processMapData]);
 
     const filteredProcessMapDataByProject = useMemo(() => {
-        return processMapData.filter(m => m.project === activeMapProject);
-    }, [processMapData, activeMapProject]);
+        // 1. Find all unique macroprocesses in the entire list (regardless of project, but excluding 'REU')
+        const uniqueMacrosSet = new Set<string>();
+        coverageAnalytics.list.forEach(g => {
+            if (g.project && g.project.toUpperCase() === 'REU') return;
+            if (g.macroprocess) uniqueMacrosSet.add(g.macroprocess);
+        });
+        const allUniqueMacroNames = Array.from(uniqueMacrosSet).sort();
+
+        // 2. Map of macroprocess name -> list of unique process names (across all projects, but excluding 'REU')
+        const macroToProcessesMap: Record<string, string[]> = {};
+        coverageAnalytics.list.forEach(g => {
+            if (g.project && g.project.toUpperCase() === 'REU') return;
+            if (!g.macroprocess) return;
+            if (!macroToProcessesMap[g.macroprocess]) {
+                macroToProcessesMap[g.macroprocess] = [];
+            }
+            const pName = g.process || 'Sin Proceso';
+            if (!macroToProcessesMap[g.macroprocess].includes(pName)) {
+                macroToProcessesMap[g.macroprocess].push(pName);
+            }
+        });
+        // Sort processes within each macroprocess alphabetically for standardization
+        Object.keys(macroToProcessesMap).forEach(key => {
+            macroToProcessesMap[key].sort();
+        });
+
+        // 3. For each unique macroprocess, build the standardized macro object for activeMapProject
+        return allUniqueMacroNames.map(macroName => {
+            const category = getMacroCategory(macroName);
+            
+            // Filter list to get items that belong to BOTH this macroprocess and the activeMapProject
+            const activeProjectItems = coverageAnalytics.list.filter(g => 
+                g.macroprocess === macroName && 
+                g.project === activeMapProject
+            );
+
+            const totalRequired = activeProjectItems.reduce((acc, curr) => acc + curr.totalRequired, 0);
+            const totalApproved = activeProjectItems.reduce((acc, curr) => acc + curr.totalApproved, 0);
+            const totalInProcess = activeProjectItems.reduce((acc, curr) => acc + curr.totalInProcess, 0);
+
+            // Build standard processes array with metrics specific to the active project
+            const standardProcessesList = (macroToProcessesMap[macroName] || []).map(pName => {
+                // Find items for this specific process in active project
+                const processItems = activeProjectItems.filter(g => (g.process || 'Sin Proceso') === pName);
+                const pRequired = processItems.reduce((acc, curr) => acc + curr.totalRequired, 0);
+                const pApproved = processItems.reduce((acc, curr) => acc + curr.totalApproved, 0);
+                return {
+                    processName: pName,
+                    totalRequired: pRequired,
+                    totalApproved: pApproved
+                };
+            });
+
+            return {
+                project: activeMapProject,
+                macroprocess: macroName,
+                category,
+                totalRequired,
+                totalApproved,
+                totalInProcess,
+                microprocesses: activeProjectItems, // legacy compatibility
+                standardGroupedProcesses: standardProcessesList
+            };
+        });
+    }, [coverageAnalytics.list, activeMapProject, macroClassifications]);
 
     useEffect(() => {
         if (filterProject) {
@@ -1558,6 +1621,9 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
     }[macro.category as 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'] || 'bg-slate-100 text-slate-700';
 
     const groupedProcesses = useMemo(() => {
+        if (macro.standardGroupedProcesses) {
+            return macro.standardGroupedProcesses;
+        }
         const pMap: Record<string, {
             processName: string;
             totalRequired: number;
@@ -1576,7 +1642,7 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
             pMap[pName].totalApproved += m.totalApproved;
         });
         return Object.values(pMap);
-    }, [macro.microprocesses]);
+    }, [macro.microprocesses, macro.standardGroupedProcesses]);
 
     return (
         <div 
