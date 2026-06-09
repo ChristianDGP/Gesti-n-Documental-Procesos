@@ -626,6 +626,20 @@ const Reports: React.FC<Props> = ({ user }) => {
         });
     }, [coverageAnalytics.list, activeMapProject, macroClassifications]);
 
+    const categoryProgress = useMemo(() => {
+        const getProgressForCategory = (category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE') => {
+            const items = filteredProcessMapDataByProject.filter(m => m.category === category);
+            const totalRequired = items.reduce((sum, item) => sum + (item.totalRequired || 0), 0);
+            const totalApproved = items.reduce((sum, item) => sum + (item.totalApproved || 0), 0);
+            return totalRequired > 0 ? Math.round((totalApproved / totalRequired) * 100) : 0;
+        };
+        return {
+            ESTRATEGICO: getProgressForCategory('ESTRATEGICO'),
+            OPERATIVO: getProgressForCategory('OPERATIVO'),
+            SOPORTE: getProgressForCategory('SOPORTE'),
+        };
+    }, [filteredProcessMapDataByProject]);
+
     useEffect(() => {
         if (filterProject) {
             setActiveMapProject(filterProject);
@@ -1224,9 +1238,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex gap-4 text-xs font-semibold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos ({filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').length})</span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos ({filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').length})</span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 animate-pulse"></span> <span>Soporte ({filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').length})</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos ({filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').length}) · <strong className="font-extrabold text-amber-600">{categoryProgress.ESTRATEGICO}% Avance</strong></span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos ({filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').length}) · <strong className="font-extrabold text-sky-600">{categoryProgress.OPERATIVO}% Avance</strong></span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 animate-pulse"></span> <span>Soporte ({filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').length}) · <strong className="font-extrabold text-purple-600">{categoryProgress.SOPORTE}% Avance</strong></span></div>
                                 </div>
                             </div>
                         </div>
@@ -1273,8 +1287,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     
                                     {/* ROW 1: STRATEGIC */}
                                     <div className="relative">
-                                        <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
+                                        <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos ({activeMapProject})
+                                            <span className="text-slate-300">|</span>
+                                            <span className="text-amber-800 font-extrabold">Avance Total: {categoryProgress.ESTRATEGICO}%</span>
                                         </div>
                                         {(() => {
                                             const items = filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO');
@@ -1303,8 +1319,10 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                                     {/* ROW 2: OPERATIONAL */}
                                     <div className="relative bg-sky-50/20 p-4 border border-sky-100/50 rounded-xl">
-                                        <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-150 border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
+                                        <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor) ({activeMapProject})
+                                            <span className="text-slate-300">|</span>
+                                            <span className="text-sky-800 font-extrabold">Avance Total: {categoryProgress.OPERATIVO}%</span>
                                         </div>
                                         {(() => {
                                             const items = filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO');
@@ -1333,8 +1351,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-1">
+                                        <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo ({activeMapProject})
+                                            <span className="text-slate-300">|</span>
+                                            <span className="text-purple-800 font-extrabold">Avance Total: {categoryProgress.SOPORTE}%</span>
                                         </div>
                                         {(() => {
                                             const items = filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE');
