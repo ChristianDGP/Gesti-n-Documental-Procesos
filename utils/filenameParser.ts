@@ -2,6 +2,11 @@
 import { ParsedFilenameResult } from '../types';
 import { DocState } from '../types';
 
+const normalizeStr = (str: string): string => {
+  if (!str) return '';
+  return str.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/^"|"$/g, ''); 
+};
+
 export const parseDocumentFilename = (
   fullFilename: string, 
   expectedProject?: string,
@@ -36,14 +41,14 @@ export const parseDocumentFilename = (
 
   if (proyecto !== 'HPC' && proyecto !== 'HSR' && proyecto !== 'REU') {
     result.errores.push(`Proyecto inválido: ${proyecto}.`);
-  } else if (expectedProject && proyecto !== expectedProject.toUpperCase()) {
+  } else if (expectedProject && normalizeStr(proyecto) !== normalizeStr(expectedProject)) {
     result.errores.push(`Proyecto no coincide con la solicitud.`);
   }
   result.proyecto = proyecto;
 
   if (!microproceso || microproceso.trim() === '') {
     result.errores.push('Microproceso vacío.');
-  } else if (expectedMicro && microproceso.toUpperCase() !== expectedMicro.toUpperCase()) {
+  } else if (expectedMicro && normalizeStr(microproceso) !== normalizeStr(expectedMicro)) {
     result.errores.push(`Microproceso no coincide.`);
   }
   result.microproceso = microproceso;

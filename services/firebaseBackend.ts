@@ -902,10 +902,16 @@ export const HierarchyService = {
           const matrixRef = doc(db, "process_matrix", context.docId);
           batch.update(matrixRef, { name: newName });
           
-          const docsQ = query(collection(db, "documents"), where("project", "==", context.project), where("microprocess", "==", oldName));
+          const docsQ = query(collection(db, "documents"), where("project", "==", context.project));
           const docsSnap = await getDocs(docsQ);
           docsSnap.forEach(d => {
-              batch.update(d.ref, { microprocess: newName, title: d.data().title.replace(oldName, newName) });
+              const currentMicro = d.data().microprocess || '';
+              if (normalizeHeader(currentMicro) === normalizeHeader(oldName)) {
+                  batch.update(d.ref, { 
+                      microprocess: newName, 
+                      title: d.data().title.split(' - ').map((part: string) => normalizeHeader(part) === normalizeHeader(currentMicro) ? newName : part).join(' - ')
+                  });
+              }
           });
       } else {
           let q;
