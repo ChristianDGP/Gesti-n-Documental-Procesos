@@ -48,8 +48,17 @@ export const parseDocumentFilename = (
 
   if (!microproceso || microproceso.trim() === '') {
     result.errores.push('Microproceso vacío.');
-  } else if (expectedMicro && normalizeStr(microproceso) !== normalizeStr(expectedMicro)) {
-    result.errores.push(`Microproceso no coincide.`);
+  } else if (expectedMicro) {
+    const cleanStr = (s: string) => normalizeStr(s).replace(/[^A-Z0-9]/g, '');
+    const cleanMicro = cleanStr(microproceso);
+    const cleanExp = cleanStr(expectedMicro);
+
+    const matches = cleanMicro === cleanExp || 
+                    (cleanMicro.length >= 5 && cleanExp.length >= 5 && (cleanMicro.includes(cleanExp) || cleanExp.includes(cleanMicro)));
+
+    if (!matches) {
+        result.errores.push(`Microproceso no coincide.`);
+    }
   }
   result.microproceso = microproceso;
 

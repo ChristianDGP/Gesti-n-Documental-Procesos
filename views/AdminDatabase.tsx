@@ -60,6 +60,22 @@ const AdminDatabase: React.FC = () => {
     }
   };
 
+  const [isAligningMicros, setIsAligningMicros] = useState(false);
+
+  const handleAlignMicroprocesses = async () => {
+    if (!window.confirm('¿Desea alinear retroactivamente los nombres de microprocesos de los documentos existentes con los de la estructura de procesos actual?')) return;
+    
+    setIsAligningMicros(true);
+    try {
+        const result = await (DatabaseService as any).alignMicroprocessNames();
+        alert(`Operación exitosa: Se alinearon ${result.updated} documentos con los nuevos nombres de microproceso.`);
+    } catch (e: any) {
+        alert("Error: " + e.message);
+    } finally {
+        setIsAligningMicros(false);
+    }
+  };
+
   const [rulesFile, setRulesFile] = useState<File | null>(null);
   const [historyFile, setHistoryFile] = useState<File | null>(null);
   
@@ -341,6 +357,29 @@ const AdminDatabase: React.FC = () => {
                     </div>
                 </div>
             )}
+        </div>
+
+        {/* Card 5: Align Microprocess Names */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center mb-4 text-sky-600">
+                <RefreshCw size={24} />
+            </div>
+            <h2 className="text-lg font-bold text-slate-800 mb-2">Alinear Microprocesos</h2>
+            <p className="text-sm text-slate-500 mb-6">
+                Sincroniza y actualiza retroactivamente los nombres de microproceso en los documentos si fueron modificados en la matriz.
+            </p>
+            <button 
+                onClick={handleAlignMicroprocesses}
+                disabled={isAligningMicros}
+                className="w-full flex items-center justify-center px-4 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-lg transition-colors font-medium shadow-sm disabled:opacity-70 font-bold text-xs uppercase tracking-wider"
+            >
+                {isAligningMicros ? <RefreshCw size={18} className="animate-spin" /> : (
+                    <>
+                        <RefreshCw size={18} className="mr-2" />
+                        Sincronizar Documentos
+                    </>
+                )}
+            </button>
         </div>
 
         {/* MAIN CARD: FULL SYSTEM RESET */}

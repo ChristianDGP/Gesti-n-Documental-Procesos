@@ -1102,6 +1102,56 @@ export const DatabaseService = {
     return deletedCount;
   },
 
+  alignMicroprocessNames: async (): Promise<{ updated: number }> => {
+    // 1. Fetch all documents
+    const docSnap = await getDocs(collection(db, "documents"));
+    // 2. Fetch all process matrix entries
+    const matrixSnap = await getDocs(collection(db, "process_matrix"));
+    
+    // Build a map of matrixId to process_matrix document name
+    const matrixMap: Record<string, string> = {};
+    matrixSnap.docs.forEach(doc => {
+        matrixMap[doc.id] = doc.data().name;
+    });
+
+    let updatedCount = 0;
+    const batch = writeBatch(db);
+
+    docSnap.docs.forEach((d) => {
+        const data = d.data();
+        const project = data.project || '';
+        const currentMicro = data.microprocess || '';
+        if (!project || !currentMicro) return;
+
+        // The original matrixId can be computed using current project and current doc microprocess
+        const matrixId = generateMatrixId(project, currentMicro);
+        const matrixName = matrixMap[matrixId];
+
+        // If the process matrix contains this ID but its stored name is different,
+        // it means there is a mismatch (caused by a rename)!
+        if (matrixName && matrixName !== currentMicro) {
+            const updatedTitle = data.title.split(' - ').map((part: string) => {
+                if (normalizeHeader(part) === normalizeHeader(currentMicro)) {
+                    return matrixName;
+                }
+                return part;
+            }).join(' - ');
+
+            batch.update(d.ref, {
+                microprocess: matrixName,
+                title: updatedTitle
+            });
+            updatedCount++;
+        }
+    });
+
+    if (updatedCount > 0) {
+        await batch.commit();
+    }
+
+    return { updated: updatedCount };
+  },
+
   fullSystemResetAndImport: async (
     rulesCsv: string, 
     historyCsv: string, 
