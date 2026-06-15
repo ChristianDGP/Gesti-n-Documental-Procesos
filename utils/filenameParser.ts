@@ -258,8 +258,10 @@ export const validateCoordinatorRules = (
                 }
                 if (current && current.n !== null && incoming.n! < current.n) return { valid: false, error: 'No puede bajar de versión.' };
                 return { valid: true };
+            } else if (project === 'REU' && incoming.type === 'PR') {
+                return { valid: true };
             } else {
-                return { valid: false, error: 'Aprobación requiere vN.n (Consolidar) o vN.nAR (Control).' };
+                return { valid: false, error: project === 'REU' ? 'Aprobación requiere vN.n (Consolidar), vN.nAR (Control) o PR (Final).' : 'Aprobación requiere vN.n (Consolidar) o vN.nAR (Control).' };
             }
         } else {
             if (incoming.type !== 'vN.n.i') return { valid: false, error: 'Rechazo requiere vN.n.i (Ej: v1.0.2).' };
@@ -306,6 +308,7 @@ export const getCoordinatorRuleHint = (currentState: DocState, action: 'APPROVE'
             return 'Formato: vN.n (Ej: v1.0)';
         }
         if (currentState === DocState.SENT_TO_REFERENT || currentState === DocState.REFERENT_REVIEW) {
+            if (project === 'REU') return 'Opción 1: vN.n (Consolidar) / Opción 2: vN.nAR (Enviar a Control) / Opción 3: PR (Final)';
             return 'Opción 1: vN.n (Consolidar) / Opción 2: vN.nAR (Enviar a Control)';
         }
         if (currentState === DocState.SENT_TO_CONTROL || currentState === DocState.CONTROL_REVIEW) {
