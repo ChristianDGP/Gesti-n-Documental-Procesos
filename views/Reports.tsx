@@ -895,7 +895,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     <button onClick={() => setActiveTab('MAP')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'MAP' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Network size={18} /> Gestión por Procesos</button>
                 )}
                 {(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) && (
-                    <button onClick={() => setActiveTab('BI')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'BI' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Database size={18} /> Constructor de Consultas</button>
+                    <button onClick={() => setActiveTab('BI')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'BI' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Database size={18} /> Constructor de Consultas (BI)</button>
                 )}
             </div>
 
