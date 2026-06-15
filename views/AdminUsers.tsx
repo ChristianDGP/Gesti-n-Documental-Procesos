@@ -392,7 +392,7 @@ const AdminUsers: React.FC = () => {
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
                                                 <input type="checkbox" checked={canAccessBIQueryBuilder} onChange={(e) => setCanAccessBIQueryBuilder(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
-                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Constructor de Consultas (BI)</span>
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Constructor de Consultas</span>
                                             </label>
                                         </div>
                                     )}

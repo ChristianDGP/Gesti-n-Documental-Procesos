@@ -392,7 +392,7 @@ const AdminBI: React.FC<AdminBIProps> = ({ hideHeader = false }) => {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <Database className="text-indigo-600" />
-              Constructor de Consultas BI
+              Constructor de Consultas
             </h1>
             <p className="text-slate-500">Extrae datos crudos y genera reportes personalizados para análisis externo.</p>
           </div>
