@@ -104,6 +104,7 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [filterProject, setFilterProject] = useState('');
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
     const [activeType, setActiveType] = useState<string | null>(null);
+    const [mapDocTypeFilter, setMapDocTypeFilter] = useState<'TODOS' | 'AS IS' | 'FCE' | 'PM' | 'TO BE'>('TODOS');
 
     const [macroClassifications, setMacroClassifications] = useState<Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>>({});
 
@@ -559,10 +560,68 @@ const Reports: React.FC<Props> = ({ user }) => {
         return projs;
     }, [processMapData]);
 
+    const mapCoverageAnalytics = useMemo(() => {
+        const groups: Record<string, { 
+            project: string;
+            macroprocess: string;
+            process: string;
+            microprocess: string;
+            docs: Record<string, { state: DocState; version: string; id: string; assignees: string[] }>;
+            totalRequired: number;
+            totalApproved: number;
+            totalInProcess: number;
+        }> = {};
+
+        // Filter filteredDocs by docType if mapDocTypeFilter is not 'TODOS'
+        const docsToUse = mapDocTypeFilter === 'TODOS' 
+            ? filteredDocs 
+            : filteredDocs.filter(d => (d.docType || 'AS IS') === mapDocTypeFilter);
+
+        docsToUse.forEach(d => {
+            const key = `${d.project}|${d.macroprocess}|${d.process}|${d.microprocess}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    project: d.project || '',
+                    macroprocess: d.macroprocess || '',
+                    process: d.process || '',
+                    microprocess: d.microprocess || '',
+                    docs: {},
+                    totalRequired: 0,
+                    totalApproved: 0,
+                    totalInProcess: 0
+                };
+            }
+            
+            const docType = d.docType || 'AS IS';
+            groups[key].docs[docType] = {
+                state: d.state,
+                version: d.version || '1.0',
+                id: d.id,
+                assignees: d.assignees || []
+            };
+            
+            groups[key].totalRequired++;
+            if (d.state === DocState.APPROVED) {
+                groups[key].totalApproved++;
+            } else if (d.state !== DocState.NOT_STARTED) {
+                groups[key].totalInProcess++;
+            }
+        });
+
+        const list = Object.values(groups).sort((a, b) => 
+            a.project.localeCompare(b.project) || 
+            a.macroprocess.localeCompare(b.macroprocess) || 
+            a.process.localeCompare(b.process) || 
+            a.microprocess.localeCompare(b.microprocess)
+        );
+
+        return { list };
+    }, [filteredDocs, mapDocTypeFilter]);
+
     const filteredProcessMapDataByProject = useMemo(() => {
         // 1. Find all unique macroprocesses in the entire list (regardless of project, but excluding 'REU')
         const uniqueMacrosSet = new Set<string>();
-        coverageAnalytics.list.forEach(g => {
+        mapCoverageAnalytics.list.forEach(g => {
             if (g.project && g.project.toUpperCase() === 'REU') return;
             if (g.macroprocess) uniqueMacrosSet.add(g.macroprocess);
         });
@@ -570,7 +629,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
         // 2. Map of macroprocess name -> list of unique process names (across all projects, but excluding 'REU')
         const macroToProcessesMap: Record<string, string[]> = {};
-        coverageAnalytics.list.forEach(g => {
+        mapCoverageAnalytics.list.forEach(g => {
             if (g.project && g.project.toUpperCase() === 'REU') return;
             if (!g.macroprocess) return;
             if (!macroToProcessesMap[g.macroprocess]) {
@@ -591,7 +650,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             const category = getMacroCategory(macroName);
             
             // Filter list to get items that belong to BOTH this macroprocess and the activeMapProject
-            const activeProjectItems = coverageAnalytics.list.filter(g => 
+            const activeProjectItems = mapCoverageAnalytics.list.filter(g => 
                 g.macroprocess === macroName && 
                 g.project === activeMapProject
             );
@@ -624,7 +683,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                 standardGroupedProcesses: standardProcessesList
             };
         });
-    }, [coverageAnalytics.list, activeMapProject, macroClassifications]);
+    }, [mapCoverageAnalytics.list, activeMapProject, macroClassifications]);
 
     const categoryProgress = useMemo(() => {
         const getProgressForCategory = (category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE') => {
@@ -638,6 +697,12 @@ const Reports: React.FC<Props> = ({ user }) => {
             OPERATIVO: getProgressForCategory('OPERATIVO'),
             SOPORTE: getProgressForCategory('SOPORTE'),
         };
+    }, [filteredProcessMapDataByProject]);
+
+    const totalProjectProgress = useMemo(() => {
+        const totalRequired = filteredProcessMapDataByProject.reduce((sum, item) => sum + (item.totalRequired || 0), 0);
+        const totalApproved = filteredProcessMapDataByProject.reduce((sum, item) => sum + (item.totalApproved || 0), 0);
+        return totalRequired > 0 ? Math.round((totalApproved / totalRequired) * 100) : 0;
     }, [filteredProcessMapDataByProject]);
 
     useEffect(() => {
@@ -1231,43 +1296,74 @@ const Reports: React.FC<Props> = ({ user }) => {
                 {activeTab === 'MAP' && (
                     <section className="space-y-6 animate-fadeIn">
                         {/* Summary Header of Process Map */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Network size={20} className="text-indigo-600" /> Gestión por Procesos</h3>
                                 <p className="text-xs text-slate-500">Representación visual interactiva orientada al cliente y alineada con la Gestión por Procesos de la organización.</p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-3">
-                                <div className="flex gap-4 text-xs font-semibold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos ({filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO').length}) · <strong className="font-extrabold text-amber-600">{categoryProgress.ESTRATEGICO}% Avance</strong></span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos ({filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO').length}) · <strong className="font-extrabold text-sky-600">{categoryProgress.OPERATIVO}% Avance</strong></span></div>
-                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 animate-pulse"></span> <span>Soporte ({filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE').length}) · <strong className="font-extrabold text-purple-600">{categoryProgress.SOPORTE}% Avance</strong></span></div>
+                            <div className="flex flex-wrap items-center gap-4">
+                                <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-500 animate-pulse"></span> <span>Estratégicos · <strong className="font-extrabold text-amber-600">{categoryProgress.ESTRATEGICO}% Avance</strong></span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-sky-500 animate-pulse"></span> <span>Operativos · <strong className="font-extrabold text-sky-600">{categoryProgress.OPERATIVO}% Avance</strong></span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500 animate-pulse"></span> <span>Soporte · <strong className="font-extrabold text-purple-600">{categoryProgress.SOPORTE}% Avance</strong></span></div>
+                                </div>
+                                <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 p-3 rounded-lg shadow-sm">
+                                    <span className="text-xs font-black text-indigo-800 uppercase">Avance Total Proyecto:</span>
+                                    <span className="text-sm font-black text-indigo-600 bg-white px-2 py-0.5 rounded shadow-sm border border-indigo-100">{totalProjectProgress}%</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Vistas / Estructuras de Proyectos en Gestión por Procesos */}
-                        <div className="flex bg-slate-100 p-1 rounded-xl w-fit gap-1 border border-slate-200 shadow-sm">
-                            {availableMapProjects.map((proj) => {
-                                const isActive = activeMapProject === proj;
-                                let fullName = proj;
-                                if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
-                                else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
-                                else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
+                        {/* Filtros de Proyecto y de Tipo de Documento */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm">
+                            <div className="space-y-1.5">
+                                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Seleccionar de Proyecto:</span>
+                                <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
+                                    {availableMapProjects.map((proj) => {
+                                        const isActive = activeMapProject === proj;
+                                        let fullName = proj;
+                                        if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
+                                        else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
+                                        else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
 
-                                return (
-                                    <button
-                                        key={proj}
-                                        onClick={() => setActiveMapProject(proj)}
-                                        className={`px-5 py-2.5 rounded-lg text-xs font-black transition-all ${
-                                            isActive 
-                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/40' 
-                                                : 'text-slate-500 hover:text-slate-700'
-                                        }`}
-                                    >
-                                        {fullName}
-                                    </button>
-                                );
-                            })}
+                                        return (
+                                            <button
+                                                key={proj}
+                                                onClick={() => setActiveMapProject(proj)}
+                                                className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
+                                                    isActive 
+                                                        ? 'bg-white text-indigo-600 shadow-sm' 
+                                                        : 'text-slate-500 hover:text-slate-700'
+                                                }`}
+                                            >
+                                                {fullName}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Filtro de Documento:</span>
+                                <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
+                                    {(['TODOS', 'AS IS', 'FCE', 'PM', 'TO BE'] as const).map((type) => {
+                                        const isActive = mapDocTypeFilter === type;
+                                        return (
+                                            <button
+                                                key={type}
+                                                onClick={() => setMapDocTypeFilter(type)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all border ${
+                                                    isActive 
+                                                        ? 'bg-white text-indigo-600 border-slate-200/60 shadow-sm font-black' 
+                                                        : 'text-slate-500 border-transparent hover:text-slate-700'
+                                                }`}
+                                            >
+                                                {type}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
 
                         {/* Interactive diagram diagram */}
@@ -1510,10 +1606,11 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                             {/* Document Status Columns */}
                                                                             <div className="grid grid-cols-4 gap-2">
                                                                                 {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => {
+                                                                                    const isFilteredOut = mapDocTypeFilter !== 'TODOS' && mapDocTypeFilter !== type;
                                                                                     const doc = micro.docs[type];
                                                                                     if (!doc) {
                                                                                         return (
-                                                                                            <div key={type} className="bg-slate-50/50 border border-slate-100 rounded-lg p-2 text-center flex flex-col justify-center h-12">
+                                                                                            <div key={type} className={`bg-slate-50/50 border border-slate-100 rounded-lg p-2 text-center flex flex-col justify-center h-12 transition-all duration-300 ${isFilteredOut ? 'opacity-25 grayscale' : ''}`}>
                                                                                                 <span className="text-[9px] text-slate-400 font-black tracking-wider block">{type}</span>
                                                                                                 <span className="text-[8px] text-slate-400 font-bold italic mt-0.5">No req.</span>
                                                                                             </div>
@@ -1529,7 +1626,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                         [DocState.REFERENT_REVIEW]: 'bg-purple-100/70 text-purple-700 border-purple-201/60 border-purple-200/60',
                                                                                         [DocState.SENT_TO_CONTROL]: 'bg-orange-50 text-orange-600 border-orange-101 border-orange-100',
                                                                                         [DocState.CONTROL_REVIEW]: 'bg-orange-100/70 text-orange-700 border-orange-201/60 border-orange-200/60',
-                                                                                        [DocState.APPROVED]: 'bg-green-50 text-green-655 text-green-650 text-green-600 border-green-200'
+                                                                                        [DocState.APPROVED]: 'bg-green-50 text-green-655 text-green-655 text-green-650 text-green-600 border-green-200'
                                                                                     };
 
                                                                                     const labelMap: Record<DocState, string> = {
@@ -1551,10 +1648,11 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                         <div 
                                                                                             key={type} 
                                                                                             onClick={() => {
+                                                                                                if (isFilteredOut) return;
                                                                                                 setSelectedMacroDetail(null);
                                                                                                 navigate(`/doc/${doc.id}`);
                                                                                             }}
-                                                                                            className={`border rounded-lg p-2 text-center flex flex-col justify-between h-12 ${styleClass} cursor-pointer hover:shadow-sm hover:scale-[1.02] transition-all`}
+                                                                                            className={`border rounded-lg p-2 text-center flex flex-col justify-between h-12 ${styleClass} transition-all duration-300 ${isFilteredOut ? 'opacity-25 grayscale cursor-not-allowed pointer-events-none' : 'cursor-pointer hover:shadow-sm hover:scale-[1.02]'}`}
                                                                                         >
                                                                                             <span className="text-[9px] font-black tracking-wider block">{type}</span>
                                                                                             <div className="flex justify-between items-center text-[8px] font-mono leading-none font-bold mt-1">
