@@ -738,9 +738,29 @@ export const DocumentService = {
           finalRecipientIds.add(currentDoc.authorId);
       }
 
-      // 3. Notificar a Analistas Asignados
+      // 3. Notificar a Analistas Asignados del Documento
       if (currentDoc.assignees) {
           currentDoc.assignees.forEach(uid => finalRecipientIds.add(uid));
+      }
+
+      // 3b. Notificar a los Analistas Asignados actuales de la Matriz de Procesos (por si hubo reasignaciones posteriores)
+      if (currentDoc.project && currentDoc.microprocess) {
+          try {
+              const matrixId = generateMatrixId(currentDoc.project, currentDoc.microprocess);
+              const mSnap = await getDoc(doc(db, "process_matrix", matrixId));
+              if (mSnap.exists()) {
+                  const mData = mSnap.data();
+                  if (mData && Array.isArray(mData.assignees)) {
+                      mData.assignees.forEach(uid => {
+                          if (uid && uid.trim() !== '') {
+                              finalRecipientIds.add(uid.trim());
+                          }
+                      });
+                  }
+              }
+          } catch (e) {
+              console.error("Error al recuperar asignatarios dinamicos de la matriz de procesos para notificaciones:", e);
+          }
       }
 
       // 4. Notificar al Analista Responsable (assignedTo)
@@ -804,7 +824,33 @@ export const HierarchyService = {
       });
       return hierarchy;
   },
-  updateMatrixAssignment: async (docId: string, assignees: string[]) => { await updateDoc(doc(db, "process_matrix", docId), { assignees }); },
+  updateMatrixAssignment: async (docId: string, assignees: string[]) => {
+      const processRef = doc(db, "process_matrix", docId);
+      const processSnap = await getDoc(processRef);
+      if (processSnap.exists()) {
+          const processData = processSnap.data();
+          const project = processData.project;
+          const microprocess = processData.name;
+          
+          const batch = writeBatch(db);
+          batch.update(processRef, { assignees });
+          
+          if (project && microprocess) {
+              const qDocs = query(
+                  collection(db, "documents"), 
+                  where("project", "==", project), 
+                  where("microprocess", "==", microprocess)
+              );
+              const docSnaps = await getDocs(qDocs);
+              docSnaps.docs.forEach(d => {
+                  batch.update(d.ref, { assignees });
+              });
+          }
+          await batch.commit();
+      } else {
+          await updateDoc(processRef, { assignees });
+      }
+  },
   updateReferentLinks: async (referentId: string, selectedDocIds: string[]) => {
       const q = query(collection(db, "process_matrix"));
       const snapshot = await getDocs(q);
