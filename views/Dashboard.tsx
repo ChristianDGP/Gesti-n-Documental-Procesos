@@ -169,16 +169,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             });
         });
 
-        realDocMap.forEach((doc) => {
-            if (!processedDocIds.has(doc.id)) {
-                finalDocsList.push({
-                    ...doc,
-                    macroprocess: doc.macroprocess || 'Sin Clasificar',
-                    process: doc.process || 'Sin Clasificar',
-                    isRequired: false 
-                });
-            }
-        });
+        // No agregamos los documentos no requeridos (huérfanos de la jerarquía activa actual) para que no sean visibles ni se consideren en los reportes o indicadores del dashboard. Su historia y registros físicos en Firestore siguen existiendo tal cual por si se reactivan.
 
         setMergedDocs(finalDocsList);
 
