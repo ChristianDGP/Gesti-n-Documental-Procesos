@@ -105,6 +105,7 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
     const [activeType, setActiveType] = useState<string | null>(null);
     const [mapDocTypeFilter, setMapDocTypeFilter] = useState<'TODOS' | 'AS IS' | 'FCE' | 'PM' | 'TO BE'>('TODOS');
+    const [mapSubTab, setMapSubTab] = useState<'DIAGRAM' | 'REPORTS'>('DIAGRAM');
 
     const [macroClassifications, setMacroClassifications] = useState<Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>>({});
 
@@ -704,6 +705,477 @@ const Reports: React.FC<Props> = ({ user }) => {
         const totalApproved = filteredProcessMapDataByProject.reduce((sum, item) => sum + (item.totalApproved || 0), 0);
         return totalRequired > 0 ? Math.round((totalApproved / totalRequired) * 100) : 0;
     }, [filteredProcessMapDataByProject]);
+
+    const projectDocTypeStats = useMemo(() => {
+        const stats: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', { total: number; approved: number; inProcess: number; initiated: number; notStarted: number }> = {
+            'AS IS': { total: 0, approved: 0, inProcess: 0, initiated: 0, notStarted: 0 },
+            'FCE': { total: 0, approved: 0, inProcess: 0, initiated: 0, notStarted: 0 },
+            'PM': { total: 0, approved: 0, inProcess: 0, initiated: 0, notStarted: 0 },
+            'TO BE': { total: 0, approved: 0, inProcess: 0, initiated: 0, notStarted: 0 }
+        };
+
+        const projectDocs = unifiedData.filter(d => d.project === activeMapProject);
+
+        projectDocs.forEach(d => {
+            const type = (d.docType || 'AS IS') as 'AS IS' | 'FCE' | 'PM' | 'TO BE';
+            if (stats[type]) {
+                stats[type].total++;
+                if (d.state === DocState.APPROVED) {
+                    stats[type].approved++;
+                } else if (d.state === DocState.NOT_STARTED) {
+                    stats[type].notStarted++;
+                } else if (d.state === DocState.INITIATED) {
+                    stats[type].initiated++;
+                } else {
+                    stats[type].inProcess++;
+                }
+            }
+        });
+
+        return stats;
+    }, [unifiedData, activeMapProject]);
+
+    const projectChartData = useMemo(() => {
+        return (['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => {
+            const stats = projectDocTypeStats[type] || { total: 0, approved: 0, inProcess: 0, initiated: 0, notStarted: 0 };
+            return {
+                name: type,
+                'No Iniciado': stats.notStarted,
+                'En Proceso': stats.inProcess + stats.initiated,
+                'Aprobados': stats.approved,
+                total: stats.total,
+                percentage: stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0
+            };
+        });
+    }, [projectDocTypeStats]);
+
+    const macroprocessDocTypeStats = useMemo(() => {
+        const grouped: Record<string, {
+            macroName: string;
+            category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE';
+            docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', { total: number; approved: number; inProcess: number; notStarted: number }>;
+            totalRequired: number;
+            totalApproved: number;
+        }> = {};
+
+        const projectDocs = unifiedData.filter(d => d.project === activeMapProject);
+
+        projectDocs.forEach(d => {
+            const macro = d.macroprocess || 'Sin Clasificar';
+            if (!grouped[macro]) {
+                grouped[macro] = {
+                    macroName: macro,
+                    category: getMacroCategory(macro),
+                    docTypes: {
+                        'AS IS': { total: 0, approved: 0, inProcess: 0, notStarted: 0 },
+                        'FCE': { total: 0, approved: 0, inProcess: 0, notStarted: 0 },
+                        'PM': { total: 0, approved: 0, inProcess: 0, notStarted: 0 },
+                        'TO BE': { total: 0, approved: 0, inProcess: 0, notStarted: 0 }
+                    },
+                    totalRequired: 0,
+                    totalApproved: 0
+                };
+            }
+
+            const type = (d.docType || 'AS IS') as 'AS IS' | 'FCE' | 'PM' | 'TO BE';
+            if (grouped[macro].docTypes[type]) {
+                grouped[macro].docTypes[type].total++;
+                grouped[macro].totalRequired++;
+                if (d.state === DocState.APPROVED) {
+                    grouped[macro].docTypes[type].approved++;
+                    grouped[macro].totalApproved++;
+                } else if (d.state === DocState.NOT_STARTED) {
+                    grouped[macro].docTypes[type].notStarted++;
+                } else {
+                    grouped[macro].docTypes[type].inProcess++;
+                }
+            }
+        });
+
+        return Object.values(grouped).sort((a, b) => {
+            const catOrder = { ESTRATEGICO: 1, OPERATIVO: 2, SOPORTE: 3 };
+            const orderA = catOrder[a.category] || 99;
+            const orderB = catOrder[b.category] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.macroName.localeCompare(b.macroName);
+        });
+    }, [unifiedData, activeMapProject]);
+
+    const handleExportPNG = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = 950;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Background Gradient
+        const grad = ctx.createLinearGradient(0, 0, 0, 950);
+        grad.addColorStop(0, '#f8fafc');
+        grad.addColorStop(1, '#f1f5f9');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 1200, 950);
+
+        // Decorative indigo top line
+        ctx.fillStyle = '#4f46e5';
+        ctx.fillRect(0, 0, 1200, 12);
+
+        // Title Block
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Reporte de Gestión por Procesos y Avance Documental', 50, 65);
+
+        // Subtitle / Metadata
+        ctx.fillStyle = '#64748b';
+        ctx.font = '500 14px system-ui, -apple-system, sans-serif';
+        const dateStr = new Date().toLocaleDateString('es-CL', { 
+            year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+        });
+        const fullProjName = activeMapProject === 'HPC' ? 'Hospital Provincia Cordillera (HPC)' : activeMapProject === 'HSR' ? 'Hospital Sótero del Río (HSR)' : activeMapProject;
+        ctx.fillText(`Proyecto: ${fullProjName}  |  Generado: ${dateStr}`, 50, 100);
+
+        // Separator line
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(50, 125);
+        ctx.lineTo(1150, 125);
+        ctx.stroke();
+
+        const roundRectLocal = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+            c.beginPath();
+            c.moveTo(x + r, y);
+            c.lineTo(x + w - r, y);
+            c.quadraticCurveTo(x + w, y, x + w, y + r);
+            c.lineTo(x + w, y + h - r);
+            c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            c.lineTo(x + r, y + h);
+            c.quadraticCurveTo(x, y + h, x, y + h - r);
+            c.lineTo(x, y + r);
+            c.quadraticCurveTo(x, y, x + r, y);
+            c.closePath();
+        };
+
+        // --- LEFT COLUMN: AVANCE GENERAL (Gauge / Circular) ---
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.04)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 4;
+        roundRectLocal(ctx, 50, 155, 450, 320, 16);
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Porcentaje de Avance General', 80, 200);
+
+        // Circular Gauge
+        const centerX = 275;
+        const centerY = 325;
+        const radius = 80;
+
+        // Background circle
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 20;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // Active progress arc
+        const progressFraction = totalProjectProgress / 100;
+        ctx.strokeStyle = '#4f46e5';
+        ctx.lineWidth = 20;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, -Math.PI / 2, (-Math.PI / 2) + (2 * Math.PI * progressFraction));
+        ctx.stroke();
+
+        // Percentage Text in center
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 36px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${totalProjectProgress}%`, centerX, centerY + 10);
+
+        ctx.fillStyle = '#4f46e5';
+        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+        ctx.fillText('COMPLETADO', centerX, centerY + 30);
+        ctx.textAlign = 'left';
+
+        // Stats details under gauge
+        ctx.fillStyle = '#64748b';
+        ctx.font = '500 13px system-ui, -apple-system, sans-serif';
+        let totalReqCount = 0;
+        let totalAppCount = 0;
+        Object.values(projectDocTypeStats).forEach(s => {
+            totalReqCount += s.total;
+            totalAppCount += s.approved;
+        });
+        ctx.fillText(`Documentos Requeridos: ${totalReqCount}`, 80, 445);
+        ctx.fillText(`Aprobados: ${totalAppCount}`, 290, 445);
+
+
+        // --- RIGHT COLUMN: AVANCE POR DOCUMENTO (Horizontal Bars) ---
+        ctx.fillStyle = '#ffffff';
+        roundRectLocal(ctx, 530, 155, 620, 320, 16);
+        ctx.fill();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Avance Detallado por Tipo de Documento', 560, 200);
+
+        // Draw State Legend
+        ctx.font = '500 11px system-ui, -apple-system, sans-serif';
+        
+        // No Iniciado (Gray)
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(800, 195, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('No Iniciado', 810, 199);
+
+        // En Proceso (Blue)
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(895, 195, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('En Proceso', 905, 199);
+
+        // Aprobados (Green)
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(990, 195, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('Aprobados', 1000, 199);
+
+        const types = ['AS IS', 'FCE', 'PM', 'TO BE'] as const;
+        const typeColors = {
+            'AS IS': '#3b82f6',
+            'FCE': '#f87171',
+            'PM': '#facc15',
+            'TO BE': '#22c55e'
+        };
+
+        types.forEach((type, index) => {
+            const yOffset = 235 + (index * 55);
+            const stats = projectDocTypeStats[type] || { total: 0, approved: 0, inProcess: 0, initiated: 0, notStarted: 0 };
+            const percentage = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+
+            // Label
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+            ctx.fillText(type, 560, yOffset + 15);
+
+            // Detailed state breakdown counts
+            ctx.fillStyle = '#64748b';
+            ctx.font = '500 11px system-ui, -apple-system, sans-serif';
+            const totalInProcess = stats.inProcess + stats.initiated;
+            const breakdownText = `No Iniciado: ${stats.notStarted}  •  En Proceso: ${totalInProcess}  •  Aprobados: ${stats.approved}`;
+            ctx.fillText(breakdownText, 620, yOffset + 15);
+
+            // Percentage label (approved %)
+            ctx.fillStyle = typeColors[type];
+            ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+            ctx.fillText(`${percentage}%`, 1100, yOffset + 15);
+
+            // Progress bar container & clipping to guarantee perfectly rounded outer corners
+            ctx.save();
+            roundRectLocal(ctx, 560, yOffset + 25, 540, 10, 5);
+            ctx.clip();
+
+            // Background
+            ctx.fillStyle = '#f1f5f9';
+            ctx.fillRect(560, yOffset + 25, 540, 10);
+
+            if (stats.total > 0) {
+                const notStartedWidth = (stats.notStarted / stats.total) * 540;
+                const inProcessWidth = (totalInProcess / stats.total) * 540;
+                const approvedWidth = (stats.approved / stats.total) * 540;
+
+                // 1. No Iniciado (Gray)
+                if (notStartedWidth > 0) {
+                    ctx.fillStyle = '#cbd5e1';
+                    ctx.fillRect(560, yOffset + 25, notStartedWidth, 10);
+                }
+                // 2. En Proceso (Blue)
+                if (inProcessWidth > 0) {
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.fillRect(560 + notStartedWidth, yOffset + 25, inProcessWidth, 10);
+                }
+                // 3. Aprobados (Green)
+                if (approvedWidth > 0) {
+                    ctx.fillStyle = '#22c55e';
+                    ctx.fillRect(560 + notStartedWidth + inProcessWidth, yOffset + 25, approvedWidth, 10);
+                }
+            }
+            ctx.restore();
+        });
+
+        // --- BOTTOM SECTION: TABLA RESUMEN POR MACROPROCESO ---
+        ctx.fillStyle = '#ffffff';
+        roundRectLocal(ctx, 50, 500, 1100, 430, 16);
+        ctx.fill();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Desglose de Avance de Documentación por Macroproceso', 80, 540);
+
+        // Table Headers
+        ctx.fillStyle = '#f8fafc';
+        roundRectLocal(ctx, 80, 560, 1040, 35, 8);
+        ctx.fill();
+
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Macroproceso', 100, 582);
+        ctx.fillText('Categoría', 420, 582);
+        ctx.fillText('AS IS', 560, 582);
+        ctx.fillText('FCE', 680, 582);
+        ctx.fillText('PM', 800, 582);
+        ctx.fillText('TO BE', 920, 582);
+        ctx.fillText('Avance General', 1010, 582);
+
+        const rows = macroprocessDocTypeStats.slice(0, 6);
+        const rowHeight = 45;
+
+        rows.forEach((row, rIdx) => {
+            const yOffset = 605 + (rIdx * rowHeight);
+
+            if (rIdx % 2 === 1) {
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillRect(80, yOffset - 10, 1040, rowHeight);
+            }
+
+            ctx.strokeStyle = '#f1f5f9';
+            ctx.beginPath();
+            ctx.moveTo(80, yOffset + rowHeight - 10);
+            ctx.lineTo(1120, yOffset + rowHeight - 10);
+            ctx.stroke();
+
+            ctx.fillStyle = '#1e293b';
+            ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+            
+            const getLines = (context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+                const words = text.split(' ');
+                const lines: string[] = [];
+                let currentLine = '';
+
+                for (let n = 0; n < words.length; n++) {
+                    const testLine = currentLine + (currentLine ? ' ' : '') + words[n];
+                    const metrics = context.measureText(testLine);
+                    if (metrics.width > maxWidth && n > 0) {
+                        lines.push(currentLine);
+                        currentLine = words[n];
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                if (currentLine) {
+                    lines.push(currentLine);
+                }
+                return lines;
+            };
+
+            const macroLines = getLines(ctx, row.macroName, 300);
+            if (macroLines.length === 1) {
+                ctx.fillText(macroLines[0], 100, yOffset + 18);
+            } else if (macroLines.length > 1) {
+                ctx.fillText(macroLines[0], 100, yOffset + 10);
+                let secondLine = macroLines[1];
+                if (macroLines.length > 2) {
+                    secondLine += '...';
+                }
+                ctx.fillText(secondLine, 100, yOffset + 24);
+            }
+
+            const catColors = {
+                ESTRATEGICO: { bg: '#fef3c7', text: '#b45309', label: 'Estratégico' },
+                OPERATIVO: { bg: '#e0f2fe', text: '#0369a1', label: 'Operativo' },
+                SOPORTE: { bg: '#f3e8ff', text: '#6b21a8', label: 'Soporte' }
+            };
+            const cat = catColors[row.category] || { bg: '#f1f5f9', text: '#475569', label: row.category };
+            ctx.fillStyle = cat.bg;
+            roundRectLocal(ctx, 420, yOffset, 90, 20, 6);
+            ctx.fill();
+            ctx.fillStyle = cat.text;
+            ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+            ctx.fillText(cat.label, 435, yOffset + 14);
+
+            const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'] as const;
+            docTypes.forEach((dtype, dIdx) => {
+                const xPos = 560 + (dIdx * 120);
+                const dstats = row.docTypes[dtype] || { total: 0, approved: 0 };
+                const p = dstats.total > 0 ? Math.round((dstats.approved / dstats.total) * 100) : 0;
+                const required = dstats.total > 0;
+
+                if (required) {
+                    ctx.fillStyle = p === 100 ? '#15803d' : p > 0 ? '#1d4ed8' : '#64748b';
+                    ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+                    ctx.fillText(`${p}%`, xPos, yOffset + 18);
+                } else {
+                    ctx.fillStyle = '#cbd5e1';
+                    ctx.font = '500 11px system-ui, -apple-system, sans-serif';
+                    ctx.fillText('N/R', xPos, yOffset + 18);
+                }
+            });
+
+            const progress = row.totalRequired > 0 ? Math.round((row.totalApproved / row.totalRequired) * 100) : 0;
+            ctx.fillStyle = '#1e1b4b';
+            ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+            ctx.fillText(`${progress}%`, 1030, yOffset + 18);
+        });
+
+        // Render Total Row in Canvas
+        const totalYOffset = 605 + (rows.length * rowHeight);
+        
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(80, totalYOffset - 10);
+        ctx.lineTo(1120, totalYOffset - 10);
+        ctx.stroke();
+        ctx.lineWidth = 1.0;
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Total', 100, totalYOffset + 18);
+
+        const docTypes = ['AS IS', 'FCE', 'PM', 'TO BE'] as const;
+        docTypes.forEach((dtype, dIdx) => {
+            const xPos = 560 + (dIdx * 120);
+            const stats = projectDocTypeStats[dtype] || { total: 0, approved: 0 };
+            const p = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+
+            ctx.fillStyle = p === 100 ? '#15803d' : p > 0 ? '#1d4ed8' : '#64748b';
+            ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+            ctx.fillText(`${p}%`, xPos, totalYOffset + 18);
+        });
+
+        let totalRequired = 0;
+        let totalApproved = 0;
+        docTypes.forEach(type => {
+            const stats = projectDocTypeStats[type] || { total: 0, approved: 0 };
+            totalRequired += stats.total;
+            totalApproved += stats.approved;
+        });
+        const totalOverallProgress = totalRequired > 0 ? Math.round((totalApproved / totalRequired) * 100) : 0;
+
+        ctx.fillStyle = '#1e1b4b';
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx.fillText(`${totalOverallProgress}%`, 1030, totalYOffset + 18);
+
+        if (macroprocessDocTypeStats.length > 6) {
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'italic 11px system-ui, -apple-system, sans-serif';
+            ctx.fillText(`* Mostrando los primeros 6 macroprocesos de un total de ${macroprocessDocTypeStats.length}.`, 80, totalYOffset + 40);
+        }
+
+        const link = document.createElement('a');
+        link.download = `reporte-avance-documentos-${activeMapProject.toLowerCase()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    };
 
     useEffect(() => {
         if (filterProject) {
@@ -1314,173 +1786,507 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                         </div>
 
-                        {/* Filtros de Proyecto y de Tipo de Documento */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm">
-                            <div className="space-y-1.5">
-                                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Seleccionar de Proyecto:</span>
-                                <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
-                                    {availableMapProjects.map((proj) => {
-                                        const isActive = activeMapProject === proj;
-                                        let fullName = proj;
-                                        if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
-                                        else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
-                                        else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
+                        {/* Sub-tab Navigation for Gestión por Procesos */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 w-fit">
+                            <button
+                                onClick={() => setMapSubTab('DIAGRAM')}
+                                className={`px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+                                    mapSubTab === 'DIAGRAM'
+                                        ? 'bg-white text-indigo-600 shadow-sm font-black border border-slate-200/20'
+                                        : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                                <Network size={15} /> Mapa de Procesos Interactivo
+                            </button>
+                            <button
+                                onClick={() => setMapSubTab('REPORTS')}
+                                className={`px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+                                    mapSubTab === 'REPORTS'
+                                        ? 'bg-white text-indigo-600 shadow-sm font-black border border-slate-200/20'
+                                        : 'text-slate-500 hover:text-slate-800'
+                                }`}
+                            >
+                                <BarChart2 size={15} /> Reportería por Documento y Avance
+                            </button>
+                        </div>
+
+                        {mapSubTab === 'DIAGRAM' && (
+                            <div className="space-y-6 animate-fadeIn">
+                                {/* Filtros de Proyecto y de Tipo de Documento */}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm">
+                                    <div className="space-y-1.5">
+                                        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Seleccionar de Proyecto:</span>
+                                        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
+                                            {availableMapProjects.map((proj) => {
+                                                const isActive = activeMapProject === proj;
+                                                let fullName = proj;
+                                                if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
+                                                else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
+                                                else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
+
+                                                return (
+                                                    <button
+                                                        key={proj}
+                                                        onClick={() => setActiveMapProject(proj)}
+                                                        className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
+                                                            isActive 
+                                                                ? 'bg-white text-indigo-600 shadow-sm' 
+                                                                : 'text-slate-500 hover:text-slate-700'
+                                                        }`}
+                                                    >
+                                                        {fullName}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Filtro de Documento:</span>
+                                        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
+                                            {(['TODOS', 'AS IS', 'FCE', 'PM', 'TO BE'] as const).map((type) => {
+                                                const isActive = mapDocTypeFilter === type;
+                                                return (
+                                                    <button
+                                                        key={type}
+                                                        onClick={() => setMapDocTypeFilter(type)}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all border ${
+                                                            isActive 
+                                                                ? 'bg-white text-indigo-600 border-slate-200/60 shadow-sm font-black' 
+                                                                : 'text-slate-500 border-transparent hover:text-slate-700'
+                                                        }`}
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Interactive diagram diagram */}
+                                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 overflow-x-auto">
+                                    <div className="min-w-[950px] flex gap-4 relative items-stretch">
+                                        
+                                        {/* LEFT MARGIN: ENTRADA */}
+                                        <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
+                                            <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">ENTRADA</div>
+                                            <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] rotate-180 flex items-center justify-center h-full">
+                                                Requisitos esperados por partes interesadas
+                                            </p>
+                                        </div>
+
+                                        {/* CENTER CONTAINER: VALUES FLOW */}
+                                        <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-6 flex flex-col gap-6 shadow-sm relative">
+                                            
+                                            {/* ROW 1: STRATEGIC */}
+                                            <div className="relative">
+                                                <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos ({activeMapProject})
+                                                    <span className="text-slate-300">|</span>
+                                                    <span className="text-amber-800 font-extrabold">Avance Total: {categoryProgress.ESTRATEGICO}%</span>
+                                                </div>
+                                                {(() => {
+                                                    const items = filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO');
+                                                    const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+                                                    return (
+                                                        <div className={`grid ${gridClass} gap-4`}>
+                                                            {items.length === 0 ? (
+                                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
+                                                            ) : (
+                                                                items.map(macro => (
+                                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                                {/* Golden Down Arrows */}
+                                                <div className="flex justify-around mt-4">
+                                                    {[1, 2, 3].map(i => (
+                                                        <div key={i} className="flex flex-col items-center">
+                                                            <ChevronDown className="text-amber-400/80 animate-bounce duration-1000" size={18} />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* ROW 2: OPERATIONAL */}
+                                            <div className="relative bg-sky-50/20 p-4 border border-sky-100/50 rounded-xl">
+                                                <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor) ({activeMapProject})
+                                                    <span className="text-slate-300">|</span>
+                                                    <span className="text-sky-800 font-extrabold">Avance Total: {categoryProgress.OPERATIVO}%</span>
+                                                </div>
+                                                {(() => {
+                                                    const items = filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO');
+                                                    const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+                                                    return (
+                                                        <div className={`grid ${gridClass} gap-4`}>
+                                                            {items.length === 0 ? (
+                                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
+                                                            ) : (
+                                                                items.map(macro => (
+                                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+
+                                            {/* ROW 3: SUPPORT */}
+                                            <div className="relative mt-2">
+                                                {/* Purple Up Arrows */}
+                                                <div className="flex justify-around mb-4">
+                                                    {[1, 2, 3].map(i => (
+                                                        <div key={i} className="flex flex-col items-center">
+                                                            <ChevronDown className="text-purple-400/80 rotate-180 animate-bounce duration-1000" size={18} />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo ({activeMapProject})
+                                                    <span className="text-slate-300">|</span>
+                                                    <span className="text-purple-800 font-extrabold">Avance Total: {categoryProgress.SOPORTE}%</span>
+                                                </div>
+                                                {(() => {
+                                                    const items = filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE');
+                                                    const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+                                                    return (
+                                                        <div className={`grid ${gridClass} gap-4`}>
+                                                            {items.length === 0 ? (
+                                                                <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
+                                                            ) : (
+                                                                items.map(macro => (
+                                                                    <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+
+                                        </div>
+
+                                        {/* RIGHT MARGIN: SALIDA */}
+                                        <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
+                                            <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">SALIDA</div>
+                                            <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] flex items-center justify-center h-full">
+                                                Requisitos satisfechos de las partes interesadas
+                                            </p>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {mapSubTab === 'REPORTS' && (
+                            <div className="space-y-6 animate-fadeIn">
+                                {/* Action Bar / Project Selection & Export Options */}
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="space-y-1.5">
+                                        <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-widest block">Proyecto Seleccionado</span>
+                                        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
+                                            {availableMapProjects.map((proj) => {
+                                                const isActive = activeMapProject === proj;
+                                                let fullName = proj;
+                                                if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
+                                                else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
+                                                else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
+
+                                                return (
+                                                    <button
+                                                        key={proj}
+                                                        onClick={() => setActiveMapProject(proj)}
+                                                        className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
+                                                            isActive 
+                                                                ? 'bg-white text-indigo-600 shadow-sm' 
+                                                                : 'text-slate-500 hover:text-slate-700'
+                                                        }`}
+                                                    >
+                                                        {fullName}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={handleExportPNG}
+                                            className="px-4 py-2.5 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm"
+                                        >
+                                            <FileSpreadsheet size={16} /> Exportar Gráficos (PNG)
+                                        </button>
+                                        <button
+                                            onClick={() => window.print()}
+                                            className="px-4 py-2.5 bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-2"
+                                        >
+                                            <ExternalLink size={16} /> Imprimir Reporte
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* KPI Metrics Row */}
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-200/60 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                                        <div>
+                                            <span className="text-[10px] font-black text-indigo-700/80 uppercase tracking-widest block">Avance General</span>
+                                            <span className="text-3xl font-black text-indigo-900 block mt-2">{totalProjectProgress}%</span>
+                                        </div>
+                                        <p className="text-[11px] text-indigo-600 mt-4 font-semibold">Progreso integral de la documentación del proyecto.</p>
+                                    </div>
+
+                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => {
+                                        const stats = projectDocTypeStats[type] || { total: 0, approved: 0, inProcess: 0, initiated: 0, notStarted: 0 };
+                                        const percentage = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+                                        
+                                        const colors = {
+                                            'AS IS': { border: 'border-blue-200', bg: 'bg-blue-50/50', text: 'text-blue-700', label: 'Procesos Actuales' },
+                                            'FCE': { border: 'border-red-200', bg: 'bg-red-50/50', text: 'text-red-700', label: 'Fichas de Control' },
+                                            'PM': { border: 'border-yellow-300', bg: 'bg-yellow-50/50', text: 'text-yellow-700', label: 'Modelos de Procesos' },
+                                            'TO BE': { border: 'border-green-200', bg: 'bg-green-50/50', text: 'text-green-700', label: 'Procesos Futuros' }
+                                        };
+                                        const col = colors[type];
 
                                         return (
-                                            <button
-                                                key={proj}
-                                                onClick={() => setActiveMapProject(proj)}
-                                                className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
-                                                    isActive 
-                                                        ? 'bg-white text-indigo-600 shadow-sm' 
-                                                        : 'text-slate-500 hover:text-slate-700'
-                                                }`}
-                                            >
-                                                {fullName}
-                                            </button>
+                                            <div key={type} className={`bg-white border ${col.border} rounded-xl p-5 shadow-sm flex flex-col justify-between`}>
+                                                <div>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{type}</span>
+                                                    <span className="text-2xl font-black text-slate-800 block mt-1">{percentage}%</span>
+                                                </div>
+                                                <div className="mt-4 space-y-1.5 text-[11px] border-t border-slate-100 pt-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-medium text-slate-500">No iniciados:</span>
+                                                        <span className="font-bold text-slate-700">{stats.notStarted}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-medium text-slate-500">En Proceso:</span>
+                                                        <span className="font-bold text-indigo-600">{(stats.inProcess + stats.initiated)}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-medium text-slate-500">Aprobados:</span>
+                                                        <span className={`font-bold ${col.text}`}>{stats.approved}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between border-t border-dashed border-slate-100 pt-1.5 mt-1.5">
+                                                        <span className="font-semibold text-slate-600">Total:</span>
+                                                        <span className="font-bold text-slate-800">{stats.total}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         );
                                     })}
                                 </div>
-                            </div>
 
-                            <div className="space-y-1.5">
-                                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Filtro de Documento:</span>
-                                <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
-                                    {(['TODOS', 'AS IS', 'FCE', 'PM', 'TO BE'] as const).map((type) => {
-                                        const isActive = mapDocTypeFilter === type;
-                                        return (
-                                            <button
-                                                key={type}
-                                                onClick={() => setMapDocTypeFilter(type)}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all border ${
-                                                    isActive 
-                                                        ? 'bg-white text-indigo-600 border-slate-200/60 shadow-sm font-black' 
-                                                        : 'text-slate-500 border-transparent hover:text-slate-700'
-                                                }`}
-                                            >
-                                                {type}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Interactive diagram diagram */}
-                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 overflow-x-auto">
-                            <div className="min-w-[950px] flex gap-4 relative items-stretch">
-                                
-                                {/* LEFT MARGIN: ENTRADA */}
-                                <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
-                                    <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">ENTRADA</div>
-                                    <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] rotate-180 flex items-center justify-center h-full">
-                                        Requisitos esperados por partes interesadas
-                                    </p>
-                                </div>
-
-                                {/* CENTER CONTAINER: VALUES FLOW */}
-                                <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-6 flex flex-col gap-6 shadow-sm relative">
-                                    
-                                    {/* ROW 1: STRATEGIC */}
-                                    <div className="relative">
-                                        <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos ({activeMapProject})
-                                            <span className="text-slate-300">|</span>
-                                            <span className="text-amber-800 font-extrabold">Avance Total: {categoryProgress.ESTRATEGICO}%</span>
-                                        </div>
-                                        {(() => {
-                                            const items = filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO');
-                                            const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
-                                            return (
-                                                <div className={`grid ${gridClass} gap-4`}>
-                                                    {items.length === 0 ? (
-                                                        <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
-                                                    ) : (
-                                                        items.map(macro => (
-                                                            <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
-                                                        ))
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-                                        {/* Golden Down Arrows */}
-                                        <div className="flex justify-around mt-4">
-                                            {[1, 2, 3].map(i => (
-                                                <div key={i} className="flex flex-col items-center">
-                                                    <ChevronDown className="text-amber-400/80 animate-bounce duration-1000" size={18} />
-                                                </div>
-                                            ))}
+                                {/* Recharts Visualizations */}
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    {/* Grouped Bar Chart */}
+                                    <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-4">Distribución del Estado de Avance por Tipo de Documento</h4>
+                                        <div className="h-[300px]">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={projectChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
+                                                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                                                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }} />
+                                                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                                                    <Bar dataKey="No Iniciado" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
+                                                    <Bar dataKey="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                                    <Bar dataKey="Aprobados" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
                                         </div>
                                     </div>
 
-                                    {/* ROW 2: OPERATIONAL */}
-                                    <div className="relative bg-sky-50/20 p-4 border border-sky-100/50 rounded-xl">
-                                        <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor) ({activeMapProject})
-                                            <span className="text-slate-300">|</span>
-                                            <span className="text-sky-800 font-extrabold">Avance Total: {categoryProgress.OPERATIVO}%</span>
-                                        </div>
+                                    {/* Doughnut / Pie Chart of States */}
+                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
+                                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Composición Total Documental</h4>
                                         {(() => {
-                                            const items = filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO');
-                                            const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
+                                            let approved = 0;
+                                            let inProcess = 0;
+                                            let pending = 0;
+                                            Object.values(projectDocTypeStats).forEach(s => {
+                                                approved += s.approved;
+                                                inProcess += s.inProcess + s.initiated;
+                                                pending += s.notStarted;
+                                            });
+                                            const pieData = [
+                                                { name: 'No Iniciado', value: pending, color: '#cbd5e1' },
+                                                { name: 'En Proceso', value: inProcess, color: '#3b82f6' },
+                                                { name: 'Aprobados', value: approved, color: '#22c55e' }
+                                            ].filter(item => item.value > 0);
+
                                             return (
-                                                <div className={`grid ${gridClass} gap-4`}>
-                                                    {items.length === 0 ? (
-                                                        <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
+                                                <div className="flex-1 flex flex-col justify-center items-center">
+                                                    {pieData.length === 0 ? (
+                                                        <div className="text-center text-xs text-slate-400 py-12">No hay documentos cargados en el proyecto.</div>
                                                     ) : (
-                                                        items.map(macro => (
-                                                            <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
-                                                        ))
+                                                        <>
+                                                            <div className="w-full h-[220px]">
+                                                                <ResponsiveContainer width="100%" height="100%">
+                                                                    <PieChart>
+                                                                        <Pie
+                                                                            data={pieData}
+                                                                            cx="50%"
+                                                                            cy="50%"
+                                                                            innerRadius={50}
+                                                                            outerRadius={75}
+                                                                            paddingAngle={4}
+                                                                            dataKey="value"
+                                                                        >
+                                                                            {pieData.map((entry, index) => (
+                                                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                                                            ))}
+                                                                        </Pie>
+                                                                        <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px' }} />
+                                                                    </PieChart>
+                                                                </ResponsiveContainer>
+                                                            </div>
+                                                            <div className="flex justify-center gap-4 text-xs font-semibold mt-2">
+                                                                {pieData.map(item => (
+                                                                    <span key={item.name} className="flex items-center gap-1.5 text-slate-600">
+                                                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                                                                        {item.name}: {item.value}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </>
                                                     )}
                                                 </div>
                                             );
                                         })()}
                                     </div>
+                                </div>
 
-                                    {/* ROW 3: SUPPORT */}
-                                    <div className="relative mt-2">
-                                        {/* Purple Up Arrows */}
-                                        <div className="flex justify-around mb-4">
-                                            {[1, 2, 3].map(i => (
-                                                <div key={i} className="flex flex-col items-center">
-                                                    <ChevronDown className="text-purple-400/80 rotate-180 animate-bounce duration-1000" size={18} />
-                                                </div>
-                                            ))}
+                                {/* Table - Progress Breakdown by Macroprocess */}
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                    <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                                        <div>
+                                            <h4 className="text-sm font-bold text-slate-950">Desglose Documental por Macroproceso ({activeMapProject})</h4>
+                                            <p className="text-xs text-slate-500">Muestra el porcentaje de avance individual de cada documento por cada macroproceso.</p>
                                         </div>
-                                        <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo ({activeMapProject})
-                                            <span className="text-slate-300">|</span>
-                                            <span className="text-purple-800 font-extrabold">Avance Total: {categoryProgress.SOPORTE}%</span>
-                                        </div>
-                                        {(() => {
-                                            const items = filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE');
-                                            const gridClass = items.length === 1 ? 'grid-cols-1' : items.length === 2 ? 'grid-cols-2' : 'grid-cols-3';
-                                            return (
-                                                <div className={`grid ${gridClass} gap-4`}>
-                                                    {items.length === 0 ? (
-                                                        <div className="col-span-3 p-4 text-center text-xs text-slate-400 italic bg-slate-50 border border-dashed rounded-lg">No hay macroprocesos en esta categoría para {activeMapProject}.</div>
-                                                    ) : (
-                                                        items.map(macro => (
-                                                            <MacroCard key={`${macro.project}-${macro.macroprocess}`} macro={macro} onTypeSelect={(cat: any) => handleUpdateMacroCategory(macro.macroprocess, cat)} onDetailSelect={setSelectedMacroDetail} />
-                                                        ))
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
                                     </div>
 
-                                </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-50 border-b border-slate-100">
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Categoría</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">AS IS</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">FCE</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">PM</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">TO BE</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Avance General</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {macroprocessDocTypeStats.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={7} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados.</td>
+                                                    </tr>
+                                                ) : (
+                                                    <>
+                                                        {macroprocessDocTypeStats.map((row) => {
+                                                            const rowProgress = row.totalRequired > 0 ? Math.round((row.totalApproved / row.totalRequired) * 100) : 0;
+                                                            
+                                                            const catLabels = {
+                                                                ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
+                                                                OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-101 border-sky-100', label: 'Operativo' },
+                                                                SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-101 border-purple-100', label: 'Soporte' }
+                                                            };
+                                                            const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
 
-                                {/* RIGHT MARGIN: SALIDA */}
-                                <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
-                                    <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">SALIDA</div>
-                                    <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] flex items-center justify-center h-full">
-                                        Requisitos satisfechos de las partes interesadas
-                                    </p>
-                                </div>
+                                                            return (
+                                                                <tr key={row.macroName} className="hover:bg-slate-50/60 transition-colors">
+                                                                    <td className="px-6 py-4">
+                                                                        <span className="font-bold text-slate-800 text-sm">{row.macroName}</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4">
+                                                                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${cat.bg}`}>
+                                                                            {cat.label}
+                                                                        </span>
+                                                                    </td>
+                                                                    
+                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
+                                                                        const dstats = row.docTypes[dtype] || { total: 0, approved: 0 };
+                                                                        const p = dstats.total > 0 ? Math.round((dstats.approved / dstats.total) * 100) : 0;
+                                                                        const isReq = dstats.total > 0;
 
+                                                                        return (
+                                                                            <td key={dtype} className="px-6 py-4 text-center">
+                                                                                {isReq ? (
+                                                                                    <span className={`text-xs font-extrabold ${p === 100 ? 'text-green-600' : p > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                                                                        {p}%
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-xs font-semibold text-slate-300">N/R</span>
+                                                                                )}
+                                                                            </td>
+                                                                        );
+                                                                    })}
+
+                                                                    <td className="px-6 py-4 text-right">
+                                                                        <div className="inline-flex flex-col items-end">
+                                                                            <span className="text-sm font-black text-slate-900">{rowProgress}%</span>
+                                                                            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
+                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${rowProgress}%` }} />
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+
+                                                        {/* Total Row */}
+                                                        {(() => {
+                                                            let totalRequired = 0;
+                                                            let totalApproved = 0;
+                                                            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(type => {
+                                                                const stats = projectDocTypeStats[type] || { total: 0, approved: 0 };
+                                                                totalRequired += stats.total;
+                                                                totalApproved += stats.approved;
+                                                            });
+                                                            const totalOverallProgress = totalRequired > 0 ? Math.round((totalApproved / totalRequired) * 100) : 0;
+
+                                                            return (
+                                                                <tr className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/50 transition-colors">
+                                                                    <td className="px-6 py-4 text-sm text-slate-950 font-black" colSpan={2}>
+                                                                        Total general
+                                                                    </td>
+                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
+                                                                        const stats = projectDocTypeStats[dtype] || { total: 0, approved: 0 };
+                                                                        const p = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+                                                                        return (
+                                                                            <td key={dtype} className="px-6 py-4 text-center">
+                                                                                <span className={`text-sm font-black ${p === 100 ? 'text-green-600' : p > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                                                                    {p}%
+                                                                                </span>
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                    <td className="px-6 py-4 text-right">
+                                                                        <div className="inline-flex flex-col items-end">
+                                                                            <span className="text-sm font-black text-indigo-700">{totalOverallProgress}%</span>
+                                                                            <div className="w-16 h-1.5 bg-indigo-100 rounded-full overflow-hidden mt-1 border border-indigo-200/30">
+                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${totalOverallProgress}%` }} />
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })()}
+                                                    </>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </section>
                 )}
 
