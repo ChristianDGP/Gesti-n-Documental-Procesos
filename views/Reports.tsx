@@ -919,7 +919,7 @@ const Reports: React.FC<Props> = ({ user }) => {
         ctx.fill();
 
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
         ctx.fillText('Avance Detallado por Tipo de Documento', 560, 200);
 
         // Draw State Legend
@@ -928,26 +928,26 @@ const Reports: React.FC<Props> = ({ user }) => {
         // No Iniciado (Gray)
         ctx.fillStyle = '#cbd5e1';
         ctx.beginPath();
-        ctx.arc(800, 195, 4, 0, 2 * Math.PI);
+        ctx.arc(900, 195, 4, 0, 2 * Math.PI);
         ctx.fill();
         ctx.fillStyle = '#64748b';
-        ctx.fillText('No Iniciado', 810, 199);
+        ctx.fillText('No Iniciado', 910, 199);
 
         // En Proceso (Blue)
         ctx.fillStyle = '#3b82f6';
         ctx.beginPath();
-        ctx.arc(895, 195, 4, 0, 2 * Math.PI);
+        ctx.arc(985, 195, 4, 0, 2 * Math.PI);
         ctx.fill();
         ctx.fillStyle = '#64748b';
-        ctx.fillText('En Proceso', 905, 199);
+        ctx.fillText('En Proceso', 995, 199);
 
         // Aprobados (Green)
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.arc(990, 195, 4, 0, 2 * Math.PI);
+        ctx.arc(1070, 195, 4, 0, 2 * Math.PI);
         ctx.fill();
         ctx.fillStyle = '#64748b';
-        ctx.fillText('Aprobados', 1000, 199);
+        ctx.fillText('Aprobados', 1080, 199);
 
         const types = ['AS IS', 'FCE', 'PM', 'TO BE'] as const;
         const typeColors = {
