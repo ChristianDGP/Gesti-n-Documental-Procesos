@@ -1177,6 +1177,387 @@ const Reports: React.FC<Props> = ({ user }) => {
         link.click();
     };
 
+    const handleExportMapPNG = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 2000;
+        canvas.height = 1350;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Background Gradient
+        const grad = ctx.createLinearGradient(0, 0, 0, 1350);
+        grad.addColorStop(0, '#f8fafc');
+        grad.addColorStop(1, '#f1f5f9');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 2000, 1350);
+
+        // Decorative indigo top line
+        ctx.fillStyle = '#4f46e5';
+        ctx.fillRect(0, 0, 2000, 12);
+
+        // Title Block
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Mapa de Procesos Interactivo', 60, 70);
+
+        // Subtitle / Metadata
+        ctx.fillStyle = '#64748b';
+        ctx.font = '500 15px system-ui, -apple-system, sans-serif';
+        const dateStr = new Date().toLocaleDateString('es-CL', { 
+            year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+        });
+        const fullProjName = activeMapProject === 'HPC' ? 'Hospital Provincia Cordillera (HPC)' : activeMapProject === 'HSR' ? 'Hospital Sótero del Río (HSR)' : activeMapProject;
+        ctx.fillText(`Proyecto: ${fullProjName}  |  Generado: ${dateStr}  |  Filtro Documental: ${mapDocTypeFilter}`, 60, 105);
+
+        // Separator line
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(60, 130);
+        ctx.lineTo(1940, 130);
+        ctx.stroke();
+
+        const roundRectLocal = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+            c.beginPath();
+            c.moveTo(x + r, y);
+            c.lineTo(x + w - r, y);
+            c.quadraticCurveTo(x + w, y, x + w, y + r);
+            c.lineTo(x + w, y + h - r);
+            c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            c.lineTo(x + r, y + h);
+            c.quadraticCurveTo(x, y + h, x, y + h - r);
+            c.lineTo(x, y + r);
+            c.quadraticCurveTo(x, y, x + r, y);
+            c.closePath();
+        };
+
+        const wrapText = (c: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number = 2) => {
+            const words = text.split(' ');
+            let line = '';
+            let lineCount = 0;
+            let currentY = y;
+
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = c.measureText(testLine);
+                const testWidth = metrics.width;
+                if (testWidth > maxWidth && n > 0) {
+                    lineCount++;
+                    if (lineCount >= maxLines) {
+                        c.fillText(line.trim() + '...', x, currentY);
+                        return;
+                    }
+                    c.fillText(line.trim(), x, currentY);
+                    line = words[n] + ' ';
+                    currentY += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            c.fillText(line.trim(), x, currentY);
+        };
+
+        // --- LEFT MARGIN: ENTRADA ---
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.03)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 4;
+        roundRectLocal(ctx, 60, 160, 100, 1110, 12);
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1;
+        roundRectLocal(ctx, 60, 160, 100, 1110, 12);
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ENTRADA', 110, 200);
+
+        ctx.save();
+        ctx.translate(110, 715);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Requisitos esperados por partes interesadas', 0, 0);
+        ctx.restore();
+
+        // --- RIGHT MARGIN: SALIDA ---
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.03)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 4;
+        roundRectLocal(ctx, 1840, 160, 100, 1110, 12);
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+
+        roundRectLocal(ctx, 1840, 160, 100, 1110, 12);
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('SALIDA', 1890, 200);
+
+        ctx.save();
+        ctx.translate(1890, 715);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+        ctx.fillText('Requisitos satisfechos de las partes interesadas', 0, 0);
+        ctx.restore();
+
+        // --- CENTER AREA: THE PROCESS LANES ---
+        // Row 1: Estratégicos (Amber Theme)
+        // Background container for strategic
+        ctx.fillStyle = '#fefdfb';
+        roundRectLocal(ctx, 180, 160, 1640, 330, 16);
+        ctx.fill();
+        ctx.strokeStyle = '#fef3c7';
+        ctx.lineWidth = 1.5;
+        roundRectLocal(ctx, 180, 160, 1640, 330, 16);
+        ctx.stroke();
+
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath();
+        ctx.arc(215, 195, 5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.fillStyle = '#92400e';
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Procesos Estratégicos (${activeMapProject})  |  Avance: ${categoryProgress.ESTRATEGICO}%`, 230, 199);
+
+        // Row 2: Operativos (Sky Theme)
+        ctx.fillStyle = '#fbfcff';
+        roundRectLocal(ctx, 180, 530, 1640, 370, 16);
+        ctx.fill();
+        ctx.strokeStyle = '#e0f2fe';
+        roundRectLocal(ctx, 180, 530, 1640, 370, 16);
+        ctx.stroke();
+
+        ctx.fillStyle = '#0284c7';
+        ctx.beginPath();
+        ctx.arc(215, 565, 5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.fillStyle = '#0369a1';
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx.fillText(`Procesos Operativos (Cadena de Valor) (${activeMapProject})  |  Avance: ${categoryProgress.OPERATIVO}%`, 230, 569);
+
+        // Row 3: Soporte (Purple Theme)
+        ctx.fillStyle = '#fafaff';
+        roundRectLocal(ctx, 180, 940, 1640, 330, 16);
+        ctx.fill();
+        ctx.strokeStyle = '#f3e8ff';
+        roundRectLocal(ctx, 180, 940, 1640, 330, 16);
+        ctx.stroke();
+
+        ctx.fillStyle = '#7c3aed';
+        ctx.beginPath();
+        ctx.arc(215, 975, 5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.fillStyle = '#6d28d9';
+        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx.fillText(`Procesos de Soporte y de Apoyo (${activeMapProject})  |  Avance: ${categoryProgress.SOPORTE}%`, 230, 979);
+
+        // Render macroprocess cards inside each row
+        const categories = [
+            { id: 'ESTRATEGICO', y: 225, color: '#f59e0b', strokeColor: '#fde68a', bgGrad: ['#fffdfa', '#fffbeb'], progressColor: '#f59e0b', pillText: '#b45309', pillBg: '#fef3c7' },
+            { id: 'OPERATIVO', y: 595, color: '#0ea5e9', strokeColor: '#bae6fd', bgGrad: ['#fbfdff', '#f0f9ff'], progressColor: '#0ea5e9', pillText: '#0369a1', pillBg: '#e0f2fe' },
+            { id: 'SOPORTE', y: 1005, color: '#a855f7', strokeColor: '#e9d5ff', bgGrad: ['#fdfbff', '#faf5ff'], progressColor: '#a855f7', pillText: '#6d28d9', pillBg: '#f3e8ff' }
+        ];
+
+        categories.forEach(cat => {
+            const items = filteredProcessMapDataByProject.filter(m => m.category === cat.id);
+            if (items.length === 0) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'italic 13px system-ui, -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(`No hay macroprocesos en esta categoría para ${activeMapProject}.`, 1000, cat.y + 110);
+                return;
+            }
+
+            const maxRowWidth = 1560;
+            const gap = 30;
+            let cardWidth = 480;
+            let totalWidth = items.length * cardWidth + (items.length - 1) * gap;
+            
+            if (totalWidth > maxRowWidth) {
+                cardWidth = Math.floor((maxRowWidth - (items.length - 1) * gap) / items.length);
+            }
+            
+            const startX = 180 + (1640 - (items.length * cardWidth + (items.length - 1) * gap)) / 2;
+
+            items.forEach((macro, idx) => {
+                const cardX = startX + idx * (cardWidth + gap);
+                const cardY = cat.y;
+                const cardHeight = 240;
+
+                // Draw Card shadow and background
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = 'rgba(15, 23, 42, 0.04)';
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetY = 4;
+                roundRectLocal(ctx, cardX, cardY, cardWidth, cardHeight, 12);
+                ctx.fill();
+                ctx.shadowColor = 'transparent';
+
+                // Gradient interior border overlay or subtle color
+                ctx.strokeStyle = cat.strokeColor;
+                ctx.lineWidth = 1.5;
+                roundRectLocal(ctx, cardX, cardY, cardWidth, cardHeight, 12);
+                ctx.stroke();
+
+                // Draw top mini metadata
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText(macro.project || activeMapProject, cardX + 16, cardY + 28);
+
+                // Draw Macroprocess Title
+                ctx.fillStyle = '#0f172a';
+                ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+                wrapText(ctx, macro.macroprocess, cardX + 16, cardY + 48, cardWidth - 32, 16, 2);
+
+                // Load grouped sub-processes
+                let groupedProcesses = macro.standardGroupedProcesses;
+                if (!groupedProcesses && macro.microprocesses) {
+                    const pMap: Record<string, { processName: string; totalRequired: number; totalApproved: number; }> = {};
+                    macro.microprocesses.forEach((m: any) => {
+                        const pName = m.process || 'Sin Proceso';
+                        if (!pMap[pName]) pMap[pName] = { processName: pName, totalRequired: 0, totalApproved: 0 };
+                        pMap[pName].totalRequired += m.totalRequired;
+                        pMap[pName].totalApproved += m.totalApproved;
+                    });
+                    groupedProcesses = Object.values(pMap);
+                }
+                groupedProcesses = groupedProcesses || [];
+
+                // Render standard processes inside this macroprocess
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
+                ctx.fillText(`PROCESOS (${groupedProcesses.length})`, cardX + 16, cardY + 95);
+
+                const subBoxWidth = Math.max(105, Math.floor((cardWidth - 32 - (Math.min(3, groupedProcesses.length) - 1) * 10) / Math.min(3, groupedProcesses.length)));
+                const subBoxHeight = 65;
+
+                groupedProcesses.slice(0, 3).forEach((subp: any, sIdx: number) => {
+                    const subX = cardX + 16 + sIdx * (subBoxWidth + 10);
+                    const subY = cardY + 106;
+
+                    // Draw process item box
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.strokeStyle = '#e2e8f0';
+                    ctx.lineWidth = 1;
+                    roundRectLocal(ctx, subX, subY, subBoxWidth, subBoxHeight, 8);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Text inside process box
+                    ctx.fillStyle = '#334155';
+                    ctx.font = 'bold 9.5px system-ui, -apple-system, sans-serif';
+                    wrapText(ctx, subp.processName, subX + 8, subY + 18, subBoxWidth - 16, 12, 2);
+
+                    // Badge for percentage
+                    const pProgress = subp.totalRequired > 0 ? Math.round((subp.totalApproved / subp.totalRequired) * 100) : 0;
+                    ctx.fillStyle = '#e0e7ff';
+                    roundRectLocal(ctx, subX + 8, subY + 44, 34, 14, 4);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#4338ca';
+                    ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${pProgress}%`, subX + 25, subY + 54);
+                    ctx.textAlign = 'left';
+                });
+
+                if (groupedProcesses.length > 3) {
+                    ctx.fillStyle = '#64748b';
+                    ctx.font = 'bold 9.5px system-ui, -apple-system, sans-serif';
+                    ctx.fillText(`+ ${groupedProcesses.length - 3} más`, cardX + cardWidth - 65, cardY + 95);
+                }
+
+                // Footer section (Progress bar)
+                const progress = macro.totalRequired > 0 ? Math.round((macro.totalApproved / macro.totalRequired) * 100) : 0;
+                ctx.fillStyle = '#64748b';
+                ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+                ctx.fillText(`${macro.totalApproved}/${macro.totalRequired} Docs`, cardX + 16, cardY + 205);
+
+                // Progress Badge background
+                ctx.fillStyle = cat.pillBg;
+                roundRectLocal(ctx, cardX + cardWidth - 56, cardY + 194, 40, 16, 4);
+                ctx.fill();
+
+                ctx.fillStyle = cat.pillText;
+                ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${progress}%`, cardX + cardWidth - 36, cardY + 206);
+                ctx.textAlign = 'left';
+
+                // Draw Progress Bar
+                ctx.fillStyle = '#f1f5f9';
+                roundRectLocal(ctx, cardX + 16, cardY + 220, cardWidth - 32, 5, 2.5);
+                ctx.fill();
+
+                ctx.fillStyle = cat.progressColor;
+                roundRectLocal(ctx, cardX + 16, cardY + 220, Math.max(5, Math.floor((cardWidth - 32) * (progress / 100))), 5, 2.5);
+                ctx.fill();
+            });
+        });
+
+        // --- DECORATIVE CONNECTIVITY ARROWS ---
+        // Downward arrows from Strategic to Operational
+        ctx.fillStyle = '#f59e0b';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        [500, 1000, 1500].forEach(ax => {
+            ctx.beginPath();
+            ctx.moveTo(ax, 498);
+            ctx.lineTo(ax, 522);
+            ctx.stroke();
+
+            // Arrow Head
+            ctx.beginPath();
+            ctx.moveTo(ax - 5, 517);
+            ctx.lineTo(ax, 522);
+            ctx.lineTo(ax + 5, 517);
+            ctx.fill();
+        });
+
+        // Upward arrows from Support to Operational
+        ctx.fillStyle = '#7c3aed';
+        ctx.strokeStyle = '#7c3aed';
+        ctx.lineWidth = 2;
+        [500, 1000, 1500].forEach(ax => {
+            ctx.beginPath();
+            ctx.moveTo(ax, 932);
+            ctx.lineTo(ax, 908);
+            ctx.stroke();
+
+            // Arrow Head
+            ctx.beginPath();
+            ctx.moveTo(ax - 5, 913);
+            ctx.lineTo(ax, 908);
+            ctx.lineTo(ax + 5, 913);
+            ctx.fill();
+        });
+
+        // Footer note
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'italic 11px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Gestión de Documentación de Procesos (SGD)  |  visualización optimizada para presentaciones de alto nivel', 1000, 1315);
+
+        const link = document.createElement('a');
+        link.download = `mapa-procesos-${activeMapProject.toLowerCase()}-${mapDocTypeFilter.toLowerCase()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    };
+
     useEffect(() => {
         if (filterProject) {
             setActiveMapProject(filterProject);
@@ -1813,54 +2194,65 @@ const Reports: React.FC<Props> = ({ user }) => {
                         {mapSubTab === 'DIAGRAM' && (
                             <div className="space-y-6 animate-fadeIn">
                                 {/* Filtros de Proyecto y de Tipo de Documento */}
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm">
-                                    <div className="space-y-1.5">
-                                        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Seleccionar de Proyecto:</span>
-                                        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
-                                            {availableMapProjects.map((proj) => {
-                                                const isActive = activeMapProject === proj;
-                                                let fullName = proj;
-                                                if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
-                                                else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
-                                                else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
+                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm">
+                                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+                                        <div className="space-y-1.5">
+                                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Seleccionar de Proyecto:</span>
+                                            <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
+                                                {availableMapProjects.map((proj) => {
+                                                    const isActive = activeMapProject === proj;
+                                                    let fullName = proj;
+                                                    if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
+                                                    else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
+                                                    else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
 
-                                                return (
-                                                    <button
-                                                        key={proj}
-                                                        onClick={() => setActiveMapProject(proj)}
-                                                        className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
-                                                            isActive 
-                                                                ? 'bg-white text-indigo-600 shadow-sm' 
-                                                                : 'text-slate-500 hover:text-slate-700'
-                                                        }`}
-                                                    >
-                                                        {fullName}
-                                                    </button>
-                                                );
-                                            })}
+                                                    return (
+                                                        <button
+                                                            key={proj}
+                                                            onClick={() => setActiveMapProject(proj)}
+                                                            className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
+                                                                isActive 
+                                                                    ? 'bg-white text-indigo-600 shadow-sm' 
+                                                                    : 'text-slate-500 hover:text-slate-700'
+                                                            }`}
+                                                        >
+                                                            {fullName}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Filtro de Documento:</span>
+                                            <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
+                                                {(['TODOS', 'AS IS', 'FCE', 'PM', 'TO BE'] as const).map((type) => {
+                                                    const isActive = mapDocTypeFilter === type;
+                                                    return (
+                                                        <button
+                                                            key={type}
+                                                            onClick={() => setMapDocTypeFilter(type)}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all border ${
+                                                                isActive 
+                                                                    ? 'bg-white text-indigo-600 border-slate-200/60 shadow-sm font-black' 
+                                                                    : 'text-slate-500 border-transparent hover:text-slate-700'
+                                                            }`}
+                                                        >
+                                                            {type}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-1.5">
-                                        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Filtro de Documento:</span>
-                                        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
-                                            {(['TODOS', 'AS IS', 'FCE', 'PM', 'TO BE'] as const).map((type) => {
-                                                const isActive = mapDocTypeFilter === type;
-                                                return (
-                                                    <button
-                                                        key={type}
-                                                        onClick={() => setMapDocTypeFilter(type)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all border ${
-                                                            isActive 
-                                                                ? 'bg-white text-indigo-600 border-slate-200/60 shadow-sm font-black' 
-                                                                : 'text-slate-500 border-transparent hover:text-slate-700'
-                                                        }`}
-                                                    >
-                                                        {type}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                    <div className="flex items-center gap-2 self-end lg:self-center">
+                                        <button
+                                            onClick={handleExportMapPNG}
+                                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
+                                        >
+                                            <FileSpreadsheet size={16} /> Exportar Mapa (PNG)
+                                        </button>
                                     </div>
                                 </div>
 
