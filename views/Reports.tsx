@@ -128,7 +128,7 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
     const [activeType, setActiveType] = useState<string | null>(null);
     const [mapDocTypeFilter, setMapDocTypeFilter] = useState<'TODOS' | 'AS IS' | 'FCE' | 'PM' | 'TO BE'>('TODOS');
-    const [mapSubTab, setMapSubTab] = useState<'DIAGRAM' | 'REPORTS' | 'MICRO_REPORTS'>('DIAGRAM');
+    const [mapSubTab, setMapSubTab] = useState<'DIAGRAM' | 'REPORTS'>('DIAGRAM');
 
     const [macroClassifications, setMacroClassifications] = useState<Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>>({});
 
@@ -2910,16 +2910,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                             >
                                 <BarChart2 size={15} /> Reportería por Documento y Avance
                             </button>
-                            <button
-                                onClick={() => setMapSubTab('MICRO_REPORTS')}
-                                className={`px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
-                                    mapSubTab === 'MICRO_REPORTS'
-                                        ? 'bg-white text-indigo-600 shadow-sm font-black border border-slate-200/20'
-                                        : 'text-slate-500 hover:text-slate-800'
-                                }`}
-                            >
-                                <Layers size={15} /> Reportería por Microproceso y Avance
-                            </button>
                         </div>
 
                         {mapSubTab === 'DIAGRAM' && (
@@ -3263,22 +3253,22 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 </div>
 
                                 {/* Recharts Visualizations */}
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                                     {/* Grouped Bar Chart */}
                                     <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                                         <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-4">Distribución del Estado de Avance por Tipo de Documento</h4>
                                         <div className="h-[300px]">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={projectChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                <BarChart data={projectChartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                                     <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
                                                     <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                                                     <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }} />
                                                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                                                    <Bar dataKey="No Iniciado" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="No Requerido" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="Aprobados" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                                                    <Bar dataKey="No Requerido" fill="#e2e8f0" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 9, fill: '#475569', fontWeight: 'bold' }} />
+                                                    <Bar dataKey="No Iniciado" fill="#cbd5e1" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 9, fill: '#475569', fontWeight: 'bold' }} />
+                                                    <Bar dataKey="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 9, fill: '#475569', fontWeight: 'bold' }} />
+                                                    <Bar dataKey="Aprobados" fill="#22c55e" radius={[4, 4, 0, 0]} label={{ position: 'top', fontSize: 9, fill: '#475569', fontWeight: 'bold' }} />
                                                 </BarChart>
                                             </ResponsiveContainer>
                                         </div>
@@ -3299,15 +3289,15 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 notRequired += s.notRequired;
                                             });
                                             const pieData = [
+                                                { name: 'No Requerido', value: notRequired, color: '#e2e8f0' },
                                                 { name: 'No Iniciado', value: pending, color: '#cbd5e1' },
                                                 { name: 'En Proceso', value: inProcess, color: '#3b82f6' },
-                                                { name: 'Aprobados', value: approved, color: '#22c55e' },
-                                                { name: 'No Requerido', value: notRequired, color: '#e2e8f0' }
-                                            ].filter(item => item.value > 0);
+                                                { name: 'Aprobados', value: approved, color: '#22c55e' }
+                                            ];
 
                                             return (
                                                 <div className="flex-1 flex flex-col justify-center items-center">
-                                                    {pieData.length === 0 ? (
+                                                    {pieData.reduce((acc, item) => acc + item.value, 0) === 0 ? (
                                                         <div className="text-center text-xs text-slate-400 py-12">No hay documentos cargados en el proyecto.</div>
                                                     ) : (
                                                         <>
@@ -3315,7 +3305,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                 <ResponsiveContainer width="100%" height="100%">
                                                                     <PieChart>
                                                                         <Pie
-                                                                            data={pieData}
+                                                                            data={pieData.filter(item => item.value > 0)}
                                                                             cx="50%"
                                                                             cy="50%"
                                                                             innerRadius={50}
@@ -3323,7 +3313,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                             paddingAngle={4}
                                                                             dataKey="value"
                                                                         >
-                                                                            {pieData.map((entry, index) => (
+                                                                            {pieData.filter(item => item.value > 0).map((entry, index) => (
                                                                                 <Cell key={`cell-${index}`} fill={entry.color} />
                                                                             ))}
                                                                         </Pie>
@@ -3331,10 +3321,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                     </PieChart>
                                                                 </ResponsiveContainer>
                                                             </div>
-                                                            <div className="flex justify-center gap-4 text-xs font-semibold mt-2">
+                                                            <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-[10px] font-bold mt-2">
                                                                 {pieData.map(item => (
-                                                                    <span key={item.name} className="flex items-center gap-1.5 text-slate-600">
-                                                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                                                                    <span key={item.name} className="flex items-center gap-1 text-slate-600 px-1.5 py-0.5 rounded border border-slate-100 bg-slate-50">
+                                                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                                                                         {item.name}: {item.value}
                                                                     </span>
                                                                 ))}
@@ -3345,128 +3335,303 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             );
                                         })()}
                                     </div>
+
+                                    {/* Doughnut / Pie Chart of Microprocesses */}
+                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
+                                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Composición del Estado de Microprocesos</h4>
+                                        <div className="flex-1 flex flex-col justify-center items-center">
+                                            {microPieData.length === 0 ? (
+                                                <div className="text-center text-xs text-slate-400 py-12">No hay microprocesos registrados.</div>
+                                            ) : (
+                                                <>
+                                                    <div className="w-full h-[220px]">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <PieChart>
+                                                                <Pie
+                                                                    data={microPieData}
+                                                                    cx="50%"
+                                                                    cy="50%"
+                                                                    innerRadius={50}
+                                                                    outerRadius={75}
+                                                                    paddingAngle={4}
+                                                                    dataKey="value"
+                                                                >
+                                                                    {microPieData.map((entry, index) => (
+                                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                                    ))}
+                                                                </Pie>
+                                                                <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px' }} />
+                                                            </PieChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                    <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 text-[10px] font-bold mt-2">
+                                                        {microPieData.map(item => (
+                                                            <span key={item.name} className="flex items-center gap-1 text-slate-600 px-1.5 py-0.5 rounded border border-slate-100 bg-slate-50">
+                                                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                                                                {item.name}: {item.value}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Table - Progress Breakdown by Macroprocess */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                    <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                                        <div>
-                                            <h4 className="text-sm font-bold text-slate-950">Desglose Documental por Macroproceso ({activeMapProject})</h4>
-                                            <p className="text-xs text-slate-500">Muestra el porcentaje de avance individual de cada documento por cada macroproceso.</p>
-                                        </div>
+                                    <div className="p-5 border-b border-slate-100">
+                                        <h4 className="text-sm font-bold text-slate-950">Desglose de Gestión Documental por Microproceso ({activeMapProject})</h4>
+                                        <p className="text-xs text-slate-500 mt-1">Muestra el estado de cada documento requerido agrupado por macroproceso del proyecto.</p>
                                     </div>
 
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-slate-50 border-b border-slate-100">
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Categoría</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Procesos (Cant)</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Microprocesos (Cant)</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Nivel / Categoría</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">AS IS</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">FCE</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">PM</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">TO BE</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Avance General</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Avance</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
-                                                {macroprocessDocTypeStats.length === 0 ? (
+                                                {macroprocessReportingStats.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={7} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados.</td>
+                                                        <td colSpan={9} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
                                                     </tr>
                                                 ) : (
-                                                    <>
-                                                        {macroprocessDocTypeStats.map((row) => {
-                                                            const rowProgress = row.totalRequired > 0 ? Math.round((row.totalApproved / row.totalRequired) * 100) : 0;
-                                                            
-                                                            const catLabels = {
-                                                                ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
-                                                                OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-101 border-sky-100', label: 'Operativo' },
-                                                                SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-101 border-purple-100', label: 'Soporte' }
-                                                            };
-                                                            const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
+                                                    macroprocessReportingStats.map((row) => {
+                                                        const catLabels = {
+                                                            ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
+                                                            OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-100', label: 'Operativo' },
+                                                            SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-100', label: 'Soporte' }
+                                                        };
+                                                        const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
+                                                        const isMacroExpanded = expandedMacros[row.macroName];
 
-                                                            return (
-                                                                <tr key={row.macroName} className="hover:bg-slate-50/60 transition-colors">
-                                                                    <td className="px-6 py-4">
-                                                                        <span className="font-bold text-slate-800 text-sm">{row.macroName}</span>
+                                                        return (
+                                                            <React.Fragment key={row.macroName}>
+                                                                {/* MACROPROCESO ROW */}
+                                                                <tr className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
+                                                                    <td className="px-6 py-4 max-w-xs flex items-center">
+                                                                        <button 
+                                                                            onClick={() => setExpandedMacros(prev => ({ ...prev, [row.macroName]: !prev[row.macroName] }))}
+                                                                            className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 hover:bg-slate-100 rounded"
+                                                                            title={isMacroExpanded ? "Contraer macroproceso" : "Expandir para ver procesos"}
+                                                                        >
+                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
+                                                                        </button>
+                                                                        <span className="font-bold text-slate-800 text-xs block truncate" title={row.macroName}>{row.macroName}</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-600">
+                                                                        {row.processCount}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-600">
+                                                                        {row.microprocessCount}
                                                                     </td>
                                                                     <td className="px-6 py-4">
-                                                                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border ${cat.bg}`}>
+                                                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${cat.bg}`}>
                                                                             {cat.label}
                                                                         </span>
                                                                     </td>
                                                                     
                                                                     {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                        const dstats = row.docTypes[dtype] || { total: 0, approved: 0 };
-                                                                        const p = dstats.total > 0 ? Math.round((dstats.approved / dstats.total) * 100) : 0;
-                                                                        const isReq = dstats.total > 0;
-
-                                                                        return (
-                                                                            <td key={dtype} className="px-6 py-4 text-center">
-                                                                                {isReq ? (
-                                                                                    <span className={`text-xs font-extrabold ${p === 100 ? 'text-green-600' : p > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                                                                        {p}%
+                                                                        const dstats = row.docTypes[dtype];
+                                                                        const isReq = dstats && dstats.total > 0;
+                                                                        
+                                                                        if (isReq) {
+                                                                            const pct = Math.round((dstats.approved / dstats.total) * 100);
+                                                                            const badgeClass = pct === 100 
+                                                                                ? 'text-green-700 bg-green-50 border-green-200 font-bold'
+                                                                                : pct > 0 
+                                                                                    ? 'text-indigo-700 bg-indigo-50 border-indigo-200 font-bold'
+                                                                                    : 'text-slate-500 bg-slate-100 border-slate-200 font-semibold';
+                                                                            return (
+                                                                                <td key={dtype} className="px-6 py-4 text-center">
+                                                                                    <span className={`px-2 py-0.5 text-[10px] rounded border ${badgeClass} inline-block whitespace-nowrap`}>
+                                                                                        {pct}%
                                                                                     </span>
-                                                                                ) : (
-                                                                                    <span className="text-xs font-semibold text-slate-300">N/R</span>
-                                                                                )}
-                                                                            </td>
-                                                                        );
-                                                                    })}
+                                                                                </td>
+                                                                            );
+                                                                        }
 
-                                                                    <td className="px-6 py-4 text-right">
-                                                                        <div className="inline-flex flex-col items-end">
-                                                                            <span className="text-sm font-black text-slate-900">{rowProgress}%</span>
-                                                                            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
-                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${rowProgress}%` }} />
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })}
-
-                                                        {/* Total Row */}
-                                                        {(() => {
-                                                            let totalRequired = 0;
-                                                            let totalApproved = 0;
-                                                            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(type => {
-                                                                const stats = projectDocTypeStats[type] || { total: 0, approved: 0, notRequired: 0 };
-                                                                totalRequired += (stats.total - stats.notRequired);
-                                                                totalApproved += stats.approved;
-                                                            });
-                                                            const totalOverallProgress = totalRequired > 0 ? Math.round((totalApproved / totalRequired) * 100) : 0;
-
-                                                            return (
-                                                                <tr className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/50 transition-colors">
-                                                                    <td className="px-6 py-4 text-sm text-slate-950 font-black" colSpan={2}>
-                                                                        Total general
-                                                                    </td>
-                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                        const stats = projectDocTypeStats[dtype] || { total: 0, approved: 0, notRequired: 0 };
-                                                                        const reqTot = stats.total - stats.notRequired;
-                                                                        const p = reqTot > 0 ? Math.round((stats.approved / reqTot) * 100) : 0;
                                                                         return (
                                                                             <td key={dtype} className="px-6 py-4 text-center">
-                                                                                <span className={`text-sm font-black ${p === 100 ? 'text-green-600' : p > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                                                                    {p}%
+                                                                                <span className="px-2 py-0.5 text-[10px] rounded border text-slate-300 bg-slate-50/50 border-slate-100 inline-block whitespace-nowrap">
+                                                                                    N/R
                                                                                 </span>
                                                                             </td>
                                                                         );
                                                                     })}
+
                                                                     <td className="px-6 py-4 text-right">
                                                                         <div className="inline-flex flex-col items-end">
-                                                                            <span className="text-sm font-black text-indigo-700">{totalOverallProgress}%</span>
-                                                                            <div className="w-16 h-1.5 bg-indigo-100 rounded-full overflow-hidden mt-1 border border-indigo-200/30">
-                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${totalOverallProgress}%` }} />
+                                                                            <span className="text-xs font-black text-slate-900">{row.overallProgress}%</span>
+                                                                            <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
+                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${row.overallProgress}%` }} />
                                                                             </div>
                                                                         </div>
                                                                     </td>
                                                                 </tr>
-                                                            );
-                                                        })()}
-                                                    </>
+
+                                                                {/* PROCESOS DRILL-DOWN */}
+                                                                {isMacroExpanded && row.processes.map((proc) => {
+                                                                    const procKey = `${row.macroName}::${proc.processName}`;
+                                                                    const isProcExpanded = expandedProcesses[procKey];
+
+                                                                    return (
+                                                                        <React.Fragment key={proc.processName}>
+                                                                            <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-slate-100/80">
+                                                                                <td className="px-6 py-3 max-w-xs pl-12 flex items-center">
+                                                                                    <button 
+                                                                                        onClick={() => setExpandedProcesses(prev => ({ ...prev, [procKey]: !prev[procKey] }))}
+                                                                                        className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-0.5 hover:bg-slate-200/60 rounded"
+                                                                                        title={isProcExpanded ? "Contraer proceso" : "Expandir para ver microprocesos"}
+                                                                                    >
+                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-indigo-655 font-bold" /> : <ChevronRight size={12} />}
+                                                                                    </button>
+                                                                                    <span className="font-semibold text-slate-700 text-xs truncate" title={proc.processName}>{proc.processName}</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-medium text-slate-400">
+                                                                                    -
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-slate-600">
+                                                                                    {proc.microprocesses.length}
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-xs text-slate-400">
+                                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Proceso</span>
+                                                                                </td>
+
+                                                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
+                                                                                    const pstats = proc.docTypes[dtype];
+                                                                                    const isReq = pstats && pstats.total > 0;
+                                                                                    
+                                                                                    if (isReq) {
+                                                                                        const pct = Math.round((pstats.approved / pstats.total) * 100);
+                                                                                        const badgeClass = pct === 100 
+                                                                                            ? 'text-green-700 bg-green-100 border-green-200 font-bold'
+                                                                                            : pct > 0 
+                                                                                                ? 'text-indigo-700 bg-indigo-50/80 border-indigo-200 font-bold'
+                                                                                                : 'text-slate-500 bg-slate-100 border-slate-200 font-semibold';
+                                                                                        return (
+                                                                                            <td key={dtype} className="px-6 py-3 text-center">
+                                                                                                <span className={`px-2 py-0.5 text-[9.5px] rounded border ${badgeClass} inline-block whitespace-nowrap`}>
+                                                                                                    {pct}%
+                                                                                                </span>
+                                                                                            </td>
+                                                                                        );
+                                                                                    }
+
+                                                                                    return (
+                                                                                        <td key={dtype} className="px-6 py-3 text-center">
+                                                                                            <span className="px-2 py-0.5 text-[9.5px] rounded border text-slate-300 bg-slate-100/30 border-slate-200/50 inline-block whitespace-nowrap">
+                                                                                                N/R
+                                                                                            </span>
+                                                                                        </td>
+                                                                                    );
+                                                                                })}
+
+                                                                                <td className="px-6 py-3 text-right">
+                                                                                    <span className="text-xs font-bold text-slate-700">{proc.overallProgress}%</span>
+                                                                                </td>
+                                                                            </tr>
+
+                                                                            {/* MICROPROCESOS DRILL-DOWN */}
+                                                                            {isProcExpanded && proc.microprocesses.map((micro) => {
+                                                                                return (
+                                                                                    <tr key={micro.microName} className="bg-white hover:bg-slate-50/40 transition-colors border-b border-slate-100/40">
+                                                                                        <td className="px-6 py-2.5 max-w-xs pl-20 flex items-center">
+                                                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 flex-shrink-0" />
+                                                                                            <span className="font-medium text-slate-500 text-[11px] leading-tight block truncate" title={micro.microName}>{micro.microName}</span>
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center text-xs font-medium text-slate-300">
+                                                                                            -
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center text-xs font-medium text-slate-300">
+                                                                                            -
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-xs text-slate-300">
+                                                                                            <span className="text-[9.5px] text-slate-400 font-medium pl-1">Microproceso</span>
+                                                                                        </td>
+
+                                                                                        {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
+                                                                                            const doc = micro.docs[dtype];
+                                                                                            
+                                                                                            if (!doc || !doc.isRequired) {
+                                                                                                return (
+                                                                                                    <td key={dtype} className="px-6 py-2.5 text-center">
+                                                                                                        <span className="px-2 py-0.5 text-[9px] rounded border text-slate-300 bg-slate-50/50 border-slate-100 inline-block whitespace-nowrap">
+                                                                                                            N/R
+                                                                                                        </span>
+                                                                                                    </td>
+                                                                                                );
+                                                                                            }
+
+                                                                                            const colorClasses: Record<DocState, string> = {
+                                                                                                [DocState.NOT_STARTED]: 'bg-slate-50 text-slate-400 border-slate-200/60',
+                                                                                                [DocState.INITIATED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+                                                                                                [DocState.IN_PROCESS]: 'bg-blue-50/80 text-blue-600 border-blue-100',
+                                                                                                [DocState.INTERNAL_REVIEW]: 'bg-sky-50 text-sky-600 border-sky-100',
+                                                                                                [DocState.SENT_TO_REFERENT]: 'bg-purple-50 text-purple-600 border-purple-100',
+                                                                                                [DocState.REFERENT_REVIEW]: 'bg-purple-100/70 text-purple-700 border-purple-200/60',
+                                                                                                [DocState.SENT_TO_CONTROL]: 'bg-orange-50 text-orange-600 border-orange-100',
+                                                                                                [DocState.CONTROL_REVIEW]: 'bg-orange-100/70 text-orange-700 border-orange-200/60',
+                                                                                                [DocState.APPROVED]: 'bg-green-50 text-green-600 border-green-200'
+                                                                                            };
+
+                                                                                            const labelMap: Record<DocState, string> = {
+                                                                                                [DocState.NOT_STARTED]: 'Inactivo',
+                                                                                                [DocState.INITIATED]: 'Iniciado',
+                                                                                                [DocState.IN_PROCESS]: 'En Proc.',
+                                                                                                [DocState.INTERNAL_REVIEW]: 'Rev. Int.',
+                                                                                                [DocState.SENT_TO_REFERENT]: 'Recom.',
+                                                                                                [DocState.REFERENT_REVIEW]: 'Recom.',
+                                                                                                [DocState.SENT_TO_CONTROL]: 'Cierre',
+                                                                                                [DocState.CONTROL_REVIEW]: 'Cierre',
+                                                                                                [DocState.APPROVED]: 'Aprobado'
+                                                                                            };
+
+                                                                                            const styleClass = colorClasses[doc.state as DocState] || 'bg-slate-50 text-slate-400';
+                                                                                            const label = labelMap[doc.state as DocState] || doc.state;
+
+                                                                                            // Navigate if real doc
+                                                                                            const handleDocClick = () => {
+                                                                                                if (!doc.isVirtual && doc.id) {
+                                                                                                    navigate(`/doc/${doc.id}`);
+                                                                                                }
+                                                                                            };
+
+                                                                                            return (
+                                                                                                <td key={dtype} className="px-6 py-2.5 text-center">
+                                                                                                    <span 
+                                                                                                        onClick={handleDocClick}
+                                                                                                        className={`px-2 py-0.5 text-[9px] rounded border ${styleClass} inline-flex items-center gap-1 whitespace-nowrap ${!doc.isVirtual ? 'cursor-pointer hover:scale-[1.03] hover:shadow-sm font-bold' : 'font-medium opacity-80'}`}
+                                                                                                        title={!doc.isVirtual ? 'Click para ver documento' : 'Documento no iniciado'}
+                                                                                                    >
+                                                                                                        {label}
+                                                                                                    </span>
+                                                                                                </td>
+                                                                                            );
+                                                                                        })}
+
+                                                                                        <td className="px-6 py-2.5 text-right">
+                                                                                            <span className="text-[10px] font-medium text-slate-500">{micro.overallProgress}%</span>
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                );
+                                                                            })}
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
+                                                            </React.Fragment>
+                                                        );
+                                                    })
                                                 )}
                                             </tbody>
                                         </table>
@@ -3475,7 +3640,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                         )}
 
-                        {mapSubTab === 'MICRO_REPORTS' && (
+                        {false && (
                             <div className="space-y-6 animate-fadeIn">
                                 {/* Action Bar / Project Selection & Export Options */}
                                 <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
