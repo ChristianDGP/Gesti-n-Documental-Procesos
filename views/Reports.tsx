@@ -1223,12 +1223,16 @@ const Reports: React.FC<Props> = ({ user }) => {
                 microprocessCount: number;
                 noIniciadoCount: number;
                 enProcesoCount: number;
-                aprobadosCount: number;
+                referenteCount: number;
+                controlGestionCount: number;
+                terminadosCount: number;
             }>;
             microprocessCount: number;
             noIniciadoCount: number;
             enProcesoCount: number;
-            aprobadosCount: number;
+            referenteCount: number;
+            controlGestionCount: number;
+            terminadosCount: number;
         }> = {};
 
         filteredMicroprocessStats.forEach(micro => {
@@ -1243,7 +1247,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                     microprocessCount: 0,
                     noIniciadoCount: 0,
                     enProcesoCount: 0,
-                    aprobadosCount: 0
+                    referenteCount: 0,
+                    controlGestionCount: 0,
+                    terminadosCount: 0
                 };
             }
 
@@ -1254,22 +1260,30 @@ const Reports: React.FC<Props> = ({ user }) => {
                     microprocessCount: 0,
                     noIniciadoCount: 0,
                     enProcesoCount: 0,
-                    aprobadosCount: 0
+                    referenteCount: 0,
+                    controlGestionCount: 0,
+                    terminadosCount: 0
                 };
             }
 
             // Document-level counting
             let microNoIniciado = 0;
             let microEnProceso = 0;
-            let microAprobado = 0;
+            let microReferente = 0;
+            let microControlGestion = 0;
+            let microTerminados = 0;
 
             (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
                 const doc = micro.docs[dtype];
                 if (doc && doc.isRequired) {
                     if (doc.state === DocState.APPROVED) {
-                        microAprobado++;
+                        microTerminados++;
                     } else if (doc.state === DocState.NOT_STARTED) {
                         microNoIniciado++;
+                    } else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) {
+                        microReferente++;
+                    } else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) {
+                        microControlGestion++;
                     } else {
                         microEnProceso++;
                     }
@@ -1280,13 +1294,17 @@ const Reports: React.FC<Props> = ({ user }) => {
             grouped[macro].processes[proc].microprocessCount++;
             grouped[macro].processes[proc].noIniciadoCount += microNoIniciado;
             grouped[macro].processes[proc].enProcesoCount += microEnProceso;
-            grouped[macro].processes[proc].aprobadosCount += microAprobado;
+            grouped[macro].processes[proc].referenteCount += microReferente;
+            grouped[macro].processes[proc].controlGestionCount += microControlGestion;
+            grouped[macro].processes[proc].terminadosCount += microTerminados;
 
             // Increment macro level
             grouped[macro].microprocessCount++;
             grouped[macro].noIniciadoCount += microNoIniciado;
             grouped[macro].enProcesoCount += microEnProceso;
-            grouped[macro].aprobadosCount += microAprobado;
+            grouped[macro].referenteCount += microReferente;
+            grouped[macro].controlGestionCount += microControlGestion;
+            grouped[macro].terminadosCount += microTerminados;
 
             grouped[macro].processes[proc].microprocesses.push({
                 microName: micro.microName,
@@ -1312,7 +1330,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                 microprocessCount: macro.microprocessCount,
                 noIniciadoCount: macro.noIniciadoCount,
                 enProcesoCount: macro.enProcesoCount,
-                aprobadosCount: macro.aprobadosCount,
+                referenteCount: macro.referenteCount,
+                controlGestionCount: macro.controlGestionCount,
+                terminadosCount: macro.terminadosCount,
                 processes: processesList
             };
         }).sort((a, b) => {
@@ -3792,15 +3812,17 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             <thead>
                                                 <tr className="bg-slate-50 border-b border-slate-100">
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-56">No Iniciados</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-56">En Proceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-56">Aprobados</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">No Iniciados</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">En Proceso</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Referente</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-44">Control Gestión</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Terminados</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
                                                 {macroprocessMicroStateStats.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={4} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
+                                                        <td colSpan={6} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
                                                     </tr>
                                                 ) : (
                                                     macroprocessMicroStateStats.map((row) => {
@@ -3811,8 +3833,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         };
                                                         const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
                                                         const isMacroExpanded = expandedMicroStateMacros[row.macroName];
-                                                        const totalMacroDocs = row.noIniciadoCount + row.enProcesoCount + row.aprobadosCount;
-                                                        const macroProgress = totalMacroDocs > 0 ? Math.round((row.aprobadosCount / totalMacroDocs) * 100) : 0;
 
                                                         return (
                                                             <React.Fragment key={`state-macro-${row.macroName}`}>
@@ -3837,13 +3857,14 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                     <td className="px-6 py-4 text-center text-xs font-semibold text-blue-600">
                                                                         <span className="bg-blue-50 px-2 py-1 rounded text-blue-700 font-bold">{row.enProcesoCount} docs</span>
                                                                     </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-purple-600">
+                                                                        <span className="bg-purple-50 px-2 py-1 rounded text-purple-700 font-bold">{row.referenteCount} docs</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-orange-600">
+                                                                        <span className="bg-orange-50 px-2 py-1 rounded text-orange-700 font-bold">{row.controlGestionCount} docs</span>
+                                                                    </td>
                                                                     <td className="px-6 py-4 text-center text-xs font-semibold text-green-600">
-                                                                        <div className="inline-flex flex-col items-center">
-                                                                            <span className="bg-green-50 px-2 py-1 rounded text-green-700 font-bold">{row.aprobadosCount} docs ({macroProgress}%)</span>
-                                                                            <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
-                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${macroProgress}%` }} />
-                                                                            </div>
-                                                                        </div>
+                                                                        <span className="bg-green-50 px-2 py-1 rounded text-green-700 font-bold">{row.terminadosCount} docs</span>
                                                                     </td>
                                                                 </tr>
 
@@ -3851,8 +3872,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                 {isMacroExpanded && row.processes.map((proc) => {
                                                                     const procKey = `${row.macroName}::${proc.processName}`;
                                                                     const isProcExpanded = expandedMicroStateProcesses[procKey];
-                                                                    const totalProcDocs = proc.noIniciadoCount + proc.enProcesoCount + proc.aprobadosCount;
-                                                                    const procProgress = totalProcDocs > 0 ? Math.round((proc.aprobadosCount / totalProcDocs) * 100) : 0;
 
                                                                     return (
                                                                         <React.Fragment key={`state-proc-${proc.processName}`}>
@@ -3874,8 +3893,14 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                 <td className="px-6 py-3 text-center text-xs font-semibold text-blue-500">
                                                                                     <span>{proc.enProcesoCount} docs</span>
                                                                                 </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-purple-500">
+                                                                                    <span>{proc.referenteCount} docs</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-orange-500">
+                                                                                    <span>{proc.controlGestionCount} docs</span>
+                                                                                </td>
                                                                                 <td className="px-6 py-3 text-center text-xs font-semibold text-green-500">
-                                                                                    <span>{proc.aprobadosCount} docs ({procProgress}%)</span>
+                                                                                    <span>{proc.terminadosCount} docs</span>
                                                                                 </td>
                                                                             </tr>
 
@@ -3883,15 +3908,21 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                             {isProcExpanded && proc.microprocesses.map((micro) => {
                                                                                 const noIniciadosDocs: string[] = [];
                                                                                 const enProcesoDocs: string[] = [];
-                                                                                const aprobadosDocs: string[] = [];
+                                                                                const referenteDocs: string[] = [];
+                                                                                const controlGestionDocs: string[] = [];
+                                                                                const terminadosDocs: string[] = [];
 
                                                                                 (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
                                                                                     const doc = micro.docs[dtype];
                                                                                     if (doc && doc.isRequired) {
                                                                                         if (doc.state === DocState.APPROVED) {
-                                                                                            aprobadosDocs.push(dtype);
+                                                                                            terminadosDocs.push(dtype);
                                                                                         } else if (doc.state === DocState.NOT_STARTED) {
                                                                                             noIniciadosDocs.push(dtype);
+                                                                                        } else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) {
+                                                                                            referenteDocs.push(dtype);
+                                                                                        } else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) {
+                                                                                            controlGestionDocs.push(dtype);
                                                                                         } else {
                                                                                             enProcesoDocs.push(dtype);
                                                                                         }
@@ -3912,7 +3943,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                             {renderDocBadges(enProcesoDocs, 'bg-blue-50 text-blue-700 border-blue-200/60 hover:bg-blue-100/80', 'En Proceso', micro.docs)}
                                                                                         </td>
                                                                                         <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(aprobadosDocs, 'bg-green-50 text-green-700 border-green-200/60 hover:bg-green-100/80', 'Aprobado', micro.docs)}
+                                                                                            {renderDocBadges(referenteDocs, 'bg-purple-50 text-purple-700 border-purple-200/60 hover:bg-purple-100/80', 'Referente', micro.docs)}
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center">
+                                                                                            {renderDocBadges(controlGestionDocs, 'bg-orange-50 text-orange-700 border-orange-200/60 hover:bg-orange-100/80', 'Control Gestión', micro.docs)}
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center">
+                                                                                            {renderDocBadges(terminadosDocs, 'bg-green-50 text-green-700 border-green-200/60 hover:bg-green-100/80', 'Terminado', micro.docs)}
                                                                                         </td>
                                                                                     </tr>
                                                                                 );
@@ -3929,16 +3966,17 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 {(() => {
                                                     let totalNoIniciados = 0;
                                                     let totalEnProceso = 0;
-                                                    let totalAprobados = 0;
+                                                    let totalReferente = 0;
+                                                    let totalControlGestion = 0;
+                                                    let totalTerminados = 0;
 
                                                     macroprocessMicroStateStats.forEach(row => {
                                                         totalNoIniciados += row.noIniciadoCount;
                                                         totalEnProceso += row.enProcesoCount;
-                                                        totalAprobados += row.aprobadosCount;
+                                                        totalReferente += row.referenteCount;
+                                                        totalControlGestion += row.controlGestionCount;
+                                                        totalTerminados += row.terminadosCount;
                                                     });
-
-                                                    const totalDocs = totalNoIniciados + totalEnProceso + totalAprobados;
-                                                    const overallDocPct = totalDocs > 0 ? Math.round((totalAprobados / totalDocs) * 100) : 0;
 
                                                     return (
                                                         <tr className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/50 transition-colors">
@@ -3951,13 +3989,14 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                             <td className="px-6 py-4 text-center text-sm font-black text-blue-600">
                                                                 {totalEnProceso} docs
                                                             </td>
+                                                            <td className="px-6 py-4 text-center text-sm font-black text-purple-600">
+                                                                {totalReferente} docs
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-sm font-black text-orange-600">
+                                                                {totalControlGestion} docs
+                                                            </td>
                                                             <td className="px-6 py-4 text-center text-sm font-black text-green-600">
-                                                                <div className="inline-flex flex-col items-center">
-                                                                    <span>{totalAprobados} docs ({overallDocPct}%)</span>
-                                                                    <div className="w-16 h-1.5 bg-indigo-100 rounded-full overflow-hidden mt-1 border border-indigo-200/30">
-                                                                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${overallDocPct}%` }} />
-                                                                    </div>
-                                                                </div>
+                                                                {totalTerminados} docs
                                                             </td>
                                                         </tr>
                                                     );
