@@ -115,9 +115,14 @@ const parseSpanishDate = (dateStr: string): string => {
     return new Date(dateStr).toISOString();
 };
 
-export const generateMatrixId = (project: string, micro: string): string => {
+export const generateMatrixId = (project: string, micro: string, macro?: string, process?: string): string => {
     const p = normalizeHeader(project).replace(/[^A-Z0-9]/g, '').substring(0, 10);
     const m = normalizeHeader(micro).replace(/[^A-Z0-9]+/g, '_').substring(0, 60); 
+    if (macro && process) {
+        const ma = normalizeHeader(macro).replace(/[^A-Z0-9]/g, '').substring(0, 15);
+        const pr = normalizeHeader(process).replace(/[^A-Z0-9]/g, '').substring(0, 15);
+        return `MTX_${p}_${ma}_${pr}_${m}`;
+    }
     return `MTX_${p}_${m}`;
 };
 
@@ -746,7 +751,7 @@ export const DocumentService = {
       // 3b. Notificar a los Analistas Asignados actuales de la Matriz de Procesos (por si hubo reasignaciones posteriores)
       if (currentDoc.project && currentDoc.microprocess) {
           try {
-              const matrixId = generateMatrixId(currentDoc.project, currentDoc.microprocess);
+              const matrixId = generateMatrixId(currentDoc.project, currentDoc.microprocess, currentDoc.macroprocess, currentDoc.process);
               const mSnap = await getDoc(doc(db, "process_matrix", matrixId));
               if (mSnap.exists()) {
                   const mData = mSnap.data();
@@ -873,7 +878,7 @@ export const HierarchyService = {
       }
   },
   addMicroprocess: async (project: string, macro: string, process: string, name: string, assignees: string[], requiredTypes: string[]) => {
-      const id = generateMatrixId(project, name);
+      const id = generateMatrixId(project, name, macro, process);
       await setDoc(doc(db, "process_matrix", id), { project, macroprocess: macro, process, name, assignees, referentIds: [], requiredTypes, active: true });
   },
   getMacroClassifications: async (): Promise<Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>> => {
@@ -986,7 +991,7 @@ export const HierarchyService = {
            const [project, micro, asis, fce, pm, tobe] = row;
            const requiredTypes: string[] = [];
            if (asis) requiredTypes.push('AS IS'); if (fce) requiredTypes.push('FCE'); if (pm) requiredTypes.push('PM'); if (tobe) requiredTypes.push('TO BE');
-           batch.set(doc(db, "process_matrix", generateMatrixId(project, micro)), { project, macroprocess: 'Macroproceso General', process: 'Proceso General', name: micro, assignees: [], referentIds: [], requiredTypes, active: true });
+           batch.set(doc(db, "process_matrix", generateMatrixId(project, micro, 'Macroproceso General', 'Proceso General')), { project, macroprocess: 'Macroproceso General', process: 'Proceso General', name: micro, assignees: [], referentIds: [], requiredTypes, active: true });
       }
       await batch.commit();
   }
@@ -1170,7 +1175,7 @@ export const DatabaseService = {
         if (!project || !currentMicro) return;
 
         // The original matrixId can be computed using current project and current doc microprocess
-        const matrixId = generateMatrixId(project, currentMicro);
+        const matrixId = generateMatrixId(project, currentMicro, data.macroprocess, data.process);
         const matrixName = matrixMap[matrixId];
 
         // If the process matrix contains this ID but its stored name is different,
@@ -1228,7 +1233,7 @@ export const DatabaseService = {
         if (tobe === '1') requiredTypes.push('TO BE');
 
         const analysts = analystsStr ? analystsStr.split(',').map(a => a.trim()).filter(a => a.length > 0) : [];
-        const matrixId = generateMatrixId(project, micro);
+        const matrixId = generateMatrixId(project, micro, macro, proc);
         
         const nodeData = {
             project,

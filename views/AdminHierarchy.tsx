@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { HierarchyService, generateMatrixId } from '../services/firebaseBackend';
+import { HierarchyService } from '../services/firebaseBackend';
 import { FullHierarchy, ProcessNode, User, UserRole } from '../types';
 import { 
   FolderTree, ChevronRight, ChevronDown, Plus, X, Edit, Trash2, Save, Layers, Network, FolderOpen, FileText, Loader2, Search, Eye, EyeOff, Power, FolderInput, ArrowRight, AlertTriangle
