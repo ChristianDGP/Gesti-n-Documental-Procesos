@@ -1273,7 +1273,11 @@ const Reports: React.FC<Props> = ({ user }) => {
             let microControlGestion = 0;
             let microTerminados = 0;
 
-            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
+            const activeTypes = mapDocTypeFilter === 'TODOS' 
+                ? (['AS IS', 'FCE', 'PM', 'TO BE'] as const)
+                : ([mapDocTypeFilter] as const);
+
+            activeTypes.forEach(dtype => {
                 const doc = micro.docs[dtype];
                 if (doc && doc.isRequired) {
                     if (doc.state === DocState.APPROVED) {
@@ -1342,7 +1346,7 @@ const Reports: React.FC<Props> = ({ user }) => {
             if (orderA !== orderB) return orderA - orderB;
             return a.macroName.localeCompare(b.macroName);
         });
-    }, [filteredMicroprocessStats]);
+    }, [filteredMicroprocessStats, mapDocTypeFilter]);
 
     const handleExportMicroPNG = () => {
         const canvas = document.createElement('canvas');
@@ -3540,8 +3544,218 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     </div>
                                 </div>
 
-                                {/* Table - Progress Breakdown by Macroprocess */}
+                                {/* Table - Microprocess State Breakdown (Drill Down) */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                    <div className="p-5 border-b border-slate-100">
+                                        <h4 className="text-sm font-bold text-slate-950">Desglose de Gestión por Estado de Microproceso ({activeMapProject})</h4>
+                                        <p className="text-xs text-slate-500 mt-1">Muestra la composición del estado actual de los documentos (AS IS, FCE, PM, TO BE) para cada microproceso, proceso y macroproceso.</p>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-50 border-b border-slate-100">
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">No Iniciados</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">En Proceso</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Referente</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-44">Control Gestión</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Terminados</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {macroprocessMicroStateStats.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
+                                                    </tr>
+                                                ) : (
+                                                    macroprocessMicroStateStats.map((row) => {
+                                                        const catLabels = {
+                                                            ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
+                                                            OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-100', label: 'Operativo' },
+                                                            SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-100', label: 'Soporte' }
+                                                        };
+                                                        const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
+                                                        const isMacroExpanded = expandedMicroStateMacros[row.macroName];
+
+                                                        return (
+                                                            <React.Fragment key={`state-macro-${row.macroName}`}>
+                                                                {/* MACROPROCESO ROW */}
+                                                                <tr className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
+                                                                    <td className="px-6 py-4 flex items-center">
+                                                                        <button 
+                                                                            onClick={() => setExpandedMicroStateMacros(prev => ({ ...prev, [row.macroName]: !prev[row.macroName] }))}
+                                                                            className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 hover:bg-slate-100 rounded flex-shrink-0"
+                                                                            title={isMacroExpanded ? "Contraer macroproceso" : "Expandir para ver procesos"}
+                                                                        >
+                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
+                                                                        </button>
+                                                                        <span className="font-bold text-slate-800 text-xs block truncate" title={row.macroName}>{row.macroName}</span>
+                                                                        <span className={`ml-2 px-2 py-0.5 text-[9px] font-black uppercase rounded border flex-shrink-0 ${cat.bg}`}>
+                                                                            {cat.label}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-500">
+                                                                        <span className="bg-slate-100 px-2 py-1 rounded text-slate-700 font-bold">{row.noIniciadoCount} docs</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-blue-600">
+                                                                        <span className="bg-blue-50 px-2 py-1 rounded text-blue-700 font-bold">{row.enProcesoCount} docs</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-purple-600">
+                                                                        <span className="bg-purple-50 px-2 py-1 rounded text-purple-700 font-bold">{row.referenteCount} docs</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-orange-600">
+                                                                        <span className="bg-orange-50 px-2 py-1 rounded text-orange-700 font-bold">{row.controlGestionCount} docs</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-green-600">
+                                                                        <span className="bg-green-50 px-2 py-1 rounded text-green-700 font-bold">{row.terminadosCount} docs</span>
+                                                                    </td>
+                                                                </tr>
+
+                                                                {/* PROCESOS DRILL-DOWN */}
+                                                                {isMacroExpanded && row.processes.map((proc) => {
+                                                                    const procKey = `${row.macroName}::${proc.processName}`;
+                                                                    const isProcExpanded = expandedMicroStateProcesses[procKey];
+
+                                                                    return (
+                                                                        <React.Fragment key={`state-proc-${proc.processName}`}>
+                                                                            <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-slate-100/80">
+                                                                                <td className="px-6 py-3 pl-12 flex items-center">
+                                                                                    <button 
+                                                                                        onClick={() => setExpandedMicroStateProcesses(prev => ({ ...prev, [procKey]: !prev[procKey] }))}
+                                                                                        className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-0.5 hover:bg-slate-200/60 rounded flex-shrink-0"
+                                                                                        title={isProcExpanded ? "Contraer proceso" : "Expandir para ver microprocesos"}
+                                                                                    >
+                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-indigo-600 font-bold" /> : <ChevronRight size={12} />}
+                                                                                    </button>
+                                                                                    <span className="font-semibold text-slate-700 text-xs truncate" title={proc.processName}>{proc.processName}</span>
+                                                                                    <span className="ml-2 text-[9px] text-slate-400 font-extrabold uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex-shrink-0">Proc</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-slate-500">
+                                                                                    <span>{proc.noIniciadoCount} docs</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-blue-500">
+                                                                                    <span>{proc.enProcesoCount} docs</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-purple-500">
+                                                                                    <span>{proc.referenteCount} docs</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-orange-500">
+                                                                                    <span>{proc.controlGestionCount} docs</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-green-500">
+                                                                                    <span>{proc.terminadosCount} docs</span>
+                                                                                </td>
+                                                                            </tr>
+
+                                                                            {/* MICROPROCESOS DRILL-DOWN */}
+                                                                            {isProcExpanded && proc.microprocesses.map((micro) => {
+                                                                                const noIniciadosDocs: string[] = [];
+                                                                                const enProcesoDocs: string[] = [];
+                                                                                const referenteDocs: string[] = [];
+                                                                                const controlGestionDocs: string[] = [];
+                                                                                const terminadosDocs: string[] = [];
+
+                                                                                const activeTypes = mapDocTypeFilter === 'TODOS' 
+                                                                                    ? (['AS IS', 'FCE', 'PM', 'TO BE'] as const)
+                                                                                    : ([mapDocTypeFilter] as const);
+
+                                                                                activeTypes.forEach(dtype => {
+                                                                                    const doc = micro.docs[dtype];
+                                                                                    if (doc && doc.isRequired) {
+                                                                                        if (doc.state === DocState.APPROVED) {
+                                                                                            terminadosDocs.push(dtype);
+                                                                                        } else if (doc.state === DocState.NOT_STARTED) {
+                                                                                            noIniciadosDocs.push(dtype);
+                                                                                        } else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) {
+                                                                                            referenteDocs.push(dtype);
+                                                                                        } else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) {
+                                                                                            controlGestionDocs.push(dtype);
+                                                                                        } else {
+                                                                                            enProcesoDocs.push(dtype);
+                                                                                        }
+                                                                                    }
+                                                                                });
+
+                                                                                return (
+                                                                                    <tr key={`state-micro-${micro.microName}`} className="bg-white hover:bg-slate-50/40 transition-colors border-b border-slate-100/40">
+                                                                                        <td className="px-6 py-2.5 pl-20 flex items-center">
+                                                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 flex-shrink-0" />
+                                                                                            <span className="font-medium text-slate-500 text-[11px] leading-tight block truncate" title={micro.microName}>{micro.microName}</span>
+                                                                                            <span className="ml-2 text-[9px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 flex-shrink-0">Micro</span>
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center">
+                                                                                            {renderDocBadges(noIniciadosDocs, 'bg-slate-50 text-slate-400 border-slate-200/60 hover:bg-slate-100/80', 'Inactivo', micro.docs)}
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center">
+                                                                                            {renderDocBadges(enProcesoDocs, 'bg-blue-50 text-blue-700 border-blue-200/60 hover:bg-blue-100/80', 'En Proceso', micro.docs)}
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center">
+                                                                                            {renderDocBadges(referenteDocs, 'bg-purple-50 text-purple-700 border-purple-200/60 hover:bg-purple-100/80', 'Referente', micro.docs)}
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center">
+                                                                                            {renderDocBadges(controlGestionDocs, 'bg-orange-50 text-orange-700 border-orange-200/60 hover:bg-orange-100/80', 'Control Gestión', micro.docs)}
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-center">
+                                                                                            {renderDocBadges(terminadosDocs, 'bg-green-50 text-green-700 border-green-200/60 hover:bg-green-100/80', 'Terminado', micro.docs)}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                );
+                                                                            })}
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
+                                                            </React.Fragment>
+                                                        );
+                                                    })
+                                                )}
+
+                                                {/* Total Row */}
+                                                {(() => {
+                                                    let totalNoIniciados = 0;
+                                                    let totalEnProceso = 0;
+                                                    let totalReferente = 0;
+                                                    let totalControlGestion = 0;
+                                                    let totalTerminados = 0;
+
+                                                    macroprocessMicroStateStats.forEach(row => {
+                                                        totalNoIniciados += row.noIniciadoCount;
+                                                        totalEnProceso += row.enProcesoCount;
+                                                        totalReferente += row.referenteCount;
+                                                        totalControlGestion += row.controlGestionCount;
+                                                        totalTerminados += row.terminadosCount;
+                                                    });
+
+                                                    return (
+                                                        <tr className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/50 transition-colors">
+                                                            <td className="px-6 py-4 text-sm text-slate-950 font-black">
+                                                                Total general
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-sm font-black text-slate-500">
+                                                                {totalNoIniciados} docs
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-sm font-black text-blue-600">
+                                                                {totalEnProceso} docs
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-sm font-black text-purple-600">
+                                                                {totalReferente} docs
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-sm font-black text-orange-600">
+                                                                {totalControlGestion} docs
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-sm font-black text-green-600">
+                                                                {totalTerminados} docs
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })()}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Table - Progress Breakdown by Macroprocess */}
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
                                     <div className="p-5 border-b border-slate-100">
                                         <h4 className="text-sm font-bold text-slate-950">Desglose de Gestión Documental por Microproceso ({activeMapProject})</h4>
                                         <p className="text-xs text-slate-500 mt-1">Muestra el estado de cada documento requerido agrupado por macroproceso del proyecto.</p>
@@ -3795,212 +4009,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         );
                                                     })
                                                 )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Table - Microprocess State Breakdown (Drill Down) */}
-                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
-                                    <div className="p-5 border-b border-slate-100">
-                                        <h4 className="text-sm font-bold text-slate-950">Desglose de Gestión por Estado de Microproceso ({activeMapProject})</h4>
-                                        <p className="text-xs text-slate-500 mt-1">Muestra la composición del estado actual de los documentos (AS IS, FCE, PM, TO BE) para cada microproceso, proceso y macroproceso.</p>
-                                    </div>
-
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-slate-50 border-b border-slate-100">
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">No Iniciados</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">En Proceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Referente</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-44">Control Gestión</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Terminados</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {macroprocessMicroStateStats.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={6} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
-                                                    </tr>
-                                                ) : (
-                                                    macroprocessMicroStateStats.map((row) => {
-                                                        const catLabels = {
-                                                            ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
-                                                            OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-100', label: 'Operativo' },
-                                                            SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-100', label: 'Soporte' }
-                                                        };
-                                                        const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
-                                                        const isMacroExpanded = expandedMicroStateMacros[row.macroName];
-
-                                                        return (
-                                                            <React.Fragment key={`state-macro-${row.macroName}`}>
-                                                                {/* MACROPROCESO ROW */}
-                                                                <tr className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
-                                                                    <td className="px-6 py-4 flex items-center">
-                                                                        <button 
-                                                                            onClick={() => setExpandedMicroStateMacros(prev => ({ ...prev, [row.macroName]: !prev[row.macroName] }))}
-                                                                            className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 hover:bg-slate-100 rounded flex-shrink-0"
-                                                                            title={isMacroExpanded ? "Contraer macroproceso" : "Expandir para ver procesos"}
-                                                                        >
-                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
-                                                                        </button>
-                                                                        <span className="font-bold text-slate-800 text-xs block truncate" title={row.macroName}>{row.macroName}</span>
-                                                                        <span className={`ml-2 px-2 py-0.5 text-[9px] font-black uppercase rounded border flex-shrink-0 ${cat.bg}`}>
-                                                                            {cat.label}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-500">
-                                                                        <span className="bg-slate-100 px-2 py-1 rounded text-slate-700 font-bold">{row.noIniciadoCount} docs</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-blue-600">
-                                                                        <span className="bg-blue-50 px-2 py-1 rounded text-blue-700 font-bold">{row.enProcesoCount} docs</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-purple-600">
-                                                                        <span className="bg-purple-50 px-2 py-1 rounded text-purple-700 font-bold">{row.referenteCount} docs</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-orange-600">
-                                                                        <span className="bg-orange-50 px-2 py-1 rounded text-orange-700 font-bold">{row.controlGestionCount} docs</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-green-600">
-                                                                        <span className="bg-green-50 px-2 py-1 rounded text-green-700 font-bold">{row.terminadosCount} docs</span>
-                                                                    </td>
-                                                                </tr>
-
-                                                                {/* PROCESOS DRILL-DOWN */}
-                                                                {isMacroExpanded && row.processes.map((proc) => {
-                                                                    const procKey = `${row.macroName}::${proc.processName}`;
-                                                                    const isProcExpanded = expandedMicroStateProcesses[procKey];
-
-                                                                    return (
-                                                                        <React.Fragment key={`state-proc-${proc.processName}`}>
-                                                                            <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-slate-100/80">
-                                                                                <td className="px-6 py-3 pl-12 flex items-center">
-                                                                                    <button 
-                                                                                        onClick={() => setExpandedMicroStateProcesses(prev => ({ ...prev, [procKey]: !prev[procKey] }))}
-                                                                                        className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-0.5 hover:bg-slate-200/60 rounded flex-shrink-0"
-                                                                                        title={isProcExpanded ? "Contraer proceso" : "Expandir para ver microprocesos"}
-                                                                                    >
-                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-indigo-600 font-bold" /> : <ChevronRight size={12} />}
-                                                                                    </button>
-                                                                                    <span className="font-semibold text-slate-700 text-xs truncate" title={proc.processName}>{proc.processName}</span>
-                                                                                    <span className="ml-2 text-[9px] text-slate-400 font-extrabold uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex-shrink-0">Proc</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-slate-500">
-                                                                                    <span>{proc.noIniciadoCount} docs</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-blue-500">
-                                                                                    <span>{proc.enProcesoCount} docs</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-purple-500">
-                                                                                    <span>{proc.referenteCount} docs</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-orange-500">
-                                                                                    <span>{proc.controlGestionCount} docs</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-green-500">
-                                                                                    <span>{proc.terminadosCount} docs</span>
-                                                                                </td>
-                                                                            </tr>
-
-                                                                            {/* MICROPROCESOS DRILL-DOWN */}
-                                                                            {isProcExpanded && proc.microprocesses.map((micro) => {
-                                                                                const noIniciadosDocs: string[] = [];
-                                                                                const enProcesoDocs: string[] = [];
-                                                                                const referenteDocs: string[] = [];
-                                                                                const controlGestionDocs: string[] = [];
-                                                                                const terminadosDocs: string[] = [];
-
-                                                                                (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
-                                                                                    const doc = micro.docs[dtype];
-                                                                                    if (doc && doc.isRequired) {
-                                                                                        if (doc.state === DocState.APPROVED) {
-                                                                                            terminadosDocs.push(dtype);
-                                                                                        } else if (doc.state === DocState.NOT_STARTED) {
-                                                                                            noIniciadosDocs.push(dtype);
-                                                                                        } else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) {
-                                                                                            referenteDocs.push(dtype);
-                                                                                        } else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) {
-                                                                                            controlGestionDocs.push(dtype);
-                                                                                        } else {
-                                                                                            enProcesoDocs.push(dtype);
-                                                                                        }
-                                                                                    }
-                                                                                });
-
-                                                                                return (
-                                                                                    <tr key={`state-micro-${micro.microName}`} className="bg-white hover:bg-slate-50/40 transition-colors border-b border-slate-100/40">
-                                                                                        <td className="px-6 py-2.5 pl-20 flex items-center">
-                                                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 flex-shrink-0" />
-                                                                                            <span className="font-medium text-slate-500 text-[11px] leading-tight block truncate" title={micro.microName}>{micro.microName}</span>
-                                                                                            <span className="ml-2 text-[9px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 flex-shrink-0">Micro</span>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(noIniciadosDocs, 'bg-slate-50 text-slate-400 border-slate-200/60 hover:bg-slate-100/80', 'Inactivo', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(enProcesoDocs, 'bg-blue-50 text-blue-700 border-blue-200/60 hover:bg-blue-100/80', 'En Proceso', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(referenteDocs, 'bg-purple-50 text-purple-700 border-purple-200/60 hover:bg-purple-100/80', 'Referente', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(controlGestionDocs, 'bg-orange-50 text-orange-700 border-orange-200/60 hover:bg-orange-100/80', 'Control Gestión', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(terminadosDocs, 'bg-green-50 text-green-700 border-green-200/60 hover:bg-green-100/80', 'Terminado', micro.docs)}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                );
-                                                                            })}
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
-                                                            </React.Fragment>
-                                                        );
-                                                    })
-                                                )}
-
-                                                {/* Total Row */}
-                                                {(() => {
-                                                    let totalNoIniciados = 0;
-                                                    let totalEnProceso = 0;
-                                                    let totalReferente = 0;
-                                                    let totalControlGestion = 0;
-                                                    let totalTerminados = 0;
-
-                                                    macroprocessMicroStateStats.forEach(row => {
-                                                        totalNoIniciados += row.noIniciadoCount;
-                                                        totalEnProceso += row.enProcesoCount;
-                                                        totalReferente += row.referenteCount;
-                                                        totalControlGestion += row.controlGestionCount;
-                                                        totalTerminados += row.terminadosCount;
-                                                    });
-
-                                                    return (
-                                                        <tr className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/50 transition-colors">
-                                                            <td className="px-6 py-4 text-sm text-slate-950 font-black">
-                                                                Total general
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-slate-500">
-                                                                {totalNoIniciados} docs
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-blue-600">
-                                                                {totalEnProceso} docs
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-purple-600">
-                                                                {totalReferente} docs
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-orange-600">
-                                                                {totalControlGestion} docs
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-green-600">
-                                                                {totalTerminados} docs
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })()}
                                             </tbody>
                                         </table>
                                     </div>
