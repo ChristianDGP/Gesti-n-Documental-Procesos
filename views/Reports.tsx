@@ -3556,17 +3556,19 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             <thead>
                                                 <tr className="bg-slate-50 border-b border-slate-100">
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Nivel / Categoría</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">No Iniciados</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">En Proceso</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Referente</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-44">Control Gestión</th>
                                                     <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Terminados</th>
+                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-right w-36">Avance</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
                                                 {macroprocessMicroStateStats.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={6} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
+                                                        <td colSpan={8} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
                                                     </tr>
                                                 ) : (
                                                     macroprocessMicroStateStats.map((row) => {
@@ -3591,24 +3593,40 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                             {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
                                                                         </button>
                                                                         <span className="font-bold text-slate-800 text-xs block truncate" title={row.macroName}>{row.macroName}</span>
-                                                                        <span className={`ml-2 px-2 py-0.5 text-[9px] font-black uppercase rounded border flex-shrink-0 ${cat.bg}`}>
+                                                                    </td>
+                                                                    <td className="px-6 py-4">
+                                                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border flex-shrink-0 ${cat.bg}`}>
                                                                             {cat.label}
                                                                         </span>
                                                                     </td>
                                                                     <td className="px-6 py-4 text-center text-xs font-semibold text-slate-500">
-                                                                        <span className="bg-slate-100 px-2 py-1 rounded text-slate-700 font-bold">{row.noIniciadoCount} docs</span>
+                                                                        <span className="bg-slate-100 px-2 py-1 rounded text-slate-700 font-bold">{row.noIniciadoCount}</span>
                                                                     </td>
                                                                     <td className="px-6 py-4 text-center text-xs font-semibold text-blue-600">
-                                                                        <span className="bg-blue-50 px-2 py-1 rounded text-blue-700 font-bold">{row.enProcesoCount} docs</span>
+                                                                        <span className="bg-blue-50 px-2 py-1 rounded text-blue-700 font-bold">{row.enProcesoCount}</span>
                                                                     </td>
                                                                     <td className="px-6 py-4 text-center text-xs font-semibold text-purple-600">
-                                                                        <span className="bg-purple-50 px-2 py-1 rounded text-purple-700 font-bold">{row.referenteCount} docs</span>
+                                                                        <span className="bg-purple-50 px-2 py-1 rounded text-purple-700 font-bold">{row.referenteCount}</span>
                                                                     </td>
                                                                     <td className="px-6 py-4 text-center text-xs font-semibold text-orange-600">
-                                                                        <span className="bg-orange-50 px-2 py-1 rounded text-orange-700 font-bold">{row.controlGestionCount} docs</span>
+                                                                        <span className="bg-orange-50 px-2 py-1 rounded text-orange-700 font-bold">{row.controlGestionCount}</span>
                                                                     </td>
                                                                     <td className="px-6 py-4 text-center text-xs font-semibold text-green-600">
-                                                                        <span className="bg-green-50 px-2 py-1 rounded text-green-700 font-bold">{row.terminadosCount} docs</span>
+                                                                        <span className="bg-green-50 px-2 py-1 rounded text-green-700 font-bold">{row.terminadosCount}</span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-right">
+                                                                        {(() => {
+                                                                            const req = row.noIniciadoCount + row.enProcesoCount + row.referenteCount + row.controlGestionCount + row.terminadosCount;
+                                                                            const pct = req > 0 ? Math.round((row.terminadosCount / req) * 100) : 0;
+                                                                            return (
+                                                                                <div className="inline-flex flex-col items-end">
+                                                                                    <span className="text-xs font-black text-slate-900">{pct}%</span>
+                                                                                    <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
+                                                                                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${pct}%` }} />
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })()}
                                                                     </td>
                                                                 </tr>
 
@@ -3629,22 +3647,33 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                         {isProcExpanded ? <ChevronDown size={12} className="text-indigo-600 font-bold" /> : <ChevronRight size={12} />}
                                                                                     </button>
                                                                                     <span className="font-semibold text-slate-700 text-xs truncate" title={proc.processName}>{proc.processName}</span>
-                                                                                    <span className="ml-2 text-[9px] text-slate-400 font-extrabold uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex-shrink-0">Proc</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3">
+                                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Proceso</span>
                                                                                 </td>
                                                                                 <td className="px-6 py-3 text-center text-xs font-semibold text-slate-500">
-                                                                                    <span>{proc.noIniciadoCount} docs</span>
+                                                                                    <span>{proc.noIniciadoCount}</span>
                                                                                 </td>
                                                                                 <td className="px-6 py-3 text-center text-xs font-semibold text-blue-500">
-                                                                                    <span>{proc.enProcesoCount} docs</span>
+                                                                                    <span>{proc.enProcesoCount}</span>
                                                                                 </td>
                                                                                 <td className="px-6 py-3 text-center text-xs font-semibold text-purple-500">
-                                                                                    <span>{proc.referenteCount} docs</span>
+                                                                                    <span>{proc.referenteCount}</span>
                                                                                 </td>
                                                                                 <td className="px-6 py-3 text-center text-xs font-semibold text-orange-500">
-                                                                                    <span>{proc.controlGestionCount} docs</span>
+                                                                                    <span>{proc.controlGestionCount}</span>
                                                                                 </td>
                                                                                 <td className="px-6 py-3 text-center text-xs font-semibold text-green-500">
-                                                                                    <span>{proc.terminadosCount} docs</span>
+                                                                                    <span>{proc.terminadosCount}</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-3 text-right">
+                                                                                    {(() => {
+                                                                                        const req = proc.noIniciadoCount + proc.enProcesoCount + proc.referenteCount + proc.controlGestionCount + proc.terminadosCount;
+                                                                                        const pct = req > 0 ? Math.round((proc.terminadosCount / req) * 100) : 0;
+                                                                                        return (
+                                                                                            <span className="text-xs font-bold text-slate-700">{pct}%</span>
+                                                                                        );
+                                                                                    })()}
                                                                                 </td>
                                                                             </tr>
 
@@ -3682,7 +3711,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                         <td className="px-6 py-2.5 pl-20 flex items-center">
                                                                                             <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 flex-shrink-0" />
                                                                                             <span className="font-medium text-slate-500 text-[11px] leading-tight block truncate" title={micro.microName}>{micro.microName}</span>
-                                                                                            <span className="ml-2 text-[9px] text-slate-400 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 flex-shrink-0">Micro</span>
+                                                                                        </td>
+                                                                                        <td className="px-6 py-2.5 text-xs text-slate-300">
+                                                                                            <span className="text-[9.5px] text-slate-400 font-medium pl-1">Microproceso</span>
                                                                                         </td>
                                                                                         <td className="px-6 py-2.5 text-center">
                                                                                             {renderDocBadges(noIniciadosDocs, 'bg-slate-50 text-slate-400 border-slate-200/60 hover:bg-slate-100/80', 'Inactivo', micro.docs)}
@@ -3699,6 +3730,15 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                         <td className="px-6 py-2.5 text-center">
                                                                                             {renderDocBadges(terminadosDocs, 'bg-green-50 text-green-700 border-green-200/60 hover:bg-green-100/80', 'Terminado', micro.docs)}
                                                                                         </td>
+                                                                                        <td className="px-6 py-2.5 text-right">
+                                                                                            {(() => {
+                                                                                                const req = noIniciadosDocs.length + enProcesoDocs.length + referenteDocs.length + controlGestionDocs.length + terminadosDocs.length;
+                                                                                                const pct = req > 0 ? Math.round((terminadosDocs.length / req) * 100) : 0;
+                                                                                                return (
+                                                                                                    <span className="text-xs font-bold text-slate-700">{pct}%</span>
+                                                                                                );
+                                                                                            })()}
+                                                                                        </td>
                                                                                     </tr>
                                                                                 );
                                                                             })}
@@ -3708,7 +3748,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                             </React.Fragment>
                                                         );
                                                     })
-                                                )}
+                                                 )}
 
                                                 {/* Total Row */}
                                                 {(() => {
@@ -3731,20 +3771,30 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                             <td className="px-6 py-4 text-sm text-slate-950 font-black">
                                                                 Total general
                                                             </td>
+                                                            <td className="px-6 py-4 text-sm text-slate-400 font-medium">
+                                                                -
+                                                            </td>
                                                             <td className="px-6 py-4 text-center text-sm font-black text-slate-500">
-                                                                {totalNoIniciados} docs
+                                                                {totalNoIniciados}
                                                             </td>
                                                             <td className="px-6 py-4 text-center text-sm font-black text-blue-600">
-                                                                {totalEnProceso} docs
+                                                                {totalEnProceso}
                                                             </td>
                                                             <td className="px-6 py-4 text-center text-sm font-black text-purple-600">
-                                                                {totalReferente} docs
+                                                                {totalReferente}
                                                             </td>
                                                             <td className="px-6 py-4 text-center text-sm font-black text-orange-600">
-                                                                {totalControlGestion} docs
+                                                                {totalControlGestion}
                                                             </td>
                                                             <td className="px-6 py-4 text-center text-sm font-black text-green-600">
-                                                                {totalTerminados} docs
+                                                                {totalTerminados}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right text-sm font-black text-slate-900">
+                                                                {(() => {
+                                                                    const req = totalNoIniciados + totalEnProceso + totalReferente + totalControlGestion + totalTerminados;
+                                                                    const pct = req > 0 ? Math.round((totalTerminados / req) * 100) : 0;
+                                                                    return `${pct}%`;
+                                                                })()}
                                                             </td>
                                                         </tr>
                                                     );
