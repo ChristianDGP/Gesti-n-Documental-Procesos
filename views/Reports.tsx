@@ -3141,12 +3141,12 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                                 {/* Interactive diagram diagram */}
                                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 overflow-x-auto">
-                                    <div className="min-w-[950px] flex gap-4 relative items-stretch">
+                                    <div className="min-w-[1180px] flex gap-5 relative items-stretch">
                                         
                                         {/* LEFT MARGIN: ENTRADA */}
-                                        <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
-                                            <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">ENTRADA</div>
-                                            <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] rotate-180 flex items-center justify-center h-full">
+                                        <div className="w-[110px] bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-5 relative shadow-sm flex-shrink-0">
+                                            <div className="absolute top-3 left-0 right-0 text-[10.5px] text-slate-400 font-black font-mono text-center tracking-widest">ENTRADA</div>
+                                            <p className="text-xs md:text-[13px] font-black text-slate-600 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] rotate-180 flex items-center justify-center h-full">
                                                 Requisitos esperados por partes interesadas
                                             </p>
                                         </div>
@@ -3156,10 +3156,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             
                                             {/* ROW 1: STRATEGIC */}
                                             <div className="relative">
-                                                <div className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos ({activeMapProject})
+                                                <div className="text-xs font-black text-amber-700 bg-amber-50 border border-amber-200/80 px-4 py-2 rounded-xl w-fit mb-4 uppercase tracking-wider flex items-center gap-2 shadow-sm">
+                                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Procesos Estratégicos ({activeMapProject})
                                                     <span className="text-slate-300">|</span>
-                                                    <span className="text-amber-800 font-extrabold">Avance Total: {categoryProgress.ESTRATEGICO}%</span>
+                                                    <span className="text-amber-950 font-black">Avance Total: {categoryProgress.ESTRATEGICO}%</span>
                                                 </div>
                                                 {(() => {
                                                     const items = filteredProcessMapDataByProject.filter(m => m.category === 'ESTRATEGICO');
@@ -3188,10 +3188,10 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                                             {/* ROW 2: OPERATIONAL */}
                                             <div className="relative bg-sky-50/20 p-4 border border-sky-100/50 rounded-xl">
-                                                <div className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor) ({activeMapProject})
+                                                <div className="text-xs font-black text-sky-700 bg-sky-50 border border-sky-200/80 px-4 py-2 rounded-xl w-fit mb-4 uppercase tracking-wider flex items-center gap-2 shadow-sm">
+                                                    <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span> Procesos Operativos (Cadena de Valor) ({activeMapProject})
                                                     <span className="text-slate-300">|</span>
-                                                    <span className="text-sky-800 font-extrabold">Avance Total: {categoryProgress.OPERATIVO}%</span>
+                                                    <span className="text-sky-950 font-black">Avance Total: {categoryProgress.OPERATIVO}%</span>
                                                 </div>
                                                 {(() => {
                                                     const items = filteredProcessMapDataByProject.filter(m => m.category === 'OPERATIVO');
@@ -3220,10 +3220,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded w-fit mb-3 uppercase tracking-wider flex items-center gap-2">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo ({activeMapProject})
+                                                <div className="text-xs font-black text-purple-700 bg-purple-50 border border-purple-200/80 px-4 py-2 rounded-xl w-fit mb-4 uppercase tracking-wider flex items-center gap-2 shadow-sm">
+                                                    <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span> Procesos de Soporte y de Apoyo ({activeMapProject})
                                                     <span className="text-slate-300">|</span>
-                                                    <span className="text-purple-800 font-extrabold">Avance Total: {categoryProgress.SOPORTE}%</span>
+                                                    <span className="text-purple-950 font-black">Avance Total: {categoryProgress.SOPORTE}%</span>
                                                 </div>
                                                 {(() => {
                                                     const items = filteredProcessMapDataByProject.filter(m => m.category === 'SOPORTE');
@@ -3245,9 +3245,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         </div>
 
                                         {/* RIGHT MARGIN: SALIDA */}
-                                        <div className="w-[85px] bg-white border border-slate-200 rounded-xl flex items-center justify-center p-4 relative shadow-sm">
-                                            <div className="absolute top-2 left-2 text-[9px] text-slate-300 font-extrabold font-mono text-center w-full">SALIDA</div>
-                                            <p className="text-xs font-black text-slate-500 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] flex items-center justify-center h-full">
+                                        <div className="w-[110px] bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-5 relative shadow-sm flex-shrink-0">
+                                            <div className="absolute top-3 left-0 right-0 text-[10.5px] text-slate-400 font-black font-mono text-center tracking-widest">SALIDA</div>
+                                            <p className="text-xs md:text-[13px] font-black text-slate-600 uppercase text-center leading-relaxed tracking-wider select-none [writing-mode:vertical-lr] flex items-center justify-center h-full">
                                                 Requisitos satisfechos de las partes interesadas
                                             </p>
                                         </div>
@@ -4488,21 +4488,21 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                     return (
                                                         <div 
                                                             key={pGroup.processName + pIdx} 
-                                                            className={`border rounded-xl overflow-hidden shadow-sm transition-all duration-300 ${
+                                                            className={`border rounded-2xl overflow-hidden shadow-sm transition-all duration-300 ${
                                                                 isFocused ? 'border-indigo-500 ring-2 ring-indigo-500/20 shadow-md bg-indigo-50/10' : 'border-slate-200 bg-white'
                                                             }`}
                                                         >
                                                             {/* Process level Header breakdown */}
-                                                            <div className={`p-4 flex justify-between items-center ${isFocused ? 'bg-indigo-50/40 border-b border-indigo-100' : 'bg-slate-50 border-b border-slate-100'}`}>
-                                                                <div className="space-y-0.5">
+                                                            <div className={`p-5 flex justify-between items-center ${isFocused ? 'bg-indigo-50/40 border-b border-indigo-100' : 'bg-slate-50 border-b border-slate-100'}`}>
+                                                                <div className="space-y-1">
                                                                     <div className="flex items-center gap-1.5">
                                                                         {isFocused && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>}
-                                                                        <span className="text-xs font-black text-slate-800 uppercase tracking-wide">{pGroup.processName}</span>
+                                                                        <span className="text-sm font-black text-slate-800 uppercase tracking-wide">{pGroup.processName}</span>
                                                                     </div>
-                                                                    <p className="text-[10px] text-slate-500 font-medium">Contiene {pGroup.items.length} microproceso(s)</p>
+                                                                    <p className="text-xs text-slate-500 font-bold">Contiene {pGroup.items.length} microproceso(s)</p>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-[10px] font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 shadow-sm">
+                                                                    <span className="text-xs font-mono font-black text-indigo-700 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100 shadow-sm">
                                                                         {pProgress}% completitud
                                                                     </span>
                                                                 </div>
@@ -4512,31 +4512,31 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                             <div className="divide-y divide-slate-100 bg-white">
                                                                 {pGroup.items.map((micro: any, mIdx: number) => {
                                                                     return (
-                                                                        <div key={micro.microprocess + mIdx} className="p-4 hover:bg-slate-50/30 transition-colors space-y-3">
-                                                                            <div className="flex justify-between items-start gap-2">
+                                                                        <div key={micro.microprocess + mIdx} className="p-5 hover:bg-slate-50/30 transition-colors space-y-4">
+                                                                            <div className="flex justify-between items-start gap-3">
                                                                                 <div>
-                                                                                    <span className="text-xs font-extrabold text-slate-700 leading-tight block">{micro.microprocess}</span>
+                                                                                    <span className="text-[14px] font-black text-slate-800 leading-snug block">{micro.microprocess}</span>
                                                                                     {micro.assignees && micro.assignees.length > 0 && (
-                                                                                        <p className="text-[9px] text-slate-400 font-bold mt-1">
-                                                                                            Responsables: {micro.assignees.join(', ')}
+                                                                                        <p className="text-[10.5px] text-slate-500 font-bold mt-1.5">
+                                                                                            Responsables: <span className="text-slate-700">{micro.assignees.join(', ')}</span>
                                                                                         </p>
                                                                                     )}
                                                                                 </div>
-                                                                                <span className="text-[9.5px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full select-none">
+                                                                                <span className="text-xs font-mono font-black text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg select-none">
                                                                                     {micro.totalRequired > 0 ? Math.round((micro.totalApproved / micro.totalRequired) * 100) : 0}% avance
                                                                                 </span>
                                                                             </div>
 
                                                                             {/* Document Status Columns */}
-                                                                            <div className="grid grid-cols-4 gap-2">
+                                                                            <div className="grid grid-cols-4 gap-3">
                                                                                 {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => {
                                                                                     const isFilteredOut = mapDocTypeFilter !== 'TODOS' && mapDocTypeFilter !== type;
                                                                                     const doc = micro.docs[type];
                                                                                     if (!doc) {
                                                                                         return (
-                                                                                            <div key={type} className={`bg-slate-50/50 border border-slate-100 rounded-lg p-2 text-center flex flex-col justify-center h-12 transition-all duration-300 ${isFilteredOut ? 'opacity-25 grayscale' : ''}`}>
-                                                                                                <span className="text-[9px] text-slate-400 font-black tracking-wider block">{type}</span>
-                                                                                                <span className="text-[8px] text-slate-400 font-bold italic mt-0.5">No req.</span>
+                                                                                            <div key={type} className={`bg-slate-50/50 border border-slate-100 rounded-xl p-2.5 text-center flex flex-col justify-center h-14 transition-all duration-300 ${isFilteredOut ? 'opacity-25 grayscale' : ''}`}>
+                                                                                                <span className="text-[11px] text-slate-400 font-black tracking-wider block">{type}</span>
+                                                                                                <span className="text-[9.5px] text-slate-400 font-bold italic mt-0.5">No req.</span>
                                                                                             </div>
                                                                                         );
                                                                                     }
@@ -4576,12 +4576,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                                 setSelectedMacroDetail(null);
                                                                                                 navigate(`/doc/${doc.id}`);
                                                                                             }}
-                                                                                            className={`border rounded-lg p-2 text-center flex flex-col justify-between h-12 ${styleClass} transition-all duration-300 ${isFilteredOut ? 'opacity-25 grayscale cursor-not-allowed pointer-events-none' : 'cursor-pointer hover:shadow-sm hover:scale-[1.02]'}`}
+                                                                                            className={`border rounded-xl p-2.5 text-center flex flex-col justify-between h-14 ${styleClass} transition-all duration-300 ${isFilteredOut ? 'opacity-25 grayscale cursor-not-allowed pointer-events-none' : 'cursor-pointer hover:shadow-sm hover:scale-[1.02]'}`}
                                                                                         >
-                                                                                            <span className="text-[9px] font-black tracking-wider block">{type}</span>
-                                                                                            <div className="flex justify-between items-center text-[8px] font-mono leading-none font-bold mt-1">
+                                                                                            <span className="text-[11px] font-black tracking-wider block">{type}</span>
+                                                                                            <div className="flex justify-between items-center text-[9.5px] font-mono leading-none font-bold mt-1">
                                                                                                 <span className="opacity-75">v{doc.version}</span>
-                                                                                                <span className="uppercase font-black text-[7px] tracking-tighter">{label}</span>
+                                                                                                <span className="uppercase font-black text-[8.5px] tracking-tighter">{label}</span>
                                                                                             </div>
                                                                                         </div>
                                                                                     );
@@ -4688,7 +4688,7 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
 
     return (
         <div 
-            className={`p-4 rounded-xl border shadow-sm transition-all flex flex-col justify-between cursor-pointer relative group ${themeClasses} hover:shadow min-h-[180px] h-full`}
+            className={`p-5 rounded-2xl border shadow-sm transition-all flex flex-col justify-between cursor-pointer relative group ${themeClasses} hover:shadow min-h-[220px] h-full`}
             onClick={() => onDetailSelect(macro)}
         >
             {/* Quick classification switcher dropdown */}
@@ -4719,14 +4719,14 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
             </div>
 
             <div className="space-y-1 my-1 pr-8">
-                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block truncate" title={macro.project}>{macro.project}</span>
-                <span className="text-[12px] font-black text-slate-800 line-clamp-2 block leading-snug" title={macro.macroprocess}>{macro.macroprocess}</span>
+                <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-400 block truncate" title={macro.project}>{macro.project}</span>
+                <span className="text-[14.5px] font-black text-slate-800 line-clamp-2 block leading-snug" title={macro.macroprocess}>{macro.macroprocess}</span>
             </div>
 
             {/* Apertura a nivel de Procesos */}
-            <div className="mt-3.5 pt-2 border-t border-slate-100 space-y-1.5 flex-1">
-                <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Procesos ({groupedProcesses.length})</span>
-                <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-indigo-200 scrollbar-track-transparent pr-0.5 cursor-grab active:cursor-grabbing">
+            <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 flex-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Procesos ({groupedProcesses.length})</span>
+                <div className="flex gap-2.5 overflow-x-auto pb-3 pt-1 scrollbar-thin scrollbar-thumb-indigo-200 scrollbar-track-transparent pr-0.5 cursor-grab active:cursor-grabbing">
                     {groupedProcesses.map((p: any, idx: number) => {
                         const pProgress = p.totalRequired > 0 ? Math.round((p.totalApproved / p.totalRequired) * 100) : 0;
                         return (
@@ -4736,13 +4736,13 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
                                     e.stopPropagation();
                                     onDetailSelect({ ...macro, focusProcessName: p.processName });
                                 }}
-                                className="flex-shrink-0 w-28 h-20 flex flex-col justify-between text-left p-2.5 bg-slate-50/90 hover:bg-indigo-50/40 border border-slate-200 hover:border-indigo-300 rounded-lg shadow-sm hover:shadow transition-all duration-200 select-none group/item active:scale-95 cursor-pointer relative"
+                                className="flex-shrink-0 w-36 h-[92px] flex flex-col justify-between text-left p-3 bg-slate-50 hover:bg-indigo-50/40 border border-slate-200 hover:border-indigo-300 rounded-xl shadow-sm hover:shadow transition-all duration-200 select-none group/item active:scale-95 cursor-pointer relative"
                             >
-                                <span className="font-black text-[9.5px] text-slate-700 leading-tight line-clamp-2" title={p.processName}>
+                                <span className="font-extrabold text-[11.5px] text-slate-800 leading-snug line-clamp-2" title={p.processName}>
                                     {p.processName}
                                 </span>
                                 <div className="flex justify-between items-center mt-1">
-                                    <span className="font-mono font-black text-[9px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100/50 shadow-sm leading-none">
+                                    <span className="font-mono font-black text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/50 shadow-sm leading-none">
                                         {pProgress}%
                                     </span>
                                 </div>
@@ -4753,12 +4753,12 @@ const MacroCard = ({ macro, onTypeSelect, onDetailSelect }: any) => {
             </div>
 
             <div className="space-y-1.5 mt-4 pt-3 border-t border-slate-100/60">
-                <div className="flex justify-between items-center text-[9.5px] font-bold font-mono">
+                <div className="flex justify-between items-center text-[11px] font-bold font-mono">
                     <span className="text-slate-500">{macro.totalApproved}/{macro.totalRequired} Docs</span>
-                    <span className={`${pillBg} px-1 rounded`}>{progress}%</span>
+                    <span className={`${pillBg} px-1.5 rounded`}>{progress}%</span>
                 </div>
                 
-                <div className="w-full bg-slate-200/50 h-1 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-200/50 h-1.5 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full transition-all duration-500 ${progressColorClasses}`} style={{ width: `${progress}%` }}></div>
                 </div>
             </div>
