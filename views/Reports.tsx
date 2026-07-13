@@ -88,6 +88,7 @@ const Reports: React.FC<Props> = ({ user }) => {
     });
     const [chartScale, setChartScale] = useState<ChartScale>('MONTHLY');
     const [cfdRange, setCfdRange] = useState<3 | 6 | 12>(6);
+    const [selectedChartDocType, setSelectedChartDocType] = useState<'AS IS' | 'FCE' | 'PM' | 'TO BE'>('AS IS');
 
     // Redirección si no tiene acceso a la pestaña activa (por si acaso)
     useEffect(() => {
@@ -3711,17 +3712,32 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                                 {/* Table 3 - Avance por Macroproceso (Drill Down) */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
-                                    <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                                    <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                         <div>
                                             <h4 className="text-sm font-bold text-slate-950">Desglose de Reportería por Macroproceso ({activeMapProject})</h4>
                                             <p className="text-xs text-slate-500 mt-1">
                                                 Avance y estados detallados de la documentación, estructurado por macroprocesos.
                                             </p>
                                         </div>
+                                        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
+                                            {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => (
+                                                <button
+                                                    key={type}
+                                                    onClick={() => setSelectedChartDocType(type)}
+                                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                                        selectedChartDocType === type
+                                                            ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
+                                                            : 'text-slate-500 hover:text-slate-800'
+                                                    }`}
+                                                >
+                                                    {type}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                     {/* Gráfico de Barras por Macroproceso */}
                                     <div className="p-6 border-b border-slate-100 bg-slate-50/30">
-                                        <h5 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Documentos Terminados por Macroproceso</h5>
+                                        <h5 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Estados del Documento ({selectedChartDocType}) por Macroproceso</h5>
                                         {macroprocessThreeDrillDownStats.length === 0 ? (
                                             <p className="text-xs text-slate-400 italic">No hay datos disponibles.</p>
                                         ) : (
@@ -3729,17 +3745,20 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 <ResponsiveContainer width="100%" height="100%">
                                                     <BarChart
                                                         data={macroprocessThreeDrillDownStats.map(macro => {
-                                                            const asis = macro.docTypes['AS IS'].approved;
-                                                            const fce = macro.docTypes['FCE'].approved;
-                                                            const pm = macro.docTypes['PM'].approved;
-                                                            const tobe = macro.docTypes['TO BE'].approved;
+                                                            const stats = macro.docTypes[selectedChartDocType] || { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 };
+                                                            const ni = stats.notStarted;
+                                                            const ep = stats.inProcess;
+                                                            const ref = stats.referent;
+                                                            const cg = stats.control;
+                                                            const ter = stats.approved;
                                                             return { 
                                                                 name: macro.macroName, 
-                                                                'AS IS': asis,
-                                                                'FCE': fce,
-                                                                'PM': pm,
-                                                                'TO BE': tobe,
-                                                                total: asis + fce + pm + tobe 
+                                                                'N/I': ni,
+                                                                'E/P': ep,
+                                                                'REF': ref,
+                                                                'C/G': cg,
+                                                                'TER': ter,
+                                                                total: ni + ep + ref + cg + ter 
                                                             };
                                                         })}
                                                         margin={{ top: 25, right: 30, left: 0, bottom: 80 }}
@@ -3791,18 +3810,21 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                             labelStyle={{ color: '#0f172a', fontWeight: 'bold', marginBottom: '4px' }}
                                                         />
                                                         <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} verticalAlign="top" height={36} />
-                                                        <Bar dataKey="AS IS" stackId="a" fill="#3b82f6" maxBarSize={60}>
-                                                            <LabelList dataKey="AS IS" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        <Bar dataKey="N/I" stackId="a" fill="#94a3b8" maxBarSize={60}>
+                                                            <LabelList dataKey="N/I" position="center" fill="#ffffff" style={{ fontSize: "10px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
                                                         </Bar>
-                                                        <Bar dataKey="FCE" stackId="a" fill="#ef4444" maxBarSize={60}>
-                                                            <LabelList dataKey="FCE" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        <Bar dataKey="E/P" stackId="a" fill="#3b82f6" maxBarSize={60}>
+                                                            <LabelList dataKey="E/P" position="center" fill="#ffffff" style={{ fontSize: "10px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
                                                         </Bar>
-                                                        <Bar dataKey="PM" stackId="a" fill="#f59e0b" maxBarSize={60}>
-                                                            <LabelList dataKey="PM" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        <Bar dataKey="REF" stackId="a" fill="#a855f7" maxBarSize={60}>
+                                                            <LabelList dataKey="REF" position="center" fill="#ffffff" style={{ fontSize: "10px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
                                                         </Bar>
-                                                        <Bar dataKey="TO BE" stackId="a" fill="#10b981" maxBarSize={60} radius={[4, 4, 0, 0]}>
-                                                            <LabelList dataKey="TO BE" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
-                                                            <LabelList dataKey="total" position="top" style={{ fontSize: "12px", fontWeight: "900", fill: "#334155" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        <Bar dataKey="C/G" stackId="a" fill="#0ea5e9" maxBarSize={60}>
+                                                            <LabelList dataKey="C/G" position="center" fill="#ffffff" style={{ fontSize: "10px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        </Bar>
+                                                        <Bar dataKey="TER" stackId="a" fill="#10b981" maxBarSize={60} radius={[4, 4, 0, 0]}>
+                                                            <LabelList dataKey="TER" position="center" fill="#ffffff" style={{ fontSize: "10px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                            <LabelList dataKey="total" position="top" style={{ fontSize: "11px", fontWeight: "900", fill: "#334155" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
                                                         </Bar>
                                                     </BarChart>
                                                 </ResponsiveContainer>
