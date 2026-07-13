@@ -5,7 +5,7 @@ import { Document, User, DocState, FullHierarchy, DocType, UserRole, DocHistory 
 import { STATE_CONFIG } from '../constants';
 import AdminBI from './AdminBI';
 import { 
-    PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
+    PieChart, Pie, Cell, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
     Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown
@@ -168,6 +168,8 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [expandedProcesses, setExpandedProcesses] = useState<Record<string, boolean>>({});
     const [expandedMicroStateMacros, setExpandedMicroStateMacros] = useState<Record<string, boolean>>({});
     const [expandedMicroStateProcesses, setExpandedMicroStateProcesses] = useState<Record<string, boolean>>({});
+    const [expandedThreeMacros, setExpandedThreeMacros] = useState<Record<string, boolean>>({});
+    const [expandedThreeProcesses, setExpandedThreeProcesses] = useState<Record<string, boolean>>({});
 
     const [microDrillDown, setMicroDrillDown] = useState<{ title: string, color: string, items: {name: string, project: string, ids: string[]}[] } | null>(null);
     const [selectedMacroDetail, setSelectedMacroDetail] = useState<any | null>(null);
@@ -1347,6 +1349,169 @@ const Reports: React.FC<Props> = ({ user }) => {
             return a.macroName.localeCompare(b.macroName);
         });
     }, [filteredMicroprocessStats, mapDocTypeFilter]);
+
+    const macroprocessThreeDrillDownStats = useMemo(() => {
+        const grouped: Record<string, {
+            macroName: string;
+            category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE';
+            processes: Record<string, {
+                processName: string;
+                microprocesses: Array<{
+                    microName: string;
+                    docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                        notRequired: number;
+                        notStarted: number;
+                        inProcess: number;
+                        referent: number;
+                        control: number;
+                        approved: number;
+                    }>;
+                    total: number;
+                }>;
+                docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                    notRequired: number;
+                    notStarted: number;
+                    inProcess: number;
+                    referent: number;
+                    control: number;
+                    approved: number;
+                }>;
+                microprocessCount: number;
+                total: number;
+            }>;
+            docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                notRequired: number;
+                notStarted: number;
+                inProcess: number;
+                referent: number;
+                control: number;
+                approved: number;
+            }>;
+            processCount: number;
+            microprocessCount: number;
+            total: number;
+        }> = {};
+
+        filteredMicroprocessStats.forEach(micro => {
+            const macro = micro.macroName;
+            const proc = micro.processName;
+
+            if (!grouped[macro]) {
+                grouped[macro] = {
+                    macroName: macro,
+                    category: micro.category,
+                    processes: {},
+                    docTypes: {
+                        'AS IS': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                        'FCE': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                        'PM': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                        'TO BE': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 }
+                    },
+                    processCount: 0,
+                    microprocessCount: 0,
+                    total: 0
+                };
+            }
+
+            if (!grouped[macro].processes[proc]) {
+                grouped[macro].processes[proc] = {
+                    processName: proc,
+                    microprocesses: [],
+                    docTypes: {
+                        'AS IS': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                        'FCE': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                        'PM': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                        'TO BE': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 }
+                    },
+                    microprocessCount: 0,
+                    total: 0
+                };
+            }
+
+            const microDocTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                notRequired: number;
+                notStarted: number;
+                inProcess: number;
+                referent: number;
+                control: number;
+                approved: number;
+            }> = {
+                'AS IS': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                'FCE': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                'PM': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 },
+                'TO BE': { notRequired: 0, notStarted: 0, inProcess: 0, referent: 0, control: 0, approved: 0 }
+            };
+
+            let microTotal = 0;
+
+            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
+                const doc = micro.docs[dtype];
+                if (!doc || !doc.isRequired) {
+                    microDocTypes[dtype].notRequired = 1;
+                    grouped[macro].docTypes[dtype].notRequired++;
+                    grouped[macro].processes[proc].docTypes[dtype].notRequired++;
+                } else {
+                    microTotal++;
+                    if (doc.state === DocState.APPROVED) {
+                        microDocTypes[dtype].approved = 1;
+                        grouped[macro].docTypes[dtype].approved++;
+                        grouped[macro].processes[proc].docTypes[dtype].approved++;
+                    } else if (doc.state === DocState.NOT_STARTED) {
+                        microDocTypes[dtype].notStarted = 1;
+                        grouped[macro].docTypes[dtype].notStarted++;
+                        grouped[macro].processes[proc].docTypes[dtype].notStarted++;
+                    } else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) {
+                        microDocTypes[dtype].referent = 1;
+                        grouped[macro].docTypes[dtype].referent++;
+                        grouped[macro].processes[proc].docTypes[dtype].referent++;
+                    } else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) {
+                        microDocTypes[dtype].control = 1;
+                        grouped[macro].docTypes[dtype].control++;
+                        grouped[macro].processes[proc].docTypes[dtype].control++;
+                    } else {
+                        microDocTypes[dtype].inProcess = 1;
+                        grouped[macro].docTypes[dtype].inProcess++;
+                        grouped[macro].processes[proc].docTypes[dtype].inProcess++;
+                    }
+                }
+            });
+
+            grouped[macro].processes[proc].microprocesses.push({
+                microName: micro.microName,
+                docTypes: microDocTypes,
+                total: microTotal
+            });
+
+            grouped[macro].processes[proc].microprocessCount++;
+            grouped[macro].processes[proc].total += microTotal;
+            grouped[macro].microprocessCount++;
+            grouped[macro].total += microTotal;
+        });
+
+        // Convert processes Record to sorted Array
+        return Object.values(grouped).map(macro => {
+            const processesList = Object.values(macro.processes).map(proc => {
+                proc.microprocesses.sort((a, b) => a.microName.localeCompare(b.microName));
+                return proc;
+            }).sort((a, b) => a.processName.localeCompare(b.processName));
+
+            return {
+                macroName: macro.macroName,
+                category: macro.category,
+                processCount: processesList.length,
+                microprocessCount: macro.microprocessCount,
+                processes: processesList,
+                docTypes: macro.docTypes,
+                total: macro.total
+            };
+        }).sort((a, b) => {
+            const catOrder = { ESTRATEGICO: 1, OPERATIVO: 2, SOPORTE: 3 };
+            const orderA = catOrder[a.category] || 99;
+            const orderB = catOrder[b.category] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.macroName.localeCompare(b.macroName);
+        });
+    }, [filteredMicroprocessStats]);
 
     const handleExportMicroPNG = () => {
         const canvas = document.createElement('canvas');
@@ -3544,926 +3709,241 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     </div>
                                 </div>
 
-                                {/* Table - Microprocess State Breakdown (Drill Down) */}
-                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                    <div className="p-5 border-b border-slate-100">
-                                        <h4 className="text-sm font-bold text-slate-950">Desglose de Gestión por Estado de Microproceso ({activeMapProject})</h4>
-                                        <p className="text-xs text-slate-500 mt-1">Muestra la composición del estado actual de los documentos (AS IS, FCE, PM, TO BE) para cada microproceso, proceso y macroproceso.</p>
-                                    </div>
-
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-slate-50 border-b border-slate-100">
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Nivel / Categoría</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">No Iniciados</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">En Proceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Referente</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-44">Control Gestión</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center w-40">Terminados</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-right w-36">Avance</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {macroprocessMicroStateStats.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={8} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
-                                                    </tr>
-                                                ) : (
-                                                    macroprocessMicroStateStats.map((row) => {
-                                                        const catLabels = {
-                                                            ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
-                                                            OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-100', label: 'Operativo' },
-                                                            SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-100', label: 'Soporte' }
-                                                        };
-                                                        const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
-                                                        const isMacroExpanded = expandedMicroStateMacros[row.macroName];
-
-                                                        return (
-                                                            <React.Fragment key={`state-macro-${row.macroName}`}>
-                                                                {/* MACROPROCESO ROW */}
-                                                                <tr className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
-                                                                    <td className="px-6 py-4 flex items-center">
-                                                                        <button 
-                                                                            onClick={() => setExpandedMicroStateMacros(prev => ({ ...prev, [row.macroName]: !prev[row.macroName] }))}
-                                                                            className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 hover:bg-slate-100 rounded flex-shrink-0"
-                                                                            title={isMacroExpanded ? "Contraer macroproceso" : "Expandir para ver procesos"}
-                                                                        >
-                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
-                                                                        </button>
-                                                                        <span className="font-bold text-slate-800 text-xs block truncate" title={row.macroName}>{row.macroName}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border flex-shrink-0 ${cat.bg}`}>
-                                                                            {cat.label}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-500">
-                                                                        <span className="bg-slate-100 px-2 py-1 rounded text-slate-700 font-bold">{row.noIniciadoCount}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-blue-600">
-                                                                        <span className="bg-blue-50 px-2 py-1 rounded text-blue-700 font-bold">{row.enProcesoCount}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-purple-600">
-                                                                        <span className="bg-purple-50 px-2 py-1 rounded text-purple-700 font-bold">{row.referenteCount}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-orange-600">
-                                                                        <span className="bg-orange-50 px-2 py-1 rounded text-orange-700 font-bold">{row.controlGestionCount}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-green-600">
-                                                                        <span className="bg-green-50 px-2 py-1 rounded text-green-700 font-bold">{row.terminadosCount}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-right">
-                                                                        {(() => {
-                                                                            const req = row.noIniciadoCount + row.enProcesoCount + row.referenteCount + row.controlGestionCount + row.terminadosCount;
-                                                                            const pct = req > 0 ? Math.round((row.terminadosCount / req) * 100) : 0;
-                                                                            return (
-                                                                                <div className="inline-flex flex-col items-end">
-                                                                                    <span className="text-xs font-black text-slate-900">{pct}%</span>
-                                                                                    <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
-                                                                                        <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${pct}%` }} />
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        })()}
-                                                                    </td>
-                                                                </tr>
-
-                                                                {/* PROCESOS DRILL-DOWN */}
-                                                                {isMacroExpanded && row.processes.map((proc) => {
-                                                                    const procKey = `${row.macroName}::${proc.processName}`;
-                                                                    const isProcExpanded = expandedMicroStateProcesses[procKey];
-
-                                                                    return (
-                                                                        <React.Fragment key={`state-proc-${proc.processName}`}>
-                                                                            <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-slate-100/80">
-                                                                                <td className="px-6 py-3 pl-12 flex items-center">
-                                                                                    <button 
-                                                                                        onClick={() => setExpandedMicroStateProcesses(prev => ({ ...prev, [procKey]: !prev[procKey] }))}
-                                                                                        className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-0.5 hover:bg-slate-200/60 rounded flex-shrink-0"
-                                                                                        title={isProcExpanded ? "Contraer proceso" : "Expandir para ver microprocesos"}
-                                                                                    >
-                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-indigo-600 font-bold" /> : <ChevronRight size={12} />}
-                                                                                    </button>
-                                                                                    <span className="font-semibold text-slate-700 text-xs truncate" title={proc.processName}>{proc.processName}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3">
-                                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Proceso</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-slate-500">
-                                                                                    <span>{proc.noIniciadoCount}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-blue-500">
-                                                                                    <span>{proc.enProcesoCount}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-purple-500">
-                                                                                    <span>{proc.referenteCount}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-orange-500">
-                                                                                    <span>{proc.controlGestionCount}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-green-500">
-                                                                                    <span>{proc.terminadosCount}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-right">
-                                                                                    {(() => {
-                                                                                        const req = proc.noIniciadoCount + proc.enProcesoCount + proc.referenteCount + proc.controlGestionCount + proc.terminadosCount;
-                                                                                        const pct = req > 0 ? Math.round((proc.terminadosCount / req) * 100) : 0;
-                                                                                        return (
-                                                                                            <span className="text-xs font-bold text-slate-700">{pct}%</span>
-                                                                                        );
-                                                                                    })()}
-                                                                                </td>
-                                                                            </tr>
-
-                                                                            {/* MICROPROCESOS DRILL-DOWN */}
-                                                                            {isProcExpanded && proc.microprocesses.map((micro) => {
-                                                                                const noIniciadosDocs: string[] = [];
-                                                                                const enProcesoDocs: string[] = [];
-                                                                                const referenteDocs: string[] = [];
-                                                                                const controlGestionDocs: string[] = [];
-                                                                                const terminadosDocs: string[] = [];
-
-                                                                                const activeTypes = mapDocTypeFilter === 'TODOS' 
-                                                                                    ? (['AS IS', 'FCE', 'PM', 'TO BE'] as const)
-                                                                                    : ([mapDocTypeFilter] as const);
-
-                                                                                activeTypes.forEach(dtype => {
-                                                                                    const doc = micro.docs[dtype];
-                                                                                    if (doc && doc.isRequired) {
-                                                                                        if (doc.state === DocState.APPROVED) {
-                                                                                            terminadosDocs.push(dtype);
-                                                                                        } else if (doc.state === DocState.NOT_STARTED) {
-                                                                                            noIniciadosDocs.push(dtype);
-                                                                                        } else if (doc.state === DocState.SENT_TO_REFERENT || doc.state === DocState.REFERENT_REVIEW) {
-                                                                                            referenteDocs.push(dtype);
-                                                                                        } else if (doc.state === DocState.SENT_TO_CONTROL || doc.state === DocState.CONTROL_REVIEW) {
-                                                                                            controlGestionDocs.push(dtype);
-                                                                                        } else {
-                                                                                            enProcesoDocs.push(dtype);
-                                                                                        }
-                                                                                    }
-                                                                                });
-
-                                                                                return (
-                                                                                    <tr key={`state-micro-${micro.microName}`} className="bg-white hover:bg-slate-50/40 transition-colors border-b border-slate-100/40">
-                                                                                        <td className="px-6 py-2.5 pl-20 flex items-center">
-                                                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 flex-shrink-0" />
-                                                                                            <span className="font-medium text-slate-500 text-[11px] leading-tight block truncate" title={micro.microName}>{micro.microName}</span>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-xs text-slate-300">
-                                                                                            <span className="text-[9.5px] text-slate-400 font-medium pl-1">Microproceso</span>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(noIniciadosDocs, 'bg-slate-50 text-slate-400 border-slate-200/60 hover:bg-slate-100/80', 'Inactivo', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(enProcesoDocs, 'bg-blue-50 text-blue-700 border-blue-200/60 hover:bg-blue-100/80', 'En Proceso', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(referenteDocs, 'bg-purple-50 text-purple-700 border-purple-200/60 hover:bg-purple-100/80', 'Referente', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(controlGestionDocs, 'bg-orange-50 text-orange-700 border-orange-200/60 hover:bg-orange-100/80', 'Control Gestión', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center">
-                                                                                            {renderDocBadges(terminadosDocs, 'bg-green-50 text-green-700 border-green-200/60 hover:bg-green-100/80', 'Terminado', micro.docs)}
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-right">
-                                                                                            {(() => {
-                                                                                                const req = noIniciadosDocs.length + enProcesoDocs.length + referenteDocs.length + controlGestionDocs.length + terminadosDocs.length;
-                                                                                                const pct = req > 0 ? Math.round((terminadosDocs.length / req) * 100) : 0;
-                                                                                                return (
-                                                                                                    <span className="text-xs font-bold text-slate-700">{pct}%</span>
-                                                                                                );
-                                                                                            })()}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                );
-                                                                            })}
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
-                                                            </React.Fragment>
-                                                        );
-                                                    })
-                                                 )}
-
-                                                {/* Total Row */}
-                                                {(() => {
-                                                    let totalNoIniciados = 0;
-                                                    let totalEnProceso = 0;
-                                                    let totalReferente = 0;
-                                                    let totalControlGestion = 0;
-                                                    let totalTerminados = 0;
-
-                                                    macroprocessMicroStateStats.forEach(row => {
-                                                        totalNoIniciados += row.noIniciadoCount;
-                                                        totalEnProceso += row.enProcesoCount;
-                                                        totalReferente += row.referenteCount;
-                                                        totalControlGestion += row.controlGestionCount;
-                                                        totalTerminados += row.terminadosCount;
-                                                    });
-
-                                                    return (
-                                                        <tr className="bg-slate-50 border-t-2 border-slate-200 hover:bg-slate-100/50 transition-colors">
-                                                            <td className="px-6 py-4 text-sm text-slate-950 font-black">
-                                                                Total general
-                                                            </td>
-                                                            <td className="px-6 py-4 text-sm text-slate-400 font-medium">
-                                                                -
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-slate-500">
-                                                                {totalNoIniciados}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-blue-600">
-                                                                {totalEnProceso}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-purple-600">
-                                                                {totalReferente}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-orange-600">
-                                                                {totalControlGestion}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center text-sm font-black text-green-600">
-                                                                {totalTerminados}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-right text-sm font-black text-slate-900">
-                                                                {(() => {
-                                                                    const req = totalNoIniciados + totalEnProceso + totalReferente + totalControlGestion + totalTerminados;
-                                                                    const pct = req > 0 ? Math.round((totalTerminados / req) * 100) : 0;
-                                                                    return `${pct}%`;
-                                                                })()}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })()}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Table - Progress Breakdown by Macroprocess */}
+                                {/* Table 3 - Avance por Macroproceso (Drill Down) */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
-                                    <div className="p-5 border-b border-slate-100">
-                                        <h4 className="text-sm font-bold text-slate-950">Desglose de Gestión Documental por Microproceso ({activeMapProject})</h4>
-                                        <p className="text-xs text-slate-500 mt-1">Muestra el estado de cada documento requerido agrupado por macroproceso del proyecto.</p>
+                                    <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                                        <div>
+                                            <h4 className="text-sm font-bold text-slate-950">Desglose de Reportería por Macroproceso ({activeMapProject})</h4>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Avance y estados detallados de la documentación, estructurado por macroprocesos.
+                                            </p>
+                                        </div>
                                     </div>
-
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
+                                    {/* Gráfico de Barras por Macroproceso */}
+                                    <div className="p-6 border-b border-slate-100 bg-slate-50/30">
+                                        <h5 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Documentos Terminados por Macroproceso</h5>
+                                        {macroprocessThreeDrillDownStats.length === 0 ? (
+                                            <p className="text-xs text-slate-400 italic">No hay datos disponibles.</p>
+                                        ) : (
+                                            <div className="h-[400px] w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart
+                                                        data={macroprocessThreeDrillDownStats.map(macro => {
+                                                            const asis = macro.docTypes['AS IS'].approved;
+                                                            const fce = macro.docTypes['FCE'].approved;
+                                                            const pm = macro.docTypes['PM'].approved;
+                                                            const tobe = macro.docTypes['TO BE'].approved;
+                                                            return { 
+                                                                name: macro.macroName, 
+                                                                'AS IS': asis,
+                                                                'FCE': fce,
+                                                                'PM': pm,
+                                                                'TO BE': tobe,
+                                                                total: asis + fce + pm + tobe 
+                                                            };
+                                                        })}
+                                                        margin={{ top: 25, right: 30, left: 0, bottom: 80 }}
+                                                    >
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                        <XAxis 
+                                                            dataKey="name" 
+                                                            axisLine={false} 
+                                                            tickLine={false} 
+                                                            interval={0}
+                                                            tick={(props: any) => {
+                                                                const { x, y, payload } = props;
+                                                                const text = payload.value || '';
+                                                                const words = text.split(' ');
+                                                                let lines = [];
+                                                                let curr = '';
+                                                                words.forEach((w: string) => {
+                                                                    if ((curr + w).length > 15) {
+                                                                        if (curr) lines.push(curr.trim());
+                                                                        curr = w + ' ';
+                                                                    } else {
+                                                                        curr += w + ' ';
+                                                                    }
+                                                                });
+                                                                if (curr) lines.push(curr.trim());
+                                                                
+                                                                return (
+                                                                    <g transform={`translate(${x},${y})`}>
+                                                                        <text x={0} y={0} dy={16} textAnchor="middle" fill="#64748b" fontSize="11" fontWeight="500">
+                                                                            {lines.map((line: string, i: number) => (
+                                                                                <tspan textAnchor="middle" x={0} dy={i === 0 ? 0 : 14} key={i}>
+                                                                                    {line}
+                                                                                </tspan>
+                                                                            ))}
+                                                                        </text>
+                                                                    </g>
+                                                                );
+                                                            }}
+                                                        />
+                                                        <YAxis 
+                                                            axisLine={false} 
+                                                            tickLine={false} 
+                                                            tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
+                                                            allowDecimals={false}
+                                                        />
+                                                        <Tooltip
+                                                            cursor={{ fill: '#f1f5f9' }}
+                                                            contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                            labelStyle={{ color: '#0f172a', fontWeight: 'bold', marginBottom: '4px' }}
+                                                        />
+                                                        <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} verticalAlign="top" height={36} />
+                                                        <Bar dataKey="AS IS" stackId="a" fill="#3b82f6" maxBarSize={60}>
+                                                            <LabelList dataKey="AS IS" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        </Bar>
+                                                        <Bar dataKey="FCE" stackId="a" fill="#ef4444" maxBarSize={60}>
+                                                            <LabelList dataKey="FCE" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        </Bar>
+                                                        <Bar dataKey="PM" stackId="a" fill="#f59e0b" maxBarSize={60}>
+                                                            <LabelList dataKey="PM" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        </Bar>
+                                                        <Bar dataKey="TO BE" stackId="a" fill="#10b981" maxBarSize={60} radius={[4, 4, 0, 0]}>
+                                                            <LabelList dataKey="TO BE" position="center" fill="#ffffff" style={{ fontSize: "11px", fontWeight: "900" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                            <LabelList dataKey="total" position="top" style={{ fontSize: "12px", fontWeight: "900", fill: "#334155" }} formatter={(val: any) => Number(val) > 0 ? val : ''} />
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* Tabla Drill-down */}
+                                    <div className="overflow-x-auto max-w-full pb-8">
+                                        <table className="w-full text-left border-collapse min-w-[1400px]">
                                             <thead>
-                                                <tr className="bg-slate-50 border-b border-slate-100">
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Procesos (Cant)</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Microprocesos (Cant)</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Nivel / Categoría</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">AS IS</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">FCE</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">PM</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">TO BE</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Avance</th>
+                                                <tr className="bg-slate-100/80 border-b border-slate-200 text-[10px] font-bold text-slate-700">
+                                                    <th rowSpan={2} className="px-4 py-3 text-left border-r border-slate-200 min-w-[320px] sticky left-0 bg-slate-100 z-10">
+                                                        Procesos
+                                                    </th>
+                                                    <th colSpan={6} className="px-2 py-1.5 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900">AS IS</th>
+                                                    <th colSpan={6} className="px-2 py-1.5 text-center border-r border-slate-200 bg-red-50/70 font-extrabold text-red-900">FCE</th>
+                                                    <th colSpan={6} className="px-2 py-1.5 text-center border-r border-slate-200 bg-amber-50/70 font-extrabold text-amber-900">PM</th>
+                                                    <th colSpan={6} className="px-2 py-1.5 text-center bg-green-50/70 font-extrabold text-green-900">TO BE</th>
+                                                </tr>
+                                                <tr className="bg-slate-50 border-b border-slate-200 text-[9px] font-bold text-slate-500">
+                                                    {['AS IS', 'FCE', 'PM', 'TO BE'].map((t) => (
+                                                        <React.Fragment key={t}>
+                                                            <th className="px-1 py-1.5 text-center border-r border-slate-200/60 font-semibold" title="No requerido">N/R</th>
+                                                            <th className="px-1 py-1.5 text-center border-r border-slate-200/60 font-semibold" title="No Iniciado">N/I</th>
+                                                            <th className="px-1 py-1.5 text-center border-r border-slate-200/60 font-semibold" title="En Proceso">E/P</th>
+                                                            <th className="px-1 py-1.5 text-center border-r border-slate-200/60 font-semibold" title="Referente">REF</th>
+                                                            <th className="px-1 py-1.5 text-center border-r border-slate-200/60 font-semibold" title="Control Gestión">C/G</th>
+                                                            <th className="px-1 py-1.5 text-center border-r border-slate-200 font-semibold" title="Terminados (Aprobados)">TER</th>
+                                                        </React.Fragment>
+                                                    ))}
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {macroprocessReportingStats.length === 0 ? (
+                                            <tbody className="text-xs text-slate-700">
+                                                {macroprocessThreeDrillDownStats.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={9} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
+                                                        <td colSpan={25} className="text-center py-8 text-slate-500 italic">No hay datos disponibles.</td>
                                                     </tr>
                                                 ) : (
-                                                    macroprocessReportingStats.map((row) => {
-                                                        const catLabels = {
-                                                            ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
-                                                            OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-100', label: 'Operativo' },
-                                                            SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-100', label: 'Soporte' }
-                                                        };
-                                                        const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
-                                                        const isMacroExpanded = expandedMacros[row.macroName];
-
+                                                    macroprocessThreeDrillDownStats.map((row) => {
+                                                        const isMacroExpanded = expandedThreeMacros[row.macroName];
+                                                        
                                                         return (
                                                             <React.Fragment key={row.macroName}>
-                                                                {/* MACROPROCESO ROW */}
-                                                                <tr className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
-                                                                    <td className="px-6 py-4 max-w-xs flex items-center">
-                                                                        <button 
-                                                                            onClick={() => setExpandedMacros(prev => ({ ...prev, [row.macroName]: !prev[row.macroName] }))}
-                                                                            className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 hover:bg-slate-100 rounded"
-                                                                            title={isMacroExpanded ? "Contraer macroproceso" : "Expandir para ver procesos"}
-                                                                        >
-                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
-                                                                        </button>
-                                                                        <span className="font-bold text-slate-800 text-xs block truncate" title={row.macroName}>{row.macroName}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-600">
-                                                                        {row.processCount}
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-600">
-                                                                        {row.microprocessCount}
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${cat.bg}`}>
-                                                                            {cat.label}
-                                                                        </span>
-                                                                    </td>
-                                                                    
-                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                        const dstats = row.docTypes[dtype];
-                                                                        const isReq = dstats && dstats.total > 0;
-                                                                        
-                                                                        if (isReq) {
-                                                                            const pct = Math.round((dstats.approved / dstats.total) * 100);
-                                                                            const badgeClass = pct === 100 
-                                                                                ? 'text-green-700 bg-green-50 border-green-200 font-bold'
-                                                                                : pct > 0 
-                                                                                    ? 'text-indigo-700 bg-indigo-50 border-indigo-200 font-bold'
-                                                                                    : 'text-slate-500 bg-slate-100 border-slate-200 font-semibold';
-                                                                            return (
-                                                                                <td key={dtype} className="px-6 py-4 text-center">
-                                                                                    <span className={`px-2 py-0.5 text-[10px] rounded border ${badgeClass} inline-block whitespace-nowrap`}>
-                                                                                        {pct}%
-                                                                                    </span>
-                                                                                </td>
-                                                                            );
-                                                                        }
-
-                                                                        return (
-                                                                            <td key={dtype} className="px-6 py-4 text-center">
-                                                                                <span className="px-2 py-0.5 text-[10px] rounded border text-slate-300 bg-slate-50/50 border-slate-100 inline-block whitespace-nowrap">
-                                                                                    N/R
-                                                                                </span>
-                                                                            </td>
-                                                                        );
-                                                                    })}
-
-                                                                    <td className="px-6 py-4 text-right">
-                                                                        <div className="inline-flex flex-col items-end">
-                                                                            <span className="text-xs font-black text-slate-900">{row.overallProgress}%</span>
-                                                                            <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
-                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${row.overallProgress}%` }} />
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-
-                                                                {/* PROCESOS DRILL-DOWN */}
-                                                                {isMacroExpanded && row.processes.map((proc) => {
-                                                                    const procKey = `${row.macroName}::${proc.processName}`;
-                                                                    const isProcExpanded = expandedProcesses[procKey];
-
-                                                                    return (
-                                                                        <React.Fragment key={proc.processName}>
-                                                                            <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-slate-100/80">
-                                                                                <td className="px-6 py-3 max-w-xs pl-12 flex items-center">
-                                                                                    <button 
-                                                                                        onClick={() => setExpandedProcesses(prev => ({ ...prev, [procKey]: !prev[procKey] }))}
-                                                                                        className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-0.5 hover:bg-slate-200/60 rounded"
-                                                                                        title={isProcExpanded ? "Contraer proceso" : "Expandir para ver microprocesos"}
-                                                                                    >
-                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-indigo-655 font-bold" /> : <ChevronRight size={12} />}
-                                                                                    </button>
-                                                                                    <span className="font-semibold text-slate-700 text-xs truncate" title={proc.processName}>{proc.processName}</span>
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-medium text-slate-400">
-                                                                                    -
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-slate-600">
-                                                                                    {proc.microprocesses.length}
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-xs text-slate-400">
-                                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Proceso</span>
-                                                                                </td>
-
-                                                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                                    const pstats = proc.docTypes[dtype];
-                                                                                    const isReq = pstats && pstats.total > 0;
-                                                                                    
-                                                                                    if (isReq) {
-                                                                                        const pct = Math.round((pstats.approved / pstats.total) * 100);
-                                                                                        const badgeClass = pct === 100 
-                                                                                            ? 'text-green-700 bg-green-100 border-green-200 font-bold'
-                                                                                            : pct > 0 
-                                                                                                ? 'text-indigo-700 bg-indigo-50/80 border-indigo-200 font-bold'
-                                                                                                : 'text-slate-500 bg-slate-100 border-slate-200 font-semibold';
-                                                                                        return (
-                                                                                            <td key={dtype} className="px-6 py-3 text-center">
-                                                                                                <span className={`px-2 py-0.5 text-[9.5px] rounded border ${badgeClass} inline-block whitespace-nowrap`}>
-                                                                                                    {pct}%
-                                                                                                </span>
-                                                                                            </td>
-                                                                                        );
-                                                                                    }
-
-                                                                                    return (
-                                                                                        <td key={dtype} className="px-6 py-3 text-center">
-                                                                                            <span className="px-2 py-0.5 text-[9.5px] rounded border text-slate-300 bg-slate-100/30 border-slate-200/50 inline-block whitespace-nowrap">
-                                                                                                N/R
-                                                                                            </span>
-                                                                                        </td>
-                                                                                    );
-                                                                                })}
-
-                                                                                <td className="px-6 py-3 text-right">
-                                                                                    <span className="text-xs font-bold text-slate-700">{proc.overallProgress}%</span>
-                                                                                </td>
-                                                                            </tr>
-
-                                                                            {/* MICROPROCESOS DRILL-DOWN */}
-                                                                            {isProcExpanded && proc.microprocesses.map((micro) => {
-                                                                                return (
-                                                                                    <tr key={micro.microName} className="bg-white hover:bg-slate-50/40 transition-colors border-b border-slate-100/40">
-                                                                                        <td className="px-6 py-2.5 max-w-xs pl-20 flex items-center">
-                                                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 flex-shrink-0" />
-                                                                                            <span className="font-medium text-slate-500 text-[11px] leading-tight block truncate" title={micro.microName}>{micro.microName}</span>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center text-xs font-medium text-slate-300">
-                                                                                            -
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center text-xs font-medium text-slate-300">
-                                                                                            -
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-xs text-slate-300">
-                                                                                            <span className="text-[9.5px] text-slate-400 font-medium pl-1">Microproceso</span>
-                                                                                        </td>
-
-                                                                                        {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                                            const doc = micro.docs[dtype];
-                                                                                            
-                                                                                            if (!doc || !doc.isRequired) {
-                                                                                                return (
-                                                                                                    <td key={dtype} className="px-6 py-2.5 text-center">
-                                                                                                        <span className="px-2 py-0.5 text-[9px] rounded border text-slate-300 bg-slate-50/50 border-slate-100 inline-block whitespace-nowrap">
-                                                                                                            N/R
-                                                                                                        </span>
-                                                                                                    </td>
-                                                                                                );
-                                                                                            }
-
-                                                                                            const colorClasses: Record<DocState, string> = {
-                                                                                                [DocState.NOT_STARTED]: 'bg-slate-50 text-slate-400 border-slate-200/60',
-                                                                                                [DocState.INITIATED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-                                                                                                [DocState.IN_PROCESS]: 'bg-blue-50/80 text-blue-600 border-blue-100',
-                                                                                                [DocState.INTERNAL_REVIEW]: 'bg-sky-50 text-sky-600 border-sky-100',
-                                                                                                [DocState.SENT_TO_REFERENT]: 'bg-purple-50 text-purple-600 border-purple-100',
-                                                                                                [DocState.REFERENT_REVIEW]: 'bg-purple-100/70 text-purple-700 border-purple-200/60',
-                                                                                                [DocState.SENT_TO_CONTROL]: 'bg-orange-50 text-orange-600 border-orange-100',
-                                                                                                [DocState.CONTROL_REVIEW]: 'bg-orange-100/70 text-orange-700 border-orange-200/60',
-                                                                                                [DocState.APPROVED]: 'bg-green-50 text-green-600 border-green-200'
-                                                                                            };
-
-                                                                                            const labelMap: Record<DocState, string> = {
-                                                                                                [DocState.NOT_STARTED]: 'Inactivo',
-                                                                                                [DocState.INITIATED]: 'Iniciado',
-                                                                                                [DocState.IN_PROCESS]: 'En Proc.',
-                                                                                                [DocState.INTERNAL_REVIEW]: 'Rev. Int.',
-                                                                                                [DocState.SENT_TO_REFERENT]: 'Recom.',
-                                                                                                [DocState.REFERENT_REVIEW]: 'Recom.',
-                                                                                                [DocState.SENT_TO_CONTROL]: 'Cierre',
-                                                                                                [DocState.CONTROL_REVIEW]: 'Cierre',
-                                                                                                [DocState.APPROVED]: 'Aprobado'
-                                                                                            };
-
-                                                                                            const styleClass = colorClasses[doc.state as DocState] || 'bg-slate-50 text-slate-400';
-                                                                                            const label = labelMap[doc.state as DocState] || doc.state;
-
-                                                                                            // Navigate if real doc
-                                                                                            const handleDocClick = () => {
-                                                                                                if (!doc.isVirtual && doc.id) {
-                                                                                                    navigate(`/doc/${doc.id}`);
-                                                                                                }
-                                                                                            };
-
-                                                                                            return (
-                                                                                                <td key={dtype} className="px-6 py-2.5 text-center">
-                                                                                                    <span 
-                                                                                                        onClick={handleDocClick}
-                                                                                                        className={`px-2 py-0.5 text-[9px] rounded border ${styleClass} inline-flex items-center gap-1 whitespace-nowrap ${!doc.isVirtual ? 'cursor-pointer hover:scale-[1.03] hover:shadow-sm font-bold' : 'font-medium opacity-80'}`}
-                                                                                                        title={!doc.isVirtual ? 'Click para ver documento' : 'Documento no iniciado'}
-                                                                                                    >
-                                                                                                        {label}
-                                                                                                    </span>
-                                                                                                </td>
-                                                                                            );
-                                                                                        })}
-
-                                                                                        <td className="px-6 py-2.5 text-right">
-                                                                                            <span className="text-[10px] font-medium text-slate-500">{micro.overallProgress}%</span>
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                );
-                                                                            })}
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
-                                                            </React.Fragment>
-                                                        );
-                                                    })
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {false && (
-                            <div className="space-y-6 animate-fadeIn">
-                                {/* Action Bar / Project Selection & Export Options */}
-                                <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-                                        <div className="space-y-1.5">
-                                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Proyecto Seleccionado:</span>
-                                            <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
-                                                {availableMapProjects.map((proj) => {
-                                                    const isActive = activeMapProject === proj;
-                                                    let fullName = proj;
-                                                    if (proj === 'HPC') fullName = 'Hospital Provincia Cordillera (HPC)';
-                                                    else if (proj === 'HSR') fullName = 'Hospital Sótero del Río (HSR)';
-                                                    else if (proj === 'REU') fullName = 'Red de Urgencia (REU)';
-
-                                                    return (
-                                                        <button
-                                                            key={proj}
-                                                            onClick={() => setActiveMapProject(proj)}
-                                                            className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${
-                                                                isActive 
-                                                                    ? 'bg-white text-indigo-600 shadow-sm' 
-                                                                    : 'text-slate-500 hover:text-slate-700'
-                                                            }`}
-                                                        >
-                                                            {fullName}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Filtro de Documento (Incide en Microprocesos):</span>
-                                            <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/50 w-fit">
-                                                {(['TODOS', 'AS IS', 'FCE', 'PM', 'TO BE'] as const).map((type) => {
-                                                    const isActive = mapDocTypeFilter === type;
-                                                    return (
-                                                        <button
-                                                            key={type}
-                                                            onClick={() => setMapDocTypeFilter(type)}
-                                                            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all border ${
-                                                                isActive 
-                                                                    ? 'bg-white text-indigo-600 border-slate-200/60 shadow-sm font-black' 
-                                                                    : 'text-slate-500 border-transparent hover:text-slate-700'
-                                                            }`}
-                                                        >
-                                                            {type}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 self-end lg:self-center">
-                                        <button
-                                            onClick={handleExportMicroPNG}
-                                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
-                                        >
-                                            <FileSpreadsheet size={16} /> Exportar Gráficos (PNG)
-                                        </button>
-                                        <button
-                                            onClick={() => window.print()}
-                                            className="px-4 py-2.5 bg-white text-slate-700 border border-slate-200 font-bold text-xs rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm whitespace-nowrap"
-                                        >
-                                            <ExternalLink size={16} /> Imprimir Reporte
-                                        </button>
-                                    </div>
-                                </div>
-
-
-
-                                {/* Recharts Visualizations */}
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                    {/* Grouped Bar Chart */}
-                                    <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-4">Distribución del Avance de Microprocesos por Categoría</h4>
-                                        <div className="h-[300px]">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={microCategoryChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
-                                                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
-                                                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ fontSize: '11px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                                                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                                                    <Bar dataKey="No iniciado" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="En Proceso" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="Aprobados" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </div>
-
-                                    {/* Doughnut / Pie Chart of States */}
-                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
-                                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-2">Composición del Estado de Microprocesos</h4>
-                                        <div className="flex-1 flex flex-col justify-center items-center">
-                                            {microPieData.length === 0 ? (
-                                                <div className="text-center text-xs text-slate-400 py-12">No hay microprocesos registrados.</div>
-                                            ) : (
-                                                <>
-                                                    <div className="w-full h-[220px]">
-                                                        <ResponsiveContainer width="100%" height="100%">
-                                                            <PieChart>
-                                                                <Pie
-                                                                    data={microPieData}
-                                                                    cx="50%"
-                                                                    cy="50%"
-                                                                    innerRadius={50}
-                                                                    outerRadius={75}
-                                                                    paddingAngle={4}
-                                                                    dataKey="value"
+                                                                <tr 
+                                                                    className="border-b border-slate-200 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition-colors"
+                                                                    onClick={() => setExpandedThreeMacros(p => ({ ...p, [row.macroName]: !p[row.macroName] }))}
                                                                 >
-                                                                    {microPieData.map((entry, index) => (
-                                                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                                                    ))}
-                                                                </Pie>
-                                                                <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px' }} />
-                                                            </PieChart>
-                                                        </ResponsiveContainer>
-                                                    </div>
-                                                    <div className="flex flex-wrap justify-center gap-2 text-[10px] font-bold mt-2">
-                                                        {microPieData.map(item => (
-                                                            <span key={item.name} className="flex items-center gap-1 text-slate-600 px-1.5 py-0.5 rounded border border-slate-100 bg-slate-50">
-                                                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                                                                {item.name}: {item.value}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Table - Progress Breakdown by Macroprocess */}
-                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                    <div className="p-5 border-b border-slate-100">
-                                        <h4 className="text-sm font-bold text-slate-950">Desglose de Gestión Documental por Microproceso ({activeMapProject})</h4>
-                                        <p className="text-xs text-slate-500 mt-1">Muestra el estado de cada documento requerido agrupado por macroproceso del proyecto.</p>
-                                    </div>
-
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-slate-50 border-b border-slate-100">
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Macroproceso / Proceso / Microproceso</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Procesos (Cant)</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Microprocesos (Cant)</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider">Nivel / Categoría</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">AS IS</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">FCE</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">PM</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-center">TO BE</th>
-                                                    <th className="px-6 py-3.5 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Avance</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {macroprocessReportingStats.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={9} className="px-6 py-12 text-center text-xs text-slate-400 italic">No se encontraron macroprocesos registrados para este proyecto.</td>
-                                                    </tr>
-                                                ) : (
-                                                    macroprocessReportingStats.map((row) => {
-                                                        const catLabels = {
-                                                            ESTRATEGICO: { bg: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Estratégico' },
-                                                            OPERATIVO: { bg: 'bg-sky-50 text-sky-700 border-sky-100', label: 'Operativo' },
-                                                            SOPORTE: { bg: 'bg-purple-50 text-purple-700 border-purple-100', label: 'Soporte' }
-                                                        };
-                                                        const cat = catLabels[row.category] || { bg: 'bg-slate-50 text-slate-600 border-slate-100', label: row.category };
-                                                        const isMacroExpanded = expandedMacros[row.macroName];
-
-                                                        return (
-                                                            <React.Fragment key={row.macroName}>
-                                                                {/* MACROPROCESO ROW */}
-                                                                <tr className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
-                                                                    <td className="px-6 py-4 max-w-xs flex items-center">
-                                                                        <button 
-                                                                            onClick={() => setExpandedMacros(prev => ({ ...prev, [row.macroName]: !prev[row.macroName] }))}
-                                                                            className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 hover:bg-slate-100 rounded"
-                                                                            title={isMacroExpanded ? "Contraer macroproceso" : "Expandir para ver procesos"}
-                                                                        >
+                                                                    <td className="px-4 py-2 border-r border-slate-200 font-bold text-slate-900 sticky left-0 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                        <div className="flex items-center gap-2">
                                                                             {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
-                                                                        </button>
-                                                                        <span className="font-bold text-slate-800 text-xs block truncate" title={row.macroName}>{row.macroName}</span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-600">
-                                                                        {row.processCount}
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-center text-xs font-semibold text-slate-600">
-                                                                        {row.microprocessCount}
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded border ${cat.bg}`}>
-                                                                            {cat.label}
-                                                                        </span>
-                                                                    </td>
-                                                                    
-                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                        const dstats = row.docTypes[dtype];
-                                                                        const isReq = dstats && dstats.total > 0;
-                                                                        
-                                                                        if (isReq) {
-                                                                            const pct = Math.round((dstats.approved / dstats.total) * 100);
-                                                                            const badgeClass = pct === 100 
-                                                                                ? 'text-green-700 bg-green-50 border-green-200 font-bold'
-                                                                                : pct > 0 
-                                                                                    ? 'text-indigo-700 bg-indigo-50 border-indigo-200 font-bold'
-                                                                                    : 'text-slate-500 bg-slate-100 border-slate-200 font-semibold';
-                                                                            return (
-                                                                                <td key={dtype} className="px-6 py-4 text-center">
-                                                                                    <span className={`px-2 py-0.5 text-[10px] rounded border ${badgeClass} inline-block whitespace-nowrap`}>
-                                                                                        {pct}%
-                                                                                    </span>
-                                                                                </td>
-                                                                            );
-                                                                        }
-
-                                                                        return (
-                                                                            <td key={dtype} className="px-6 py-4 text-center">
-                                                                                <span className="px-2 py-0.5 text-[10px] rounded border text-slate-300 bg-slate-50/50 border-slate-100 inline-block whitespace-nowrap">
-                                                                                    N/R
-                                                                                </span>
-                                                                            </td>
-                                                                        );
-                                                                    })}
-
-                                                                    <td className="px-6 py-4 text-right">
-                                                                        <div className="inline-flex flex-col items-end">
-                                                                            <span className="text-xs font-black text-slate-900">{row.overallProgress}%</span>
-                                                                            <div className="w-14 h-1 bg-slate-100 rounded-full overflow-hidden mt-1 border border-slate-200/50">
-                                                                                <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${row.overallProgress}%` }} />
-                                                                            </div>
+                                                                            <span className="truncate">{row.macroName}</span>
                                                                         </div>
                                                                     </td>
+                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
+                                                                        const st = row.docTypes[t];
+                                                                        return (
+                                                                            <React.Fragment key={t}>
+                                                                                <td className="px-1 py-2 text-center border-r border-slate-200/60 text-slate-400 font-medium">{st.notRequired > 0 ? st.notRequired : '-'}</td>
+                                                                                <td className="px-1 py-2 text-center border-r border-slate-200/60 text-slate-600 font-medium">{st.notStarted > 0 ? st.notStarted : '-'}</td>
+                                                                                <td className="px-1 py-2 text-center border-r border-slate-200/60 text-indigo-600 font-medium">{st.inProcess > 0 ? st.inProcess : '-'}</td>
+                                                                                <td className="px-1 py-2 text-center border-r border-slate-200/60 text-purple-600 font-medium">{st.referent > 0 ? st.referent : '-'}</td>
+                                                                                <td className="px-1 py-2 text-center border-r border-slate-200/60 text-sky-600 font-medium">{st.control > 0 ? st.control : '-'}</td>
+                                                                                <td className="px-1 py-2 text-center border-r border-slate-200 font-bold text-emerald-600">{st.approved > 0 ? st.approved : '-'}</td>
+                                                                            </React.Fragment>
+                                                                        )
+                                                                    })}
                                                                 </tr>
-
-                                                                {/* PROCESOS DRILL-DOWN */}
+                                                                
                                                                 {isMacroExpanded && row.processes.map((proc) => {
-                                                                    const procKey = `${row.macroName}::${proc.processName}`;
-                                                                    const isProcExpanded = expandedProcesses[procKey];
-
+                                                                    const isProcExpanded = expandedThreeProcesses[proc.processName];
                                                                     return (
                                                                         <React.Fragment key={proc.processName}>
-                                                                            <tr className="bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-slate-100/80">
-                                                                                <td className="px-6 py-3 max-w-xs pl-12 flex items-center">
-                                                                                    <button 
-                                                                                        onClick={() => setExpandedProcesses(prev => ({ ...prev, [procKey]: !prev[procKey] }))}
-                                                                                        className="mr-2 text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-0.5 hover:bg-slate-200/60 rounded"
-                                                                                        title={isProcExpanded ? "Contraer proceso" : "Expandir para ver microprocesos"}
-                                                                                    >
-                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-indigo-650 font-bold" /> : <ChevronRight size={12} />}
-                                                                                    </button>
-                                                                                    <span className="font-semibold text-slate-700 text-xs truncate" title={proc.processName}>{proc.processName}</span>
+                                                                            <tr 
+                                                                                className="border-b border-slate-100 bg-white hover:bg-slate-50/50 cursor-pointer transition-colors"
+                                                                                onClick={() => setExpandedThreeProcesses(p => ({ ...p, [proc.processName]: !p[proc.processName] }))}
+                                                                            >
+                                                                                <td className="px-4 py-2 border-r border-slate-200 font-semibold text-slate-700 pl-8 sticky left-0 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold" /> : <ChevronRight size={13} />}
+                                                                                        <span className="truncate">{proc.processName}</span>
+                                                                                    </div>
                                                                                 </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-medium text-slate-400">
-                                                                                    -
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-center text-xs font-semibold text-slate-600">
-                                                                                    {proc.microprocesses.length}
-                                                                                </td>
-                                                                                <td className="px-6 py-3 text-xs text-slate-400">
-                                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Proceso</span>
-                                                                                </td>
-
-                                                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                                    const pstats = proc.docTypes[dtype];
-                                                                                    const isReq = pstats && pstats.total > 0;
-                                                                                    
-                                                                                    if (isReq) {
-                                                                                        const pct = Math.round((pstats.approved / pstats.total) * 100);
-                                                                                        const badgeClass = pct === 100 
-                                                                                            ? 'text-green-700 bg-green-100 border-green-200 font-bold'
-                                                                                            : pct > 0 
-                                                                                                ? 'text-indigo-700 bg-indigo-50/80 border-indigo-200 font-bold'
-                                                                                                : 'text-slate-500 bg-slate-100 border-slate-200 font-semibold';
-                                                                                        return (
-                                                                                            <td key={dtype} className="px-6 py-3 text-center">
-                                                                                                <span className={`px-2 py-0.5 text-[9.5px] rounded border ${badgeClass} inline-block whitespace-nowrap`}>
-                                                                                                    {pct}%
-                                                                                                </span>
-                                                                                            </td>
-                                                                                        );
-                                                                                    }
-
+                                                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
+                                                                                    const st = proc.docTypes[t];
                                                                                     return (
-                                                                                        <td key={dtype} className="px-6 py-3 text-center">
-                                                                                            <span className="px-2 py-0.5 text-[9.5px] rounded border text-slate-300 bg-slate-100/30 border-slate-200/50 inline-block whitespace-nowrap">
-                                                                                                N/R
-                                                                                            </span>
-                                                                                        </td>
-                                                                                    );
+                                                                                        <React.Fragment key={t}>
+                                                                                            <td className="px-1 py-2 text-center border-r border-slate-200/60 text-slate-400">{st.notRequired > 0 ? st.notRequired : '-'}</td>
+                                                                                            <td className="px-1 py-2 text-center border-r border-slate-200/60 text-slate-600">{st.notStarted > 0 ? st.notStarted : '-'}</td>
+                                                                                            <td className="px-1 py-2 text-center border-r border-slate-200/60 text-indigo-600">{st.inProcess > 0 ? st.inProcess : '-'}</td>
+                                                                                            <td className="px-1 py-2 text-center border-r border-slate-200/60 text-purple-600">{st.referent > 0 ? st.referent : '-'}</td>
+                                                                                            <td className="px-1 py-2 text-center border-r border-slate-200/60 text-sky-600">{st.control > 0 ? st.control : '-'}</td>
+                                                                                            <td className="px-1 py-2 text-center border-r border-slate-200 font-bold text-emerald-600">{st.approved > 0 ? st.approved : '-'}</td>
+                                                                                        </React.Fragment>
+                                                                                    )
                                                                                 })}
-
-                                                                                <td className="px-6 py-3 text-right">
-                                                                                    <span className="text-xs font-bold text-slate-700">{proc.overallProgress}%</span>
-                                                                                </td>
                                                                             </tr>
-
-                                                                            {/* MICROPROCESOS DRILL-DOWN */}
-                                                                            {isProcExpanded && proc.microprocesses.map((micro) => {
-                                                                                return (
-                                                                                    <tr key={micro.microName} className="bg-white hover:bg-slate-50/40 transition-colors border-b border-slate-100/40">
-                                                                                        <td className="px-6 py-2.5 max-w-xs pl-20 flex items-center">
-                                                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2 flex-shrink-0" />
-                                                                                            <span className="font-medium text-slate-500 text-[11px] leading-tight block truncate" title={micro.microName}>{micro.microName}</span>
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center text-xs font-medium text-slate-300">
-                                                                                            -
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-center text-xs font-medium text-slate-300">
-                                                                                            -
-                                                                                        </td>
-                                                                                        <td className="px-6 py-2.5 text-xs text-slate-300">
-                                                                                            <span className="text-[9.5px] text-slate-400 font-medium pl-1">Microproceso</span>
-                                                                                        </td>
-
-                                                                                        {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(dtype => {
-                                                                                            const doc = micro.docs[dtype];
-                                                                                            
-                                                                                            if (!doc || !doc.isRequired) {
-                                                                                                return (
-                                                                                                    <td key={dtype} className="px-6 py-2.5 text-center">
-                                                                                                        <span className="px-2 py-0.5 text-[9px] rounded border text-slate-300 bg-slate-50/50 border-slate-100 inline-block whitespace-nowrap">
-                                                                                                            N/R
-                                                                                                        </span>
-                                                                                                    </td>
-                                                                                                );
-                                                                                            }
-
-                                                                                            const colorClasses: Record<DocState, string> = {
-                                                                                                [DocState.NOT_STARTED]: 'bg-slate-50 text-slate-400 border-slate-200/60',
-                                                                                                [DocState.INITIATED]: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-                                                                                                [DocState.IN_PROCESS]: 'bg-blue-50/80 text-blue-600 border-blue-100',
-                                                                                                [DocState.INTERNAL_REVIEW]: 'bg-sky-50 text-sky-600 border-sky-100',
-                                                                                                [DocState.SENT_TO_REFERENT]: 'bg-purple-50 text-purple-600 border-purple-100',
-                                                                                                [DocState.REFERENT_REVIEW]: 'bg-purple-100/70 text-purple-700 border-purple-200/60',
-                                                                                                [DocState.SENT_TO_CONTROL]: 'bg-orange-50 text-orange-600 border-orange-100',
-                                                                                                [DocState.CONTROL_REVIEW]: 'bg-orange-100/70 text-orange-700 border-orange-200/60',
-                                                                                                [DocState.APPROVED]: 'bg-green-50 text-green-600 border-green-200'
-                                                                                            };
-
-                                                                                            const labelMap: Record<DocState, string> = {
-                                                                                                [DocState.NOT_STARTED]: 'Inactivo',
-                                                                                                [DocState.INITIATED]: 'Iniciado',
-                                                                                                [DocState.IN_PROCESS]: 'En Proc.',
-                                                                                                [DocState.INTERNAL_REVIEW]: 'Rev. Int.',
-                                                                                                [DocState.SENT_TO_REFERENT]: 'Recom.',
-                                                                                                [DocState.REFERENT_REVIEW]: 'Recom.',
-                                                                                                [DocState.SENT_TO_CONTROL]: 'Cierre',
-                                                                                                [DocState.CONTROL_REVIEW]: 'Cierre',
-                                                                                                [DocState.APPROVED]: 'Aprobado'
-                                                                                            };
-
-                                                                                            const styleClass = colorClasses[doc.state as DocState] || 'bg-slate-50 text-slate-400';
-                                                                                            const label = labelMap[doc.state as DocState] || doc.state;
-
-                                                                                            // Navigate if real doc
-                                                                                            const handleDocClick = () => {
-                                                                                                if (!doc.isVirtual && doc.id) {
-                                                                                                    navigate(`/doc/${doc.id}`);
-                                                                                                }
-                                                                                            };
-
-                                                                                            return (
-                                                                                                <td key={dtype} className="px-6 py-2.5 text-center">
-                                                                                                    <span 
-                                                                                                        onClick={handleDocClick}
-                                                                                                        className={`px-2 py-0.5 text-[9px] rounded border ${styleClass} inline-flex items-center gap-1 whitespace-nowrap ${!doc.isVirtual ? 'cursor-pointer hover:scale-[1.03] hover:shadow-sm font-bold' : 'font-medium opacity-80'}`}
-                                                                                                        title={!doc.isVirtual ? 'Click para ver documento' : 'Documento no iniciado'}
-                                                                                                    >
-                                                                                                        {label}
-                                                                                                    </span>
-                                                                                                </td>
-                                                                                            );
-                                                                                        })}
-
-                                                                                        <td className="px-6 py-2.5 text-right">
-                                                                                            <span className="text-[10px] font-medium text-slate-500">{micro.overallProgress}%</span>
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                );
-                                                                            })}
+                                                                            
+                                                                            {isProcExpanded && proc.microprocesses.map(micro => (
+                                                                                <tr key={micro.microName} className="border-b border-slate-50 bg-slate-50/20 hover:bg-slate-50">
+                                                                                    <td className="px-4 py-2 text-[11px] border-r border-slate-200 font-medium text-slate-600 pl-12 sticky left-0 bg-white/60 shadow-[2px_0_5px_rgba(0,0,0,0.01)] backdrop-blur-sm">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+                                                                                            <span className="truncate">{micro.microName}</span>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
+                                                                                        const st = micro.docTypes[t];
+                                                                                        return (
+                                                                                            <React.Fragment key={t}>
+                                                                                                <td className="px-1 py-1.5 text-[11px] text-center border-r border-slate-200/60 text-slate-300">{st.notRequired > 0 ? '✓' : '-'}</td>
+                                                                                                <td className="px-1 py-1.5 text-[11px] text-center border-r border-slate-200/60 text-slate-400">{st.notStarted > 0 ? '1' : '-'}</td>
+                                                                                                <td className="px-1 py-1.5 text-[11px] text-center border-r border-slate-200/60 text-indigo-400">{st.inProcess > 0 ? '1' : '-'}</td>
+                                                                                                <td className="px-1 py-1.5 text-[11px] text-center border-r border-slate-200/60 text-purple-400">{st.referent > 0 ? '1' : '-'}</td>
+                                                                                                <td className="px-1 py-1.5 text-[11px] text-center border-r border-slate-200/60 text-sky-400">{st.control > 0 ? '1' : '-'}</td>
+                                                                                                <td className="px-1 py-1.5 text-[11px] text-center border-r border-slate-200 font-bold text-emerald-500">{st.approved > 0 ? '✓' : '-'}</td>
+                                                                                            </React.Fragment>
+                                                                                        )
+                                                                                    })}
+                                                                                </tr>
+                                                                            ))}
                                                                         </React.Fragment>
-                                                                    );
+                                                                    )
                                                                 })}
                                                             </React.Fragment>
-                                                        );
+                                                        )
                                                     })
                                                 )}
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-                    </section>
+                                
+                                <div className="mt-8 text-xs text-slate-400 text-center flex items-center justify-center gap-2">
+                                    <span>N/R: No requerido</span> &bull; 
+                                    <span>N/I: No Iniciado</span> &bull; 
+                                    <span>E/P: En Proceso</span> &bull; 
+                                    <span>REF: Referente</span> &bull; 
+                                    <span>C/G: Control Gestión</span> &bull;
+                                    <span>TER: Terminados</span>
+                                </div>
+                    </div>
                 )}
 
                 {/* selectedMacroDetail BREAKOUT PANEL/DRAWER */}
@@ -4669,6 +4149,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                         </div>
                     </div>
+                )}
+                </section>
                 )}
 
                 {(activeTab === 'BI' && (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder)) && (

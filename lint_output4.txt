@@ -1,0 +1,16 @@
+
+> sgd-gestion-documental@1.0.0 lint
+> tsc --noEmit
+
+views/Reports.tsx(2999,26): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/Reports.tsx(3043,21): error TS1005: ')' expected.
+views/Reports.tsx(3044,18): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(3085,26): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/Reports.tsx(3128,21): error TS1005: ')' expected.
+views/Reports.tsx(3133,26): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/Reports.tsx(3198,21): error TS1005: ')' expected.
+views/Reports.tsx(3199,17): error TS1109: Expression expected.
+views/Reports.tsx(4157,23): error TS17002: Expected corresponding JSX closing tag for 'section'.
+views/Reports.tsx(4159,15): error TS17002: Expected corresponding JSX closing tag for 'section'.
+views/Reports.tsx(4160,9): error TS1005: ')' expected.
+views/Reports.tsx(4161,5): error TS1109: Expression expected.

@@ -1,0 +1,52 @@
+
+> sgd-gestion-documental@1.0.0 lint
+> tsc --noEmit
+
+views/Reports.tsx(2833,10): error TS17008: JSX element 'div' has no corresponding closing tag.
+views/Reports.tsx(4157,23): error TS17002: Expected corresponding JSX closing tag for 'section'.
+views/Reports.tsx(4159,15): error TS17002: Expected corresponding JSX closing tag for 'section'.
+views/Reports.tsx(4160,9): error TS1005: ')' expected.
+views/Reports.tsx(4162,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4164,38): error TS1005: '}' expected.
+views/Reports.tsx(4164,76): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4164,85): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4165,5): error TS1109: Expression expected.
+views/Reports.tsx(4165,38): error TS1003: Identifier expected.
+views/Reports.tsx(4165,46): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4165,58): error TS1005: '}' expected.
+views/Reports.tsx(4165,271): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4167,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4169,42): error TS1005: '}' expected.
+views/Reports.tsx(4169,65): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4169,74): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4170,5): error TS1109: Expression expected.
+views/Reports.tsx(4170,34): error TS1003: Identifier expected.
+views/Reports.tsx(4170,42): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4171,14): error TS1005: '}' expected.
+views/Reports.tsx(4177,5): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4179,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4181,67): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4182,5): error TS1109: Expression expected.
+views/Reports.tsx(4183,42): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4186,22): error TS1005: '}' expected.
+views/Reports.tsx(4189,5): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4192,22): error TS1005: '}' expected.
+views/Reports.tsx(4195,5): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4198,22): error TS1005: '}' expected.
+views/Reports.tsx(4201,5): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4203,42): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4204,9): error TS1109: Expression expected.
+views/Reports.tsx(4205,13): error TS1109: Expression expected.
+views/Reports.tsx(4206,9): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4207,34): error TS1003: Identifier expected.
+views/Reports.tsx(4208,24): error TS1005: '}' expected.
+views/Reports.tsx(4211,9): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4211,10): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4212,48): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+views/Reports.tsx(4213,13): error TS1109: Expression expected.
+views/Reports.tsx(4219,18): error TS1005: '}' expected.
+views/Reports.tsx(4220,13): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4223,9): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4225,5): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4305,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+views/Reports.tsx(4307,24): error TS1005: '</' expected.

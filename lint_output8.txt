@@ -1,0 +1,6 @@
+
+> sgd-gestion-documental@1.0.0 lint
+> tsc --noEmit
+
+views/Reports.tsx(3947,21): error TS1005: ')' expected.
+views/Reports.tsx(3947,23): error TS17002: Expected corresponding JSX closing tag for 'section'.
