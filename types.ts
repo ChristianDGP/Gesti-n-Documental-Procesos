@@ -40,7 +40,10 @@ export interface User {
   canEditStructure?: boolean;
   canEditMasterData?: boolean;
   canAccessBIQueryBuilder?: boolean;
+  canAccessUpEngine?: boolean;
 }
+
+export * from './types/upEngine';
 
 export interface Referent {
   id: string;

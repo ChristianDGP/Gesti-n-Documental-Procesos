@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserService } from '../services/firebaseBackend';
 import { User, UserRole } from '../types';
-import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange, Link as LinkIcon, Network, ClipboardList, History, Database } from 'lucide-react';
+import { Trash2, UserPlus, Shield, Briefcase, User as UserIcon, X, Lock, Pencil, Power, AlertCircle, CheckCircle, PieChart, UserCheck, Loader2, CalendarRange, Link as LinkIcon, Network, ClipboardList, History, Database, Cpu } from 'lucide-react';
 
 const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -42,6 +42,7 @@ const AdminUsers: React.FC = () => {
   const [canEditMasterData, setCanEditMasterData] = useState(false);
   const [canAssignDefinedDocs, setCanAssignDefinedDocs] = useState(false);
   const [canManageAssignments, setCanManageAssignments] = useState(false);
+  const [canAccessUpEngine, setCanAccessUpEngine] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -149,6 +150,7 @@ const AdminUsers: React.FC = () => {
       setCanAddStructure(user.canAddStructure || false);
       setCanEditStructure(user.canEditStructure || false);
       setCanEditMasterData(user.canEditMasterData || false);
+      setCanAccessUpEngine(user.canAccessUpEngine || false);
       setShowForm(true);
   };
 
@@ -204,7 +206,8 @@ const AdminUsers: React.FC = () => {
                 canManageAssignments: role === UserRole.ADMIN ? true : canManageAssignments,
                 canAccessLog: role === UserRole.ADMIN ? true : canAccessLog,
                 canAuditEvents: role === UserRole.ADMIN ? true : canAuditEvents,
-                canEditGanttDate: role === UserRole.ADMIN ? true : canEditGanttDate
+                canEditGanttDate: role === UserRole.ADMIN ? true : canEditGanttDate,
+                canAccessUpEngine: role === UserRole.ADMIN ? true : canAccessUpEngine
             };
             if (password) {
                 updatePayload.password = password;
@@ -243,7 +246,8 @@ const AdminUsers: React.FC = () => {
                 canManageAssignments: role === UserRole.ADMIN ? true : canManageAssignments,
                 canAccessLog: role === UserRole.ADMIN ? true : canAccessLog,
                 canAuditEvents: role === UserRole.ADMIN ? true : canAuditEvents,
-                canEditGanttDate: role === UserRole.ADMIN ? true : canEditGanttDate
+                canEditGanttDate: role === UserRole.ADMIN ? true : canEditGanttDate,
+                canAccessUpEngine: role === UserRole.ADMIN ? true : canAccessUpEngine
             } as User);
         }
         
@@ -287,6 +291,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessLog(false);
       setCanAuditEvents(false);
       setCanEditGanttDate(false);
+      setCanAccessUpEngine(false);
   };
 
   return (
@@ -610,6 +615,22 @@ const AdminUsers: React.FC = () => {
                                         </div>
                                     </label>
                                     <p className="ml-7 text-[9px] text-slate-400 leading-tight">Permite modificar metadatos críticos (fecha, progreso, versión) en el detalle del documento.</p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-2 bg-white rounded border border-indigo-200 cursor-pointer hover:bg-indigo-100/50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={canAccessUpEngine}
+                                            onChange={(e) => setCanAccessUpEngine(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Cpu size={16} className="text-indigo-500" />
+                                            <span className="text-sm font-medium text-slate-700">Motor Normativo UpEngine</span>
+                                        </div>
+                                    </label>
+                                    <p className="ml-7 text-[9px] text-slate-400 leading-tight">Habilita acceso al motor normativo, simulador de procesos e IA Gemini.</p>
                                 </div>
                             </div>
                         </div>

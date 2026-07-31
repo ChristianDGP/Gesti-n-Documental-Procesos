@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History, Link as LinkIcon } from 'lucide-react';
+import { Menu, X, FileText, BarChart2, PlusCircle, LogOut, User as UserIcon, Users, ClipboardList, Inbox, Database, Settings, ListTodo, Network, PieChart, UserCheck, BookOpen, CalendarRange, History, Link as LinkIcon, Cpu } from 'lucide-react';
 import { User, UserRole, DocState, Document, Notification } from '../types';
 import { NotificationService, IntegrityService, DocumentService, SystemConfigService } from '../services/firebaseBackend';
 import { toast } from 'sonner';
@@ -110,6 +110,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const canAccessStructure = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessStructure);
   const canAccessAssignments = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessAssignments);
   const canAccessLog = user.role === UserRole.ADMIN || (user.role === UserRole.ANALYST && user.canAccessLog);
+  const canAccessUpEngine = user.role === UserRole.ADMIN || !!user.canAccessUpEngine;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -159,6 +160,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                     </>
                 )}
                 {canAccessReferents && <NavItem to="/admin/referents" icon={UserCheck} label="Referentes" />}
+                {canAccessUpEngine && <NavItem to="/up-engine" icon={Cpu} label="UpEngine" />}
                 {user.role === UserRole.ADMIN && (
                     <>
                         <NavItem to="/admin/database" icon={Database} label="Base de Datos" />

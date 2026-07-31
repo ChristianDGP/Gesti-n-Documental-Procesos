@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DocumentService, HierarchyService, normalizeHeader, UserService, formatVersionForDisplay } from '../services/firebaseBackend';
+import { UpEngineService } from '../services/upEngineService';
 import { User, DocState, DocType, UserHierarchy, UserRole, Document, FullHierarchy } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { parseDocumentFilename } from '../utils/filenameParser';
@@ -304,6 +305,24 @@ const CreateDocument: React.FC<Props> = ({ user }) => {
           },
           existingDoc?.id 
       );
+
+      // Sincronización automática y paralela en UpEngine al consolidar historial (Aplica para TO BE y FCE)
+      if (selectedDocType === 'TO BE' || selectedDocType === 'FCE') {
+          UpEngineService.registerDocumentSyncEvent({
+              project: selectedProject,
+              macroprocess: selectedMacro,
+              process: selectedProcess,
+              microprocess: selectedMicro,
+              docType: selectedDocType,
+              version: detectedVersion,
+              state: detectedState,
+              userName: user.name,
+              comment: description,
+              docId: updatedDoc.id,
+              fileUrl: updatedDoc.files?.[0]?.url,
+              fileName: updatedDoc.files?.[0]?.name
+          });
+      }
 
       // Si es una actualización (Consolidar Historial), ejecutamos automáticamente la notificación al coordinador
       // Solo si el estado resultante es Revisión Interna o superior (según solicitud de usuario)
