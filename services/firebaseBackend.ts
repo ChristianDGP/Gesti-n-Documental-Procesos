@@ -521,40 +521,6 @@ export const DocumentService = {
         finalDocData = { ...newDocData, id: docRef.id } as Document;
     }
 
-    // Process file upload if file parameter is provided
-    if (file) {
-        const fileId = `f_${Date.now()}`;
-        let downloadURL = '';
-        try {
-            if (storage) {
-                const storageRef = ref(storage, `documents/${finalDocId}/${fileId}_${file.name}`);
-                await uploadBytes(storageRef, file);
-                downloadURL = await getDownloadURL(storageRef);
-            }
-        } catch (stgErr) {
-            console.warn('[DocumentService] Storage upload fallback:', stgErr);
-        }
-
-        if (!downloadURL) {
-            downloadURL = URL.createObjectURL(file);
-        }
-
-        const uploadedFileObj: DocFile = {
-            id: fileId,
-            name: file.name,
-            url: downloadURL,
-            uploadedAt: new Date().toISOString(),
-            size: file.size,
-            type: file.type || 'application/octet-stream'
-        };
-
-        const docRef = doc(db, "documents", finalDocId);
-        const currentFiles = finalDocData.files || [];
-        const updatedFiles = [...currentFiles, uploadedFileObj];
-        await updateDoc(docRef, { files: updatedFiles });
-        finalDocData = { ...finalDocData, files: updatedFiles };
-    }
-
     // Si es una carga de revisión (como v0.1), notificar a supervisores
     if (isSubmission) {
         const allUsers = await UserService.getAll();

@@ -63,17 +63,14 @@ export const parseDocumentFilename = (
   result.microproceso = microproceso;
 
   const mapTypeToCode: Record<string, string> = {
-      'AS IS': 'ASIS', 'AS_IS': 'ASIS', 'ASIS': 'ASIS',
-      'TO BE': 'TOBE', 'TO_BE': 'TOBE', 'TOBE': 'TOBE',
-      'FCE': 'FCE', 'PM': 'PM'
+      'AS IS': 'ASIS', 'TO BE': 'TOBE', 'FCE': 'FCE', 'PM': 'PM'
   };
-  const validCodes = ['ASIS', 'TOBE', 'FCE', 'PM'];
+  const validCodes = Object.values(mapTypeToCode);
   if (!validCodes.includes(tipoCodigo)) {
       result.errores.push(`Tipo inválido: ${tipoCodigo}.`);
   }
   if (expectedType) {
-      const upperExp = expectedType.toUpperCase().replace('_', ' ');
-      const expectedCode = mapTypeToCode[expectedType.toUpperCase()] || mapTypeToCode[upperExp] || expectedType.toUpperCase();
+      const expectedCode = mapTypeToCode[expectedType.toUpperCase()];
       if (tipoCodigo !== expectedCode) {
           result.errores.push(`Tipo no coincide con la solicitud.`);
       }

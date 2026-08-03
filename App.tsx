@@ -21,7 +21,6 @@ import Buffer from './views/Buffer';
 import WorkList from './views/WorkList';
 import Profile from './views/Profile';
 import ManualAnalista from './views/ManualAnalista';
-import UpEngineView from './views/UpEngineView';
 import { UserRole } from './types'; 
 import { logoutUser } from './services/firebaseAuthService'; 
 import { useAuthStatus } from './hooks/useAuthStatus'; 
@@ -123,12 +122,6 @@ const App: React.FC = () => {
                                         path="/admin/bi" 
                                         element={(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) 
                                             ? <AdminBI /> 
-                                            : <Navigate to="/" />} 
-                                    />
-                                    <Route 
-                                        path="/up-engine" 
-                                        element={(user.role === UserRole.ADMIN || user.canAccessUpEngine) 
-                                            ? <UpEngineView user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
                                     <Route path="*" element={<Navigate to="/" />} />
