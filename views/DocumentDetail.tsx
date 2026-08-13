@@ -19,6 +19,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
   const [history, setHistory] = useState<DocHistory[]>([]);
   const [assigneeNames, setAssigneeNames] = useState<string[]>([]);
   const [assigneeEmails, setAssigneeEmails] = useState<string[]>([]);
+  const [matrixAssigneeIds, setMatrixAssigneeIds] = useState<string[]>([]);
   const [referentEmails, setReferentEmails] = useState<string[]>([]);
   const [referentNames, setReferentNames] = useState<string[]>([]);
   const [reusableLinks, setReusableLinks] = useState<{ id: string, name: string, latestDocId?: string }[]>([]);
@@ -131,6 +132,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
           }
 
           if (matrix.assignees.length > 0) {
+              setMatrixAssigneeIds(matrix.assignees);
               const names = matrix.assignees.map(aid => allUsers.find(u => u.id === aid)?.name).filter(n => n) as string[];
               setAssigneeNames(names);
               const emails = matrix.assignees.map(aid => allUsers.find(u => u.id === aid)?.email).filter(e => e) as string[];
@@ -166,8 +168,10 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
                if (node) break;
            }
            
-           // Si encontramos el nodo en la matriz, usamos sus referentes vinculados
-           if (node?.assignees && (resolvedAssigneeIds.length === 0 || d.authorName.includes('Sistema'))) resolvedAssigneeIds = node.assignees;
+           // Si encontramos el nodo en la matriz, usamos sus analistas y referentes vinculados
+           if (node?.assignees && node.assignees.length > 0) {
+               resolvedAssigneeIds = Array.from(new Set([...node.assignees, ...(d.assignees || [])]));
+           }
            if (node?.referentIds && node.referentIds.length > 0) {
                const matches = allReferents.filter(r => node.referentIds.includes(r.id));
                resolvedReferentEmails = matches.map(r => r.email);
@@ -486,7 +490,7 @@ const DocumentDetail: React.FC<Props> = ({ user }) => {
 
   const config = STATE_CONFIG[doc.state];
   const isGuest = user.role === UserRole.GUEST;
-  const isAssignee = doc.assignees && doc.assignees.includes(user.id);
+  const isAssignee = (doc.assignees && doc.assignees.includes(user.id)) || matrixAssigneeIds.includes(user.id) || assigneeEmails.includes(user.email);
   const isAuthor = doc.authorId === user.id;
   const isAnalystAssigned = user.role === UserRole.ANALYST && (isAssignee || isAuthor);
   const roleUpper = (user.role || '').toString().toUpperCase();

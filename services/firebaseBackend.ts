@@ -506,7 +506,8 @@ export const DocumentService = {
         const docRef = doc(db, "documents", existingId);
         const oldSnap = await getDoc(docRef);
         const oldData = oldSnap.data() as Document;
-        const updateData: Partial<Document> = { state, version, progress, description, hasPendingRequest: isSubmission, updatedAt: new Date().toISOString(), ignoredInconsistency: null as any };
+        const mergedAssignees = Array.from(new Set([...(oldData.assignees || []), ...(hierarchy?.assignees || []), author.id]));
+        const updateData: Partial<Document> = { state, version, progress, description, hasPendingRequest: isSubmission, updatedAt: new Date().toISOString(), ignoredInconsistency: null as any, assignees: mergedAssignees };
         await updateDoc(docRef, updateData);
         await HistoryService.log(existingId, author, 'Nueva Versión (Carga)', oldData.state, state, `Carga de archivo versión ${version}`, version);
         finalDocData = { ...oldData, ...updateData, id: existingId } as Document;
