@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, UserService, HierarchyService, normalizeHeader, formatVersionForDisplay } from '../services/firebaseBackend';
-import { Document, User, UserRole, DocState, DocType, FullHierarchy } from '../types';
+import { DocumentService, UserService, HierarchyService, ReferentService, normalizeHeader, formatVersionForDisplay } from '../services/firebaseBackend';
+import { Document, User, UserRole, DocState, DocType, FullHierarchy, Referent } from '../types';
 import { STATE_CONFIG } from '../constants';
 import { 
     Plus, Clock, CheckCircle, Filter, X, Activity, 
@@ -17,6 +17,7 @@ interface DashboardProps {
 
 interface DashboardDoc extends Document {
     isRequired: boolean;
+    referentIds?: string[];
 }
 
 type SortKey = 'project' | 'microprocess' | 'state' | 'updatedAt';
@@ -40,6 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   
   const [mergedDocs, setMergedDocs] = useState<DashboardDoc[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allReferents, setAllReferents] = useState<Referent[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSystemEmpty, setIsSystemEmpty] = useState(false);
 
@@ -79,13 +81,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-        const [realDocsData, users, fullHierarchy] = await Promise.all([
+        const [realDocsData, users, fullHierarchy, referents] = await Promise.all([
             DocumentService.getAll(),
             UserService.getAll(),
-            HierarchyService.getFullHierarchy()
+            HierarchyService.getFullHierarchy(),
+            ReferentService.getAll()
         ]);
 
         setAllUsers(users);
+        setAllReferents(referents);
         const hierarchyKeys = Object.keys(fullHierarchy);
         
         if (hierarchyKeys.length === 0 && realDocsData.length === 0) {
@@ -136,6 +140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     process: proc,
                                     project: proj,
                                     assignees: (node.assignees && node.assignees.length > 0) ? node.assignees : (realDoc.assignees || []),
+                                    referentIds: (node.referentIds && node.referentIds.length > 0) ? node.referentIds : ((realDoc as any).referentIds || (realDoc as any).referents || []),
                                     isRequired: true 
                                 });
                                 processedDocIds.add(realDoc.id); 
@@ -153,6 +158,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     authorName: '',
                                     assignedTo: node.assignees?.[0] || '',
                                     assignees: node.assignees || [],
+                                    referentIds: node.referentIds || [],
                                     state: DocState.NOT_STARTED,
                                     version: '-',
                                     progress: 0,
@@ -278,15 +284,61 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return pages;
   }, [currentPage, totalPages]);
 
+  const isFirestoreId = (str: string) => /^[a-zA-Z0-9_-]{15,}$/.test(str.trim());
+
+  const resolvePersonName = (rawId: string): string => {
+      if (!rawId) return '';
+      const trimmed = String(rawId).trim();
+      if (!trimmed) return '';
+      
+      // 1. Search in allUsers by id, uid, or email
+      const matchedUser = allUsers.find(u => 
+          u.id === trimmed || 
+          (u as any).uid === trimmed || 
+          (u.email && u.email.toLowerCase() === trimmed.toLowerCase())
+      );
+      if (matchedUser?.name) return matchedUser.name;
+
+      // 2. Search in allReferents by id or email
+      const matchedRef = allReferents.find(r => 
+          r.id === trimmed || 
+          (r.email && r.email.toLowerCase() === trimmed.toLowerCase())
+      );
+      if (matchedRef?.name) return matchedRef.name;
+
+      // 3. If it looks like a raw alphanumeric database ID and wasn't found, don't output the raw ID
+      if (isFirestoreId(trimmed)) {
+          return '';
+      }
+      return trimmed;
+  };
+
   const handleExportExcel = () => {
       if (sortedDocs.length === 0) return;
-      const getUserNames = (ids: string[]) => ids.map(id => allUsers.find(u => u.id === id)?.name || id).join('; ');
-      const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'DOCUMENTO', 'VERSION', 'ESTADO', 'FECHA', 'ANALISTA'];
+      
+      const getUserNames = (ids: string[]) => {
+          if (!ids || ids.length === 0) return '-';
+          const names = Array.from(new Set(
+              ids.map(resolvePersonName).filter((name): name is string => !!name && name.trim() !== '')
+          ));
+          return names.length > 0 ? names.join('; ') : '-';
+      };
+
+      const getReferentNames = (ids?: string[]) => {
+          if (!ids || ids.length === 0) return '-';
+          const names = Array.from(new Set(
+              ids.map(resolvePersonName).filter((name): name is string => !!name && name.trim() !== '')
+          ));
+          return names.length > 0 ? names.join('; ') : '-';
+      };
+
+      const headers = ['PROYECTO', 'MACROPROCESO', 'PROCESO', 'MICROPROCESO', 'DOCUMENTO', 'VERSION', 'ESTADO', 'FECHA', 'ANALISTA', 'REFERENTE'];
       const rows = sortedDocs.map(d => [
           d.project || '-', d.macroprocess || '-', d.process || '-', d.microprocess || '-', d.docType || '-', d.version || '-',
           STATE_CONFIG[d.state]?.label.split('(')[0] || '-',
           (d.state !== DocState.NOT_STARTED && d.updatedAt) ? new Date(d.updatedAt).toLocaleDateString() : 'Sin actividad',
-          getUserNames(d.assignees || [])
+          getUserNames(d.assignees || []),
+          getReferentNames(d.referentIds)
       ]);
       const csvContent = [headers.join(';'), ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))].join('\n');
       const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -306,7 +358,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const availableProjects = useMemo(() => Array.from(new Set(mergedDocs.map(d => d.project).filter(Boolean))).sort(), [mergedDocs]);
   const availableMacros = useMemo(() => Array.from(new Set((filterProject ? mergedDocs.filter(d => d.project === filterProject) : mergedDocs).map(d => d.macroprocess).filter(Boolean))).sort(), [mergedDocs, filterProject]);
   const availableProcesses = useMemo(() => Array.from(new Set((mergedDocs.filter(d => (!filterProject || d.project === filterProject) && (!filterMacro || d.macroprocess === filterMacro))).map(d => d.process).filter(Boolean))).sort(), [mergedDocs, filterProject, filterMacro]);
-  const getUserName = (id: string) => allUsers.find(user => user.id === id)?.name || 'Sin Asignar';
+  const getUserName = (id: string) => {
+      const resolved = resolvePersonName(id);
+      return resolved || 'Sin Asignar';
+  };
 
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Actualizando dashboard...</div>;
 
