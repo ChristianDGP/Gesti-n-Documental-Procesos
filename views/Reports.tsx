@@ -171,6 +171,8 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [expandedMicroStateProcesses, setExpandedMicroStateProcesses] = useState<Record<string, boolean>>({});
     const [expandedThreeMacros, setExpandedThreeMacros] = useState<Record<string, boolean>>({});
     const [expandedThreeProcesses, setExpandedThreeProcesses] = useState<Record<string, boolean>>({});
+    const [expandedProgressPercentMacros, setExpandedProgressPercentMacros] = useState<Record<string, boolean>>({});
+    const [expandedProgressPercentProcesses, setExpandedProgressPercentProcesses] = useState<Record<string, boolean>>({});
 
     const [microDrillDown, setMicroDrillDown] = useState<{ title: string, color: string, items: {name: string, project: string, ids: string[]}[] } | null>(null);
     const [selectedMacroDetail, setSelectedMacroDetail] = useState<any | null>(null);
@@ -1513,6 +1515,377 @@ const Reports: React.FC<Props> = ({ user }) => {
             return a.macroName.localeCompare(b.macroName);
         });
     }, [filteredMicroprocessStats]);
+
+    const macroprocessProgressDrillDownStats = useMemo(() => {
+        const grouped: Record<string, {
+            macroName: string;
+            category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE';
+            processes: Record<string, {
+                processName: string;
+                microprocesses: Array<{
+                    microName: string;
+                    docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                        isRequired: boolean;
+                        progress: number | null;
+                        state?: DocState;
+                    }>;
+                    totalRequired: number;
+                    totalProgress: number;
+                }>;
+                docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                    requiredCount: number;
+                    sumProgress: number;
+                }>;
+                microprocessCount: number;
+                totalRequired: number;
+                sumTotalProgress: number;
+            }>;
+            docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                requiredCount: number;
+                sumProgress: number;
+            }>;
+            processCount: number;
+            microprocessCount: number;
+            totalRequired: number;
+            sumTotalProgress: number;
+        }> = {};
+
+        filteredMicroprocessStats.forEach(micro => {
+            const macro = micro.macroName;
+            const proc = micro.processName;
+
+            if (!grouped[macro]) {
+                grouped[macro] = {
+                    macroName: macro,
+                    category: micro.category,
+                    processes: {},
+                    docTypes: {
+                        'AS IS': { requiredCount: 0, sumProgress: 0 },
+                        'FCE': { requiredCount: 0, sumProgress: 0 },
+                        'PM': { requiredCount: 0, sumProgress: 0 },
+                        'TO BE': { requiredCount: 0, sumProgress: 0 }
+                    },
+                    processCount: 0,
+                    microprocessCount: 0,
+                    totalRequired: 0,
+                    sumTotalProgress: 0
+                };
+            }
+
+            if (!grouped[macro].processes[proc]) {
+                grouped[macro].processes[proc] = {
+                    processName: proc,
+                    microprocesses: [],
+                    docTypes: {
+                        'AS IS': { requiredCount: 0, sumProgress: 0 },
+                        'FCE': { requiredCount: 0, sumProgress: 0 },
+                        'PM': { requiredCount: 0, sumProgress: 0 },
+                        'TO BE': { requiredCount: 0, sumProgress: 0 }
+                    },
+                    microprocessCount: 0,
+                    totalRequired: 0,
+                    sumTotalProgress: 0
+                };
+            }
+
+            const microDocTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                isRequired: boolean;
+                progress: number | null;
+                state?: DocState;
+            }> = {
+                'AS IS': { isRequired: false, progress: null },
+                'FCE': { isRequired: false, progress: null },
+                'PM': { isRequired: false, progress: null },
+                'TO BE': { isRequired: false, progress: null }
+            };
+
+            let microRequiredCount = 0;
+            let microSumProgress = 0;
+
+            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
+                const doc = micro.docs[dtype];
+                if (doc && doc.isRequired) {
+                    const prog = STATE_CONFIG[doc.state]?.progress ?? 0;
+                    microDocTypes[dtype] = {
+                        isRequired: true,
+                        progress: prog,
+                        state: doc.state
+                    };
+                    microRequiredCount++;
+                    microSumProgress += prog;
+
+                    grouped[macro].docTypes[dtype].requiredCount++;
+                    grouped[macro].docTypes[dtype].sumProgress += prog;
+
+                    grouped[macro].processes[proc].docTypes[dtype].requiredCount++;
+                    grouped[macro].processes[proc].docTypes[dtype].sumProgress += prog;
+                } else {
+                    microDocTypes[dtype] = {
+                        isRequired: false,
+                        progress: null
+                    };
+                }
+            });
+
+            const microTotalProgress = microRequiredCount > 0 
+                ? Math.round(microSumProgress / microRequiredCount) 
+                : 0;
+
+            grouped[macro].processes[proc].microprocesses.push({
+                microName: micro.microName,
+                docTypes: microDocTypes,
+                totalRequired: microRequiredCount,
+                totalProgress: microTotalProgress
+            });
+
+            grouped[macro].processes[proc].microprocessCount++;
+            grouped[macro].processes[proc].totalRequired += microRequiredCount;
+            grouped[macro].processes[proc].sumTotalProgress += microSumProgress;
+
+            grouped[macro].microprocessCount++;
+            grouped[macro].totalRequired += microRequiredCount;
+            grouped[macro].sumTotalProgress += microSumProgress;
+        });
+
+        return Object.values(grouped).map(macro => {
+            const processesList = Object.values(macro.processes).map(proc => {
+                proc.microprocesses.sort((a, b) => a.microName.localeCompare(b.microName));
+
+                const procDocTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                    requiredCount: number;
+                    averageProgress: number | null;
+                }> = {
+                    'AS IS': {
+                        requiredCount: proc.docTypes['AS IS'].requiredCount,
+                        averageProgress: proc.docTypes['AS IS'].requiredCount > 0
+                            ? Math.round(proc.docTypes['AS IS'].sumProgress / proc.docTypes['AS IS'].requiredCount)
+                            : null
+                    },
+                    'FCE': {
+                        requiredCount: proc.docTypes['FCE'].requiredCount,
+                        averageProgress: proc.docTypes['FCE'].requiredCount > 0
+                            ? Math.round(proc.docTypes['FCE'].sumProgress / proc.docTypes['FCE'].requiredCount)
+                            : null
+                    },
+                    'PM': {
+                        requiredCount: proc.docTypes['PM'].requiredCount,
+                        averageProgress: proc.docTypes['PM'].requiredCount > 0
+                            ? Math.round(proc.docTypes['PM'].sumProgress / proc.docTypes['PM'].requiredCount)
+                            : null
+                    },
+                    'TO BE': {
+                        requiredCount: proc.docTypes['TO BE'].requiredCount,
+                        averageProgress: proc.docTypes['TO BE'].requiredCount > 0
+                            ? Math.round(proc.docTypes['TO BE'].sumProgress / proc.docTypes['TO BE'].requiredCount)
+                            : null
+                    }
+                };
+
+                const procTotalProgress = proc.totalRequired > 0
+                    ? Math.round(proc.sumTotalProgress / proc.totalRequired)
+                    : 0;
+
+                return {
+                    processName: proc.processName,
+                    microprocesses: proc.microprocesses,
+                    microprocessCount: proc.microprocessCount,
+                    docTypes: procDocTypes,
+                    totalRequired: proc.totalRequired,
+                    totalProgress: procTotalProgress
+                };
+            }).sort((a, b) => a.processName.localeCompare(b.processName));
+
+            const macroDocTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                requiredCount: number;
+                averageProgress: number | null;
+            }> = {
+                'AS IS': {
+                    requiredCount: macro.docTypes['AS IS'].requiredCount,
+                    averageProgress: macro.docTypes['AS IS'].requiredCount > 0
+                        ? Math.round(macro.docTypes['AS IS'].sumProgress / macro.docTypes['AS IS'].requiredCount)
+                        : null
+                },
+                'FCE': {
+                    requiredCount: macro.docTypes['FCE'].requiredCount,
+                    averageProgress: macro.docTypes['FCE'].requiredCount > 0
+                        ? Math.round(macro.docTypes['FCE'].sumProgress / macro.docTypes['FCE'].requiredCount)
+                        : null
+                },
+                'PM': {
+                    requiredCount: macro.docTypes['PM'].requiredCount,
+                    averageProgress: macro.docTypes['PM'].requiredCount > 0
+                        ? Math.round(macro.docTypes['PM'].sumProgress / macro.docTypes['PM'].requiredCount)
+                        : null
+                },
+                'TO BE': {
+                    requiredCount: macro.docTypes['TO BE'].requiredCount,
+                    averageProgress: macro.docTypes['TO BE'].requiredCount > 0
+                        ? Math.round(macro.docTypes['TO BE'].sumProgress / macro.docTypes['TO BE'].requiredCount)
+                        : null
+                }
+            };
+
+            const macroTotalProgress = macro.totalRequired > 0
+                ? Math.round(macro.sumTotalProgress / macro.totalRequired)
+                : 0;
+
+            return {
+                macroName: macro.macroName,
+                category: macro.category,
+                processCount: processesList.length,
+                microprocessCount: macro.microprocessCount,
+                processes: processesList,
+                docTypes: macroDocTypes,
+                totalRequired: macro.totalRequired,
+                totalProgress: macroTotalProgress
+            };
+        }).sort((a, b) => {
+            const catOrder = { ESTRATEGICO: 1, OPERATIVO: 2, SOPORTE: 3 };
+            const orderA = catOrder[a.category] || 99;
+            const orderB = catOrder[b.category] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.macroName.localeCompare(b.macroName);
+        });
+    }, [filteredMicroprocessStats]);
+
+    const handleExportProgressPercentExcel = () => {
+        if (macroprocessProgressDrillDownStats.length === 0) return;
+        
+        const headers = [
+            'PROYECTO',
+            'CATEGORIA',
+            'MACROPROCESO',
+            'PROCESO',
+            'MICROPROCESO',
+            'AVANCE AS IS (%)',
+            'AVANCE FCE (%)',
+            'AVANCE PM (%)',
+            'AVANCE TO BE (%)',
+            'AVANCE TOTAL (%)'
+        ];
+
+        const rows: string[][] = [];
+
+        macroprocessProgressDrillDownStats.forEach(macro => {
+            macro.processes.forEach(proc => {
+                proc.microprocesses.forEach(micro => {
+                    const getVal = (dtype: 'AS IS' | 'FCE' | 'PM' | 'TO BE') => {
+                        const dt = micro.docTypes[dtype];
+                        if (!dt.isRequired || dt.progress === null) return 'N/R';
+                        return `${dt.progress}%`;
+                    };
+
+                    rows.push([
+                        activeMapProject,
+                        macro.category,
+                        macro.macroName,
+                        proc.processName,
+                        micro.microName,
+                        getVal('AS IS'),
+                        getVal('FCE'),
+                        getVal('PM'),
+                        getVal('TO BE'),
+                        `${micro.totalProgress}%`
+                    ]);
+                });
+            });
+        });
+
+        const csvContent = [
+            headers.join(';'),
+            ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))
+        ].join('\n');
+
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Reporte_Avance_Porcentual_${activeMapProject}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const toggleAllProgressMacros = () => {
+        const allExpanded = macroprocessProgressDrillDownStats.length > 0 && macroprocessProgressDrillDownStats.every(m => expandedProgressPercentMacros[m.macroName]);
+        const newMacroState: Record<string, boolean> = {};
+        const newProcState: Record<string, boolean> = {};
+        
+        if (!allExpanded) {
+            macroprocessProgressDrillDownStats.forEach(m => {
+                newMacroState[m.macroName] = true;
+                m.processes.forEach(p => {
+                    newProcState[p.processName] = true;
+                });
+            });
+        }
+        setExpandedProgressPercentMacros(newMacroState);
+        setExpandedProgressPercentProcesses(newProcState);
+    };
+
+    const renderProgressBadge = (val: number | null, isBold = false) => {
+        if (val === null) {
+            return (
+                <span className="text-slate-300 font-semibold text-[11px]">N/R</span>
+            );
+        }
+        
+        let colorClass = 'text-slate-500 bg-slate-100 border-slate-200';
+        let barColor = 'bg-slate-400';
+        if (val === 100) {
+            colorClass = 'text-emerald-700 bg-emerald-50 border-emerald-200/80';
+            barColor = 'bg-emerald-500';
+        } else if (val >= 80) {
+            colorClass = 'text-sky-700 bg-sky-50 border-sky-200/80';
+            barColor = 'bg-sky-500';
+        } else if (val >= 50) {
+            colorClass = 'text-indigo-700 bg-indigo-50 border-indigo-200/80';
+            barColor = 'bg-indigo-500';
+        } else if (val > 0) {
+            colorClass = 'text-amber-700 bg-amber-50 border-amber-200/80';
+            barColor = 'bg-amber-500';
+        }
+
+        return (
+            <div className="flex flex-col items-center justify-center gap-1 w-full max-w-[85px] mx-auto">
+                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md border text-[11px] ${isBold ? 'font-black' : 'font-bold'} ${colorClass}`}>
+                    {val}%
+                </span>
+                <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${barColor} transition-all duration-300`} style={{ width: `${val}%` }} />
+                </div>
+            </div>
+        );
+    };
+
+    const renderTotalProgressBadge = (val: number, isHeader = false) => {
+        let colorClass = 'text-slate-600 bg-slate-100 border-slate-200';
+        let barColor = 'bg-slate-500';
+        if (val === 100) {
+            colorClass = 'text-emerald-800 bg-emerald-100/80 border-emerald-300';
+            barColor = 'bg-emerald-600';
+        } else if (val >= 80) {
+            colorClass = 'text-sky-800 bg-sky-100/80 border-sky-300';
+            barColor = 'bg-sky-600';
+        } else if (val >= 50) {
+            colorClass = 'text-indigo-800 bg-indigo-100/80 border-indigo-300';
+            barColor = 'bg-indigo-600';
+        } else if (val > 0) {
+            colorClass = 'text-amber-800 bg-amber-100/80 border-amber-300';
+            barColor = 'bg-amber-600';
+        }
+
+        return (
+            <div className="flex items-center justify-center gap-2">
+                <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full border text-[11px] ${isHeader ? 'font-black text-xs' : 'font-extrabold'} shadow-xs ${colorClass}`}>
+                    {val}%
+                </span>
+                <div className="w-10 h-1.5 bg-slate-200 rounded-full overflow-hidden hidden sm:block">
+                    <div className={`h-full ${barColor}`} style={{ width: `${val}%` }} />
+                </div>
+            </div>
+        );
+    };
 
     const handleExportMicroPNG = () => {
         const canvas = document.createElement('canvas');
@@ -3964,6 +4337,169 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <span>REF: Referente</span> &bull; 
                                     <span>C/G: Control Gestión</span> &bull;
                                     <span>TER: Terminados</span>
+                                </div>
+
+                                {/* Table 4 - Reporte de Porcentaje de Avance por Documento y Proceso (Drill Down) */}
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
+                                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+                                        <div>
+                                            <div className="flex items-center gap-2.5">
+                                                <h4 className="text-sm font-bold text-slate-900">
+                                                    Reporte de Porcentaje de Avance por Documento ({activeMapProject})
+                                                </h4>
+                                                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-full border border-emerald-200/80 uppercase tracking-wide">
+                                                    % de Avance
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Porcentaje de avance por tipo de documento con consolidación y drill-down jerárquico desde macroproceso hasta proceso y microproceso.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                            <button
+                                                onClick={toggleAllProgressMacros}
+                                                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+                                            >
+                                                <Layers size={14} className="text-slate-500" />
+                                                {macroprocessProgressDrillDownStats.length > 0 && macroprocessProgressDrillDownStats.every(m => expandedProgressPercentMacros[m.macroName]) ? 'Colapsar Todo' : 'Expandir Todo'}
+                                            </button>
+                                            <button
+                                                onClick={handleExportProgressPercentExcel}
+                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                            >
+                                                <FileSpreadsheet size={15} /> Exportar a Excel
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Tabla Drill-down de Porcentajes */}
+                                    <div className="overflow-x-auto max-w-full pb-6">
+                                        <table className="w-full text-left border-collapse min-w-[1000px]">
+                                            <thead>
+                                                <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
+                                                    <th className="px-4 py-3 text-left border-r border-slate-200 min-w-[340px] sticky left-0 bg-slate-100 z-10">
+                                                        Estructura de Procesos
+                                                    </th>
+                                                    <th className="px-3 py-2.5 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900 w-[140px]">
+                                                        AS IS (%)
+                                                    </th>
+                                                    <th className="px-3 py-2.5 text-center border-r border-slate-200 bg-red-50/70 font-extrabold text-red-900 w-[140px]">
+                                                        FCE (%)
+                                                    </th>
+                                                    <th className="px-3 py-2.5 text-center border-r border-slate-200 bg-amber-50/70 font-extrabold text-amber-900 w-[140px]">
+                                                        PM (%)
+                                                    </th>
+                                                    <th className="px-3 py-2.5 text-center border-r border-slate-200 bg-green-50/70 font-extrabold text-green-900 w-[140px]">
+                                                        TO BE (%)
+                                                    </th>
+                                                    <th className="px-3 py-2.5 text-center bg-indigo-50/80 font-black text-indigo-950 w-[150px]">
+                                                        Avance Total
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-xs text-slate-700">
+                                                {macroprocessProgressDrillDownStats.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={6} className="text-center py-8 text-slate-500 italic">No hay datos disponibles.</td>
+                                                    </tr>
+                                                ) : (
+                                                    macroprocessProgressDrillDownStats.map((macro) => {
+                                                        const isMacroExpanded = expandedProgressPercentMacros[macro.macroName];
+                                                        
+                                                        return (
+                                                            <React.Fragment key={macro.macroName}>
+                                                                {/* Macroproceso Row */}
+                                                                <tr 
+                                                                    className="border-b border-slate-200 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition-colors"
+                                                                    onClick={() => setExpandedProgressPercentMacros(p => ({ ...p, [macro.macroName]: !p[macro.macroName] }))}
+                                                                >
+                                                                    <td className="px-4 py-2.5 border-r border-slate-200 font-bold text-slate-900 sticky left-0 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                        <div className="flex items-center gap-2">
+                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
+                                                                            <span className="truncate">{macro.macroName}</span>
+                                                                            <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                                                                {macro.processCount} proc.
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => (
+                                                                        <td key={t} className="px-2 py-2 text-center border-r border-slate-200/60">
+                                                                            {renderProgressBadge(macro.docTypes[t].averageProgress, true)}
+                                                                        </td>
+                                                                    ))}
+                                                                    <td className="px-3 py-2 text-center bg-indigo-50/20">
+                                                                        {renderTotalProgressBadge(macro.totalProgress, true)}
+                                                                    </td>
+                                                                </tr>
+                                                                
+                                                                {/* Procesos Rows */}
+                                                                {isMacroExpanded && macro.processes.map((proc) => {
+                                                                    const isProcExpanded = expandedProgressPercentProcesses[proc.processName];
+                                                                    return (
+                                                                        <React.Fragment key={proc.processName}>
+                                                                            <tr 
+                                                                                className="border-b border-slate-100 bg-white hover:bg-slate-50/60 cursor-pointer transition-colors"
+                                                                                onClick={() => setExpandedProgressPercentProcesses(p => ({ ...p, [proc.processName]: !p[proc.processName] }))}
+                                                                            >
+                                                                                <td className="px-4 py-2 border-r border-slate-200 font-semibold text-slate-700 pl-8 sticky left-0 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold" /> : <ChevronRight size={13} />}
+                                                                                        <span className="truncate">{proc.processName}</span>
+                                                                                        <span className="text-[10px] font-medium text-slate-400">
+                                                                                            ({proc.microprocessCount} micro)
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </td>
+                                                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => (
+                                                                                    <td key={t} className="px-2 py-2 text-center border-r border-slate-200/60">
+                                                                                        {renderProgressBadge(proc.docTypes[t].averageProgress)}
+                                                                                    </td>
+                                                                                ))}
+                                                                                <td className="px-3 py-2 text-center bg-indigo-50/10">
+                                                                                    {renderTotalProgressBadge(proc.totalProgress)}
+                                                                                </td>
+                                                                            </tr>
+                                                                            
+                                                                            {/* Microprocesos Rows */}
+                                                                            {isProcExpanded && proc.microprocesses.map(micro => (
+                                                                                <tr key={micro.microName} className="border-b border-slate-50 bg-slate-50/20 hover:bg-slate-50">
+                                                                                    <td className="px-4 py-2 text-[11px] border-r border-slate-200 font-medium text-slate-600 pl-12 sticky left-0 bg-white/60 shadow-[2px_0_5px_rgba(0,0,0,0.01)] backdrop-blur-sm">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                                                                                            <span className="truncate">{micro.microName}</span>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => (
+                                                                                        <td key={t} className="px-2 py-1.5 text-[11px] text-center border-r border-slate-200/60">
+                                                                                            {renderProgressBadge(micro.docTypes[t].progress)}
+                                                                                        </td>
+                                                                                    ))}
+                                                                                    <td className="px-3 py-1.5 text-[11px] text-center bg-indigo-50/10 font-bold">
+                                                                                        {renderTotalProgressBadge(micro.totalProgress)}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </React.Fragment>
+                                                                    )
+                                                                })}
+                                                            </React.Fragment>
+                                                        )
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 text-xs text-slate-400 text-center flex items-center justify-center gap-2">
+                                    <span>N/R: No requerido</span> &bull; 
+                                    <span>0%: No Iniciado</span> &bull; 
+                                    <span>10%: Iniciado</span> &bull; 
+                                    <span>30%: En Proceso</span> &bull; 
+                                    <span>60%: Rev. Interna</span> &bull; 
+                                    <span>80%: Referente</span> &bull; 
+                                    <span>90%: Control Gestión</span> &bull; 
+                                    <span>100%: Aprobado</span>
                                 </div>
                     </div>
                 )}
