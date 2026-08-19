@@ -8,7 +8,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, UserCheck
 } from 'lucide-react';
 
 interface Props {
@@ -587,12 +587,12 @@ const Reports: React.FC<Props> = ({ user }) => {
         return Object.values(macros);
     }, [coverageAnalytics.list, macroClassifications]);
 
-    const availableMapProjects = useMemo(() => {
-        const projs = Array.from(new Set(processMapData.map(m => m.project).filter(Boolean)))
+    const availableMapProjects: string[] = useMemo(() => {
+        const projs = Array.from(new Set(unifiedData.map(m => m.project).filter((p): p is string => Boolean(p))))
             .filter(p => p.toUpperCase() !== 'REU');
         if (projs.length === 0) return ['HPC', 'HSR'];
         return projs;
-    }, [processMapData]);
+    }, [unifiedData]);
 
     const mapCoverageAnalytics = useMemo(() => {
         const groups: Record<string, { 
@@ -748,24 +748,30 @@ const Reports: React.FC<Props> = ({ user }) => {
             docs: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', { state: DocState; isVirtual: boolean; id: string; isRequired: boolean }>;
         }> = {};
 
-        const projectDocs = unifiedData.filter(d => d.project === activeMapProject);
+        let projectDocs = unifiedData.filter(d => d.project === activeMapProject);
+        if (filterAnalyst) {
+            projectDocs = projectDocs.filter(d => d.assignees?.includes(filterAnalyst));
+        }
+
+        const isFilteredByAnalyst = Boolean(filterAnalyst);
 
         projectDocs.forEach(d => {
             const micro = d.microprocess || 'Sin Clasificar';
+            const macro = d.macroprocess || 'Sin Clasificar';
+            const proc = d.process || 'Sin Clasificar';
+            const cat = getMacroCategory(macro);
+
             if (!grouped[micro]) {
-                const macro = d.macroprocess || 'Sin Clasificar';
-                const proc = d.process || 'Sin Clasificar';
-                const cat = getMacroCategory(macro);
                 grouped[micro] = {
                     microName: micro,
                     macroName: macro,
                     processName: proc,
                     category: cat,
                     docs: {
-                        'AS IS': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isDocTypeRequired(activeMapProject, macro, proc, micro, 'AS IS') },
-                        'FCE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isDocTypeRequired(activeMapProject, macro, proc, micro, 'FCE') },
-                        'PM': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isDocTypeRequired(activeMapProject, macro, proc, micro, 'PM') },
-                        'TO BE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isDocTypeRequired(activeMapProject, macro, proc, micro, 'TO BE') }
+                        'AS IS': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'AS IS') },
+                        'FCE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'FCE') },
+                        'PM': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'PM') },
+                        'TO BE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'TO BE') }
                     }
                 };
             }
@@ -776,13 +782,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                     state: d.state,
                     isVirtual: d.isVirtual || false,
                     id: d.id,
-                    isRequired: true
+                    isRequired: isDocTypeRequired(activeMapProject, macro, proc, micro, type)
                 };
             }
         });
 
         return Object.values(grouped).sort((a, b) => a.microName.localeCompare(b.microName));
-    }, [unifiedData, activeMapProject, hierarchy]);
+    }, [unifiedData, activeMapProject, hierarchy, filterAnalyst]);
 
     const projectDocTypeStats = useMemo(() => {
         const stats: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', { total: number; approved: number; inProcess: number; initiated: number; notStarted: number; notRequired: number }> = {
@@ -3670,6 +3676,32 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 })}
                                             </div>
                                         </div>
+
+                                        <div className="space-y-1.5">
+                                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Analista:</span>
+                                            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/50">
+                                                {!isAnalyst ? (
+                                                    <div className="flex items-center gap-1.5 px-2">
+                                                        <Users size={14} className="text-slate-400" />
+                                                        <select
+                                                            value={filterAnalyst}
+                                                            onChange={(e) => setFilterAnalyst(e.target.value)}
+                                                            className="bg-transparent text-xs font-bold text-slate-700 outline-none pr-2 cursor-pointer"
+                                                        >
+                                                            <option value="">Todos los Analistas</option>
+                                                            {users.filter(u => u.role === UserRole.ANALYST).map(u => (
+                                                                <option key={u.id} value={u.id}>{u.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                ) : (
+                                                    <div className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-white rounded-lg shadow-xs flex items-center gap-1.5">
+                                                        <UserCheck size={14} className="text-indigo-600" />
+                                                        <span>{user.name}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-2 self-end lg:self-center">
@@ -3851,6 +3883,32 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         </button>
                                                     );
                                                 })}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Analista:</span>
+                                            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/50">
+                                                {!isAnalyst ? (
+                                                    <div className="flex items-center gap-1.5 px-2">
+                                                        <Users size={14} className="text-slate-400" />
+                                                        <select
+                                                            value={filterAnalyst}
+                                                            onChange={(e) => setFilterAnalyst(e.target.value)}
+                                                            className="bg-transparent text-xs font-bold text-slate-700 outline-none pr-2 cursor-pointer"
+                                                        >
+                                                            <option value="">Todos los Analistas</option>
+                                                            {users.filter(u => u.role === UserRole.ANALYST).map(u => (
+                                                                <option key={u.id} value={u.id}>{u.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                ) : (
+                                                    <div className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-white rounded-lg shadow-xs flex items-center gap-1.5">
+                                                        <UserCheck size={14} className="text-indigo-600" />
+                                                        <span>{user.name}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
