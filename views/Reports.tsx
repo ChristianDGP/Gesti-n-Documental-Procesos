@@ -171,6 +171,8 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [expandedMicroStateProcesses, setExpandedMicroStateProcesses] = useState<Record<string, boolean>>({});
     const [expandedThreeMacros, setExpandedThreeMacros] = useState<Record<string, boolean>>({});
     const [expandedThreeProcesses, setExpandedThreeProcesses] = useState<Record<string, boolean>>({});
+    const [expandedPendingCompletedMacros, setExpandedPendingCompletedMacros] = useState<Record<string, boolean>>({});
+    const [expandedPendingCompletedProcesses, setExpandedPendingCompletedProcesses] = useState<Record<string, boolean>>({});
     const [expandedProgressPercentMacros, setExpandedProgressPercentMacros] = useState<Record<string, boolean>>({});
     const [expandedProgressPercentProcesses, setExpandedProgressPercentProcesses] = useState<Record<string, boolean>>({});
 
@@ -1753,6 +1755,300 @@ const Reports: React.FC<Props> = ({ user }) => {
             return a.macroName.localeCompare(b.macroName);
         });
     }, [filteredMicroprocessStats]);
+
+    const macroprocessPendingCompletedDrillDownStats = useMemo(() => {
+        const grouped: Record<string, {
+            macroName: string;
+            category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE';
+            processes: Record<string, {
+                processName: string;
+                microprocesses: Array<{
+                    microName: string;
+                    docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                        isRequired: boolean;
+                        isTerminated: boolean;
+                        isNoTerminated: boolean;
+                        state?: DocState;
+                    }>;
+                    totalNoTerminados: number;
+                    totalTerminados: number;
+                    totalRequired: number;
+                }>;
+                docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                    noTerminados: number;
+                    terminados: number;
+                    notRequired: number;
+                    total: number;
+                }>;
+                microprocessCount: number;
+                totalNoTerminados: number;
+                totalTerminados: number;
+                totalRequired: number;
+            }>;
+            docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                noTerminados: number;
+                terminados: number;
+                notRequired: number;
+                total: number;
+            }>;
+            processCount: number;
+            microprocessCount: number;
+            totalNoTerminados: number;
+            totalTerminados: number;
+            totalRequired: number;
+        }> = {};
+
+        filteredMicroprocessStats.forEach(micro => {
+            const macro = micro.macroName;
+            const proc = micro.processName;
+
+            if (!grouped[macro]) {
+                grouped[macro] = {
+                    macroName: macro,
+                    category: micro.category,
+                    processes: {},
+                    docTypes: {
+                        'AS IS': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 },
+                        'FCE': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 },
+                        'PM': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 },
+                        'TO BE': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 }
+                    },
+                    processCount: 0,
+                    microprocessCount: 0,
+                    totalNoTerminados: 0,
+                    totalTerminados: 0,
+                    totalRequired: 0
+                };
+            }
+
+            if (!grouped[macro].processes[proc]) {
+                grouped[macro].processes[proc] = {
+                    processName: proc,
+                    microprocesses: [],
+                    docTypes: {
+                        'AS IS': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 },
+                        'FCE': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 },
+                        'PM': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 },
+                        'TO BE': { noTerminados: 0, terminados: 0, notRequired: 0, total: 0 }
+                    },
+                    microprocessCount: 0,
+                    totalNoTerminados: 0,
+                    totalTerminados: 0,
+                    totalRequired: 0
+                };
+            }
+
+            const microDocTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                isRequired: boolean;
+                isTerminated: boolean;
+                isNoTerminated: boolean;
+                state?: DocState;
+            }> = {
+                'AS IS': { isRequired: false, isTerminated: false, isNoTerminated: false },
+                'FCE': { isRequired: false, isTerminated: false, isNoTerminated: false },
+                'PM': { isRequired: false, isTerminated: false, isNoTerminated: false },
+                'TO BE': { isRequired: false, isTerminated: false, isNoTerminated: false }
+            };
+
+            let microNoTerminados = 0;
+            let microTerminados = 0;
+            let microTotalRequired = 0;
+
+            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
+                const doc = micro.docs[dtype];
+                if (doc && doc.isRequired) {
+                    microTotalRequired++;
+                    const isTerm = doc.state === DocState.APPROVED;
+                    if (isTerm) {
+                        microTerminados++;
+                        grouped[macro].docTypes[dtype].terminados++;
+                        grouped[macro].processes[proc].docTypes[dtype].terminados++;
+                    } else {
+                        microNoTerminados++;
+                        grouped[macro].docTypes[dtype].noTerminados++;
+                        grouped[macro].processes[proc].docTypes[dtype].noTerminados++;
+                    }
+                    grouped[macro].docTypes[dtype].total++;
+                    grouped[macro].processes[proc].docTypes[dtype].total++;
+
+                    microDocTypes[dtype] = {
+                        isRequired: true,
+                        isTerminated: isTerm,
+                        isNoTerminated: !isTerm,
+                        state: doc.state
+                    };
+                } else {
+                    grouped[macro].docTypes[dtype].notRequired++;
+                    grouped[macro].processes[proc].docTypes[dtype].notRequired++;
+                    microDocTypes[dtype] = {
+                        isRequired: false,
+                        isTerminated: false,
+                        isNoTerminated: false
+                    };
+                }
+            });
+
+            grouped[macro].processes[proc].microprocesses.push({
+                microName: micro.microName,
+                docTypes: microDocTypes,
+                totalNoTerminados: microNoTerminados,
+                totalTerminados: microTerminados,
+                totalRequired: microTotalRequired
+            });
+
+            grouped[macro].processes[proc].microprocessCount++;
+            grouped[macro].processes[proc].totalNoTerminados += microNoTerminados;
+            grouped[macro].processes[proc].totalTerminados += microTerminados;
+            grouped[macro].processes[proc].totalRequired += microTotalRequired;
+
+            grouped[macro].microprocessCount++;
+            grouped[macro].totalNoTerminados += microNoTerminados;
+            grouped[macro].totalTerminados += microTerminados;
+            grouped[macro].totalRequired += microTotalRequired;
+        });
+
+        return Object.values(grouped).map(macro => {
+            const processesList = Object.values(macro.processes).map(proc => {
+                proc.microprocesses.sort((a, b) => a.microName.localeCompare(b.microName));
+                return proc;
+            }).sort((a, b) => a.processName.localeCompare(b.processName));
+
+            return {
+                macroName: macro.macroName,
+                category: macro.category,
+                processCount: processesList.length,
+                microprocessCount: macro.microprocessCount,
+                processes: processesList,
+                docTypes: macro.docTypes,
+                totalNoTerminados: macro.totalNoTerminados,
+                totalTerminados: macro.totalTerminados,
+                totalRequired: macro.totalRequired
+            };
+        }).sort((a, b) => {
+            const catOrder = { ESTRATEGICO: 1, OPERATIVO: 2, SOPORTE: 3 };
+            const orderA = catOrder[a.category] || 99;
+            const orderB = catOrder[b.category] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.macroName.localeCompare(b.macroName);
+        });
+    }, [filteredMicroprocessStats]);
+
+    const handleExportPendingCompletedExcel = () => {
+        if (macroprocessPendingCompletedDrillDownStats.length === 0) return;
+        
+        const headers = [
+            'PROYECTO',
+            'CATEGORIA',
+            'MACROPROCESO',
+            'PROCESO',
+            'MICROPROCESO',
+            'AS IS (No Terminado)',
+            'AS IS (Terminado)',
+            'FCE (No Terminado)',
+            'FCE (Terminado)',
+            'PM (No Terminado)',
+            'PM (Terminado)',
+            'TO BE (No Terminado)',
+            'TO BE (Terminado)',
+            'TOTAL NO TERMINADOS',
+            'TOTAL TERMINADOS',
+            'TOTAL DOCUMENTOS'
+        ];
+
+        const rows: string[][] = [];
+
+        macroprocessPendingCompletedDrillDownStats.forEach(macro => {
+            macro.processes.forEach(proc => {
+                proc.microprocesses.forEach(micro => {
+                    const getCounts = (dtype: 'AS IS' | 'FCE' | 'PM' | 'TO BE') => {
+                        const dt = micro.docTypes[dtype];
+                        if (!dt.isRequired) return { noTerm: 'N/R', term: 'N/R' };
+                        return {
+                            noTerm: dt.isNoTerminated ? '1' : '0',
+                            term: dt.isTerminated ? '1' : '0'
+                        };
+                    };
+
+                    const asis = getCounts('AS IS');
+                    const fce = getCounts('FCE');
+                    const pm = getCounts('PM');
+                    const tobe = getCounts('TO BE');
+
+                    rows.push([
+                        activeMapProject,
+                        macro.category,
+                        macro.macroName,
+                        proc.processName,
+                        micro.microName,
+                        asis.noTerm,
+                        asis.term,
+                        fce.noTerm,
+                        fce.term,
+                        pm.noTerm,
+                        pm.term,
+                        tobe.noTerm,
+                        tobe.term,
+                        String(micro.totalNoTerminados),
+                        String(micro.totalTerminados),
+                        String(micro.totalRequired)
+                    ]);
+                });
+            });
+        });
+
+        const csvContent = [
+            headers.join(';'),
+            ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))
+        ].join('\n');
+
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Reporte_Cantidades_Terminados_NoTerminados_${activeMapProject}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const grandTotalsPendingCompleted = useMemo(() => {
+        const totals = {
+            docTypes: {
+                'AS IS': { noTerminados: 0, terminados: 0 },
+                'FCE': { noTerminados: 0, terminados: 0 },
+                'PM': { noTerminados: 0, terminados: 0 },
+                'TO BE': { noTerminados: 0, terminados: 0 }
+            },
+            totalNoTerminados: 0,
+            totalTerminados: 0
+        };
+        macroprocessPendingCompletedDrillDownStats.forEach(m => {
+            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(t => {
+                totals.docTypes[t].noTerminados += m.docTypes[t].noTerminados;
+                totals.docTypes[t].terminados += m.docTypes[t].terminados;
+            });
+            totals.totalNoTerminados += m.totalNoTerminados;
+            totals.totalTerminados += m.totalTerminados;
+        });
+        return totals;
+    }, [macroprocessPendingCompletedDrillDownStats]);
+
+    const toggleAllPendingCompletedMacros = () => {
+        const allExpanded = macroprocessPendingCompletedDrillDownStats.length > 0 && macroprocessPendingCompletedDrillDownStats.every(m => expandedPendingCompletedMacros[m.macroName]);
+        const newMacroState: Record<string, boolean> = {};
+        const newProcState: Record<string, boolean> = {};
+        
+        if (!allExpanded) {
+            macroprocessPendingCompletedDrillDownStats.forEach(m => {
+                newMacroState[m.macroName] = true;
+                m.processes.forEach(p => {
+                    newProcState[p.processName] = true;
+                });
+            });
+        }
+        setExpandedPendingCompletedMacros(newMacroState);
+        setExpandedPendingCompletedProcesses(newProcState);
+    };
 
     const handleExportProgressPercentExcel = () => {
         if (macroprocessProgressDrillDownStats.length === 0) return;
@@ -4395,6 +4691,286 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <span>REF: Referente</span> &bull; 
                                     <span>C/G: Control Gestión</span> &bull;
                                     <span>TER: Terminados</span>
+                                </div>
+
+                                {/* Table - Reporte de Cantidades de Documentos Terminados y No Terminados (Drill Down) */}
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
+                                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+                                        <div>
+                                            <div className="flex items-center gap-2.5">
+                                                <h4 className="text-sm font-bold text-slate-900">
+                                                    Reporte de Cantidades de Documentos Terminados y No Terminados ({activeMapProject})
+                                                </h4>
+                                                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-black rounded-full border border-blue-200/80 uppercase tracking-wide">
+                                                    Cantidades
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Detalle y consolidación jerárquica de cantidades de documentos no terminados (pendientes/en desarrollo) y terminados (aprobados) por tipo documental.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                            <button
+                                                onClick={toggleAllPendingCompletedMacros}
+                                                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+                                            >
+                                                <Layers size={14} className="text-slate-500" />
+                                                {macroprocessPendingCompletedDrillDownStats.length > 0 && macroprocessPendingCompletedDrillDownStats.every(m => expandedPendingCompletedMacros[m.macroName]) ? 'Colapsar Todo' : 'Expandir Todo'}
+                                            </button>
+                                            <button
+                                                onClick={handleExportPendingCompletedExcel}
+                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                            >
+                                                <FileSpreadsheet size={15} /> Exportar a Excel
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Tabla Drill-down de Cantidades */}
+                                    <div className="overflow-x-auto max-w-full pb-6">
+                                        <table className="w-full text-left border-collapse min-w-[1100px]">
+                                            <thead>
+                                                <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
+                                                    <th rowSpan={2} className="px-4 py-3 text-left border-r border-slate-200 min-w-[340px] sticky left-0 bg-slate-100 z-10 align-middle">
+                                                        Estructura de Procesos
+                                                    </th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900">
+                                                        AS IS
+                                                    </th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center border-r border-slate-200 bg-red-50/70 font-extrabold text-red-900">
+                                                        FCE
+                                                    </th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center border-r border-slate-200 bg-amber-50/70 font-extrabold text-amber-900">
+                                                        PM
+                                                    </th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center border-r border-slate-200 bg-green-50/70 font-extrabold text-green-900">
+                                                        TO BE
+                                                    </th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center bg-indigo-50/80 font-black text-indigo-950">
+                                                        Total General
+                                                    </th>
+                                                </tr>
+                                                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-600">
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200/60 bg-amber-50/40 text-amber-900 w-[65px]">No Term.</th>
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200 bg-emerald-50/40 text-emerald-900 w-[65px]">Term.</th>
+                                                    
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200/60 bg-amber-50/40 text-amber-900 w-[65px]">No Term.</th>
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200 bg-emerald-50/40 text-emerald-900 w-[65px]">Term.</th>
+                                                    
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200/60 bg-amber-50/40 text-amber-900 w-[65px]">No Term.</th>
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200 bg-emerald-50/40 text-emerald-900 w-[65px]">Term.</th>
+                                                    
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200/60 bg-amber-50/40 text-amber-900 w-[65px]">No Term.</th>
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200 bg-emerald-50/40 text-emerald-900 w-[65px]">Term.</th>
+                                                    
+                                                    <th className="px-2 py-1.5 text-center border-r border-slate-200/60 bg-amber-100/50 text-amber-950 font-black w-[75px]">No Term.</th>
+                                                    <th className="px-2 py-1.5 text-center bg-emerald-100/50 text-emerald-950 font-black w-[75px]">Term.</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-xs text-slate-700">
+                                                {macroprocessPendingCompletedDrillDownStats.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={11} className="text-center py-8 text-slate-500 italic">No hay datos disponibles.</td>
+                                                    </tr>
+                                                ) : (
+                                                    macroprocessPendingCompletedDrillDownStats.map((macro) => {
+                                                        const isMacroExpanded = expandedPendingCompletedMacros[macro.macroName];
+                                                        
+                                                        return (
+                                                            <React.Fragment key={macro.macroName}>
+                                                                {/* Macroproceso Row */}
+                                                                <tr 
+                                                                    className="border-b border-slate-200 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition-colors"
+                                                                    onClick={() => setExpandedPendingCompletedMacros(p => ({ ...p, [macro.macroName]: !p[macro.macroName] }))}
+                                                                >
+                                                                    <td className="px-4 py-2.5 border-r border-slate-200 font-bold text-slate-900 sticky left-0 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                        <div className="flex items-center gap-2">
+                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
+                                                                            <span className="truncate">{macro.macroName}</span>
+                                                                            <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                                                                {macro.processCount} proc.
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
+                                                                        const dt = macro.docTypes[t];
+                                                                        return (
+                                                                            <React.Fragment key={t}>
+                                                                                <td className="px-2 py-2 text-center border-r border-slate-200/60 font-semibold text-amber-700">
+                                                                                    {dt.noTerminados > 0 ? (
+                                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
+                                                                                            {dt.noTerminados}
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="text-slate-300">-</span>
+                                                                                    )}
+                                                                                </td>
+                                                                                <td className="px-2 py-2 text-center border-r border-slate-200 font-semibold text-emerald-700">
+                                                                                    {dt.terminados > 0 ? (
+                                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                                                                                            {dt.terminados}
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="text-slate-300">-</span>
+                                                                                    )}
+                                                                                </td>
+                                                                            </React.Fragment>
+                                                                        );
+                                                                    })}
+                                                                    <td className="px-2 py-2 text-center border-r border-slate-200/60 bg-amber-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-black text-amber-800 bg-amber-100/80 border border-amber-300 shadow-xs">
+                                                                            {macro.totalNoTerminados}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-2 py-2 text-center bg-emerald-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-black text-emerald-800 bg-emerald-100/80 border border-emerald-300 shadow-xs">
+                                                                            {macro.totalTerminados}
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                                
+                                                                {/* Procesos Rows */}
+                                                                {isMacroExpanded && macro.processes.map((proc) => {
+                                                                    const isProcExpanded = expandedPendingCompletedProcesses[proc.processName];
+                                                                    return (
+                                                                        <React.Fragment key={proc.processName}>
+                                                                            <tr 
+                                                                                className="border-b border-slate-100 bg-white hover:bg-slate-50/60 cursor-pointer transition-colors"
+                                                                                onClick={() => setExpandedPendingCompletedProcesses(p => ({ ...p, [proc.processName]: !p[proc.processName] }))}
+                                                                            >
+                                                                                <td className="px-4 py-2 border-r border-slate-200 font-semibold text-slate-700 pl-8 sticky left-0 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold" /> : <ChevronRight size={13} />}
+                                                                                        <span className="truncate">{proc.processName}</span>
+                                                                                        <span className="text-[10px] text-slate-400 font-normal">
+                                                                                            ({proc.microprocesses.length} microproc.)
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </td>
+                                                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
+                                                                                    const dt = proc.docTypes[t];
+                                                                                    return (
+                                                                                        <React.Fragment key={t}>
+                                                                                            <td className="px-2 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                                {dt.noTerminados > 0 ? (
+                                                                                                    <span className="font-semibold text-amber-700">{dt.noTerminados}</span>
+                                                                                                ) : (
+                                                                                                    <span className="text-slate-300 font-normal">-</span>
+                                                                                                )}
+                                                                                            </td>
+                                                                                            <td className="px-2 py-2 text-center border-r border-slate-200 text-slate-600">
+                                                                                                {dt.terminados > 0 ? (
+                                                                                                    <span className="font-bold text-emerald-700">{dt.terminados}</span>
+                                                                                                ) : (
+                                                                                                    <span className="text-slate-300 font-normal">-</span>
+                                                                                                )}
+                                                                                            </td>
+                                                                                        </React.Fragment>
+                                                                                    );
+                                                                                })}
+                                                                                <td className="px-2 py-2 text-center border-r border-slate-200/60 font-bold text-amber-800 bg-amber-50/10">
+                                                                                    {proc.totalNoTerminados}
+                                                                                </td>
+                                                                                <td className="px-2 py-2 text-center font-black text-emerald-800 bg-emerald-50/10">
+                                                                                    {proc.totalTerminados}
+                                                                                </td>
+                                                                            </tr>
+                                                                            
+                                                                            {/* Microprocesos Rows */}
+                                                                            {isProcExpanded && proc.microprocesses.map(micro => (
+                                                                                <tr key={micro.microName} className="border-b border-slate-50 bg-slate-50/20 hover:bg-slate-50/80 transition-colors">
+                                                                                    <td className="px-4 py-2 text-[11px] border-r border-slate-200 font-medium text-slate-600 pl-14 sticky left-0 bg-white/70 shadow-[2px_0_5px_rgba(0,0,0,0.01)] backdrop-blur-xs">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-300"></div>
+                                                                                            <span className="truncate">{micro.microName}</span>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
+                                                                                        const dt = micro.docTypes[t];
+                                                                                        return (
+                                                                                            <React.Fragment key={t}>
+                                                                                                <td className="px-2 py-1.5 text-center border-r border-slate-200/60">
+                                                                                                    {!dt.isRequired ? (
+                                                                                                        <span className="text-slate-300 text-[10px] font-normal">-</span>
+                                                                                                    ) : dt.isNoTerminated ? (
+                                                                                                        <span 
+                                                                                                            className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200"
+                                                                                                            title={`Estado: ${dt.state ? STATE_CONFIG[dt.state]?.label : 'Pendiente'}`}
+                                                                                                        >
+                                                                                                            1
+                                                                                                        </span>
+                                                                                                    ) : (
+                                                                                                        <span className="text-slate-300 text-[10px] font-normal">-</span>
+                                                                                                    )}
+                                                                                                </td>
+                                                                                                <td className="px-2 py-1.5 text-center border-r border-slate-200">
+                                                                                                    {!dt.isRequired ? (
+                                                                                                        <span className="text-slate-300 text-[10px] font-normal">-</span>
+                                                                                                    ) : dt.isTerminated ? (
+                                                                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                                                            1
+                                                                                                        </span>
+                                                                                                    ) : (
+                                                                                                        <span className="text-slate-300 text-[10px] font-normal">-</span>
+                                                                                                    )}
+                                                                                                </td>
+                                                                                            </React.Fragment>
+                                                                                        );
+                                                                                    })}
+                                                                                    <td className="px-2 py-1.5 text-center border-r border-slate-200/60 font-semibold text-amber-700 text-[11px] bg-amber-50/10">
+                                                                                        {micro.totalNoTerminados}
+                                                                                    </td>
+                                                                                    <td className="px-2 py-1.5 text-center font-bold text-emerald-700 text-[11px] bg-emerald-50/10">
+                                                                                        {micro.totalTerminados}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
+                                                            </React.Fragment>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                            {macroprocessPendingCompletedDrillDownStats.length > 0 && (
+                                                <tfoot className="border-t-2 border-slate-300 bg-slate-100/95 font-bold text-xs text-slate-900 sticky bottom-0">
+                                                    <tr>
+                                                        <td className="px-4 py-3 border-r border-slate-300 font-black text-slate-900 sticky left-0 bg-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.04)] z-10 uppercase tracking-wide text-[11px]">
+                                                            TOTAL GENERAL
+                                                        </td>
+                                                        {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
+                                                            const dt = grandTotalsPendingCompleted.docTypes[t];
+                                                            return (
+                                                                <React.Fragment key={t}>
+                                                                    <td className="px-2 py-2.5 text-center border-r border-slate-200/80 bg-amber-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-black text-amber-900 bg-amber-100/80 border border-amber-300 shadow-xs">
+                                                                            {dt.noTerminados}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-2 py-2.5 text-center border-r border-slate-300 bg-emerald-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-black text-emerald-900 bg-emerald-100/80 border border-emerald-300 shadow-xs">
+                                                                            {dt.terminados}
+                                                                        </span>
+                                                                    </td>
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
+                                                        <td className="px-2 py-2.5 text-center border-r border-slate-200/80 bg-amber-100/70">
+                                                            <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-black text-amber-950 bg-amber-200/90 border border-amber-400 shadow-xs">
+                                                                {grandTotalsPendingCompleted.totalNoTerminados}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-2 py-2.5 text-center bg-emerald-100/70">
+                                                            <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-black text-emerald-950 bg-emerald-200/90 border border-emerald-400 shadow-xs">
+                                                                {grandTotalsPendingCompleted.totalTerminados}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            )}
+                                        </table>
+                                    </div>
                                 </div>
 
                                 {/* Table 4 - Reporte de Porcentaje de Avance por Documento y Proceso (Drill Down) */}
