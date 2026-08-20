@@ -2035,21 +2035,31 @@ const Reports: React.FC<Props> = ({ user }) => {
         return totals;
     }, [macroprocessPendingCompletedDrillDownStats]);
 
-    const toggleAllPendingCompletedMacros = () => {
-        const allExpanded = macroprocessPendingCompletedDrillDownStats.length > 0 && macroprocessPendingCompletedDrillDownStats.every(m => expandedPendingCompletedMacros[m.macroName]);
+    const expandAllPendingCompletedMacros = () => {
         const newMacroState: Record<string, boolean> = {};
         const newProcState: Record<string, boolean> = {};
-        
-        if (!allExpanded) {
-            macroprocessPendingCompletedDrillDownStats.forEach(m => {
-                newMacroState[m.macroName] = true;
-                m.processes.forEach(p => {
-                    newProcState[p.processName] = true;
-                });
+        macroprocessPendingCompletedDrillDownStats.forEach(m => {
+            newMacroState[m.macroName] = true;
+            m.processes.forEach(p => {
+                newProcState[p.processName] = true;
             });
-        }
+        });
         setExpandedPendingCompletedMacros(newMacroState);
         setExpandedPendingCompletedProcesses(newProcState);
+    };
+
+    const collapseAllPendingCompletedMacros = () => {
+        setExpandedPendingCompletedMacros({});
+        setExpandedPendingCompletedProcesses({});
+    };
+
+    const toggleAllPendingCompletedMacros = () => {
+        const allExpanded = macroprocessPendingCompletedDrillDownStats.length > 0 && macroprocessPendingCompletedDrillDownStats.every(m => expandedPendingCompletedMacros[m.macroName]);
+        if (allExpanded) {
+            collapseAllPendingCompletedMacros();
+        } else {
+            expandAllPendingCompletedMacros();
+        }
     };
 
     const handleExportProgressPercentExcel = () => {
@@ -2110,21 +2120,31 @@ const Reports: React.FC<Props> = ({ user }) => {
         document.body.removeChild(link);
     };
 
-    const toggleAllProgressMacros = () => {
-        const allExpanded = macroprocessProgressDrillDownStats.length > 0 && macroprocessProgressDrillDownStats.every(m => expandedProgressPercentMacros[m.macroName]);
+    const expandAllProgressMacros = () => {
         const newMacroState: Record<string, boolean> = {};
         const newProcState: Record<string, boolean> = {};
-        
-        if (!allExpanded) {
-            macroprocessProgressDrillDownStats.forEach(m => {
-                newMacroState[m.macroName] = true;
-                m.processes.forEach(p => {
-                    newProcState[p.processName] = true;
-                });
+        macroprocessProgressDrillDownStats.forEach(m => {
+            newMacroState[m.macroName] = true;
+            m.processes.forEach(p => {
+                newProcState[p.processName] = true;
             });
-        }
+        });
         setExpandedProgressPercentMacros(newMacroState);
         setExpandedProgressPercentProcesses(newProcState);
+    };
+
+    const collapseAllProgressMacros = () => {
+        setExpandedProgressPercentMacros({});
+        setExpandedProgressPercentProcesses({});
+    };
+
+    const toggleAllProgressMacros = () => {
+        const allExpanded = macroprocessProgressDrillDownStats.length > 0 && macroprocessProgressDrillDownStats.every(m => expandedProgressPercentMacros[m.macroName]);
+        if (allExpanded) {
+            collapseAllProgressMacros();
+        } else {
+            expandAllProgressMacros();
+        }
     };
 
     const macroprocessFlowPhasesDrillDownStats = useMemo(() => {
@@ -2472,21 +2492,49 @@ const Reports: React.FC<Props> = ({ user }) => {
         document.body.removeChild(link);
     };
 
-    const toggleAllFlowPhasesMacros = () => {
-        const allExpanded = macroprocessFlowPhasesDrillDownStats.length > 0 && macroprocessFlowPhasesDrillDownStats.every(m => expandedFlowPhasesMacros[m.macroName]);
+    const expandAllThreeMacros = () => {
         const newMacroState: Record<string, boolean> = {};
         const newProcState: Record<string, boolean> = {};
-        
-        if (!allExpanded) {
-            macroprocessFlowPhasesDrillDownStats.forEach(m => {
-                newMacroState[m.macroName] = true;
-                m.processes.forEach(p => {
-                    newProcState[p.processName] = true;
-                });
+        macroprocessThreeDrillDownStats.forEach(m => {
+            newMacroState[m.macroName] = true;
+            m.processes.forEach(p => {
+                newProcState[p.processName] = true;
             });
-        }
+        });
+        setExpandedThreeMacros(newMacroState);
+        setExpandedThreeProcesses(newProcState);
+    };
+
+    const collapseAllThreeMacros = () => {
+        setExpandedThreeMacros({});
+        setExpandedThreeProcesses({});
+    };
+
+    const expandAllFlowPhasesMacros = () => {
+        const newMacroState: Record<string, boolean> = {};
+        const newProcState: Record<string, boolean> = {};
+        macroprocessFlowPhasesDrillDownStats.forEach(m => {
+            newMacroState[m.macroName] = true;
+            m.processes.forEach(p => {
+                newProcState[p.processName] = true;
+            });
+        });
         setExpandedFlowPhasesMacros(newMacroState);
         setExpandedFlowPhasesProcesses(newProcState);
+    };
+
+    const collapseAllFlowPhasesMacros = () => {
+        setExpandedFlowPhasesMacros({});
+        setExpandedFlowPhasesProcesses({});
+    };
+
+    const toggleAllFlowPhasesMacros = () => {
+        const allExpanded = macroprocessFlowPhasesDrillDownStats.length > 0 && macroprocessFlowPhasesDrillDownStats.every(m => expandedFlowPhasesMacros[m.macroName]);
+        if (allExpanded) {
+            collapseAllFlowPhasesMacros();
+        } else {
+            expandAllFlowPhasesMacros();
+        }
     };
 
     const renderProgressBadge = (val: number | null, isBold = false) => {
@@ -4810,20 +4858,41 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 Avance y estados detallados de la documentación, estructurado por macroprocesos.
                                             </p>
                                         </div>
-                                        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
-                                            {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => (
+                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
                                                 <button
-                                                    key={type}
-                                                    onClick={() => setSelectedChartDocType(type)}
-                                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                                                        selectedChartDocType === type
-                                                            ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
-                                                            : 'text-slate-500 hover:text-slate-800'
-                                                    }`}
+                                                    onClick={expandAllThreeMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Expandir todos los macroprocesos y procesos"
                                                 >
-                                                    {type}
+                                                    <FolderTree size={14} className="text-indigo-600" />
+                                                    <span>Expandir Todo</span>
                                                 </button>
-                                            ))}
+                                                <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                <button
+                                                    onClick={collapseAllThreeMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Colapsar todos los macroprocesos y procesos"
+                                                >
+                                                    <Layers size={14} className="text-slate-500" />
+                                                    <span>Colapsar Todo</span>
+                                                </button>
+                                            </div>
+                                            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
+                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => (
+                                                    <button
+                                                        key={type}
+                                                        onClick={() => setSelectedChartDocType(type)}
+                                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                                            selectedChartDocType === type
+                                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
+                                                                : 'text-slate-500 hover:text-slate-800'
+                                                        }`}
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                     {/* Gráfico de Barras por Macroproceso */}
@@ -5074,13 +5143,25 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <button
-                                                onClick={toggleAllPendingCompletedMacros}
-                                                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
-                                            >
-                                                <Layers size={14} className="text-slate-500" />
-                                                {macroprocessPendingCompletedDrillDownStats.length > 0 && macroprocessPendingCompletedDrillDownStats.every(m => expandedPendingCompletedMacros[m.macroName]) ? 'Colapsar Todo' : 'Expandir Todo'}
-                                            </button>
+                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                                                <button
+                                                    onClick={expandAllPendingCompletedMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Expandir todos los macroprocesos y procesos"
+                                                >
+                                                    <FolderTree size={14} className="text-indigo-600" />
+                                                    <span>Expandir Todo</span>
+                                                </button>
+                                                <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                <button
+                                                    onClick={collapseAllPendingCompletedMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Colapsar todos los macroprocesos y procesos"
+                                                >
+                                                    <Layers size={14} className="text-slate-500" />
+                                                    <span>Colapsar Todo</span>
+                                                </button>
+                                            </div>
                                             <button
                                                 onClick={handleExportPendingCompletedExcel}
                                                 className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
@@ -5354,13 +5435,25 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <button
-                                                onClick={toggleAllProgressMacros}
-                                                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
-                                            >
-                                                <Layers size={14} className="text-slate-500" />
-                                                {macroprocessProgressDrillDownStats.length > 0 && macroprocessProgressDrillDownStats.every(m => expandedProgressPercentMacros[m.macroName]) ? 'Colapsar Todo' : 'Expandir Todo'}
-                                            </button>
+                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                                                <button
+                                                    onClick={expandAllProgressMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Expandir todos los macroprocesos y procesos"
+                                                >
+                                                    <FolderTree size={14} className="text-indigo-600" />
+                                                    <span>Expandir Todo</span>
+                                                </button>
+                                                <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                <button
+                                                    onClick={collapseAllProgressMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Colapsar todos los macroprocesos y procesos"
+                                                >
+                                                    <Layers size={14} className="text-slate-500" />
+                                                    <span>Colapsar Todo</span>
+                                                </button>
+                                            </div>
                                             <button
                                                 onClick={handleExportProgressPercentExcel}
                                                 className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
@@ -5517,17 +5610,26 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             </p>
                                         </div>
 
-                                        <div className="flex items-center gap-2.5">
-                                            <button
-                                                onClick={toggleAllFlowPhasesMacros}
-                                                className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
-                                            >
-                                                <FolderTree size={14} className="text-indigo-600" />
-                                                {macroprocessFlowPhasesDrillDownStats.length > 0 && macroprocessFlowPhasesDrillDownStats.every(m => expandedFlowPhasesMacros[m.macroName])
-                                                    ? 'Colapsar Todo'
-                                                    : 'Expandir Todo'
-                                                }
-                                            </button>
+                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                                                <button
+                                                    onClick={expandAllFlowPhasesMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Expandir todos los macroprocesos y procesos"
+                                                >
+                                                    <FolderTree size={14} className="text-indigo-600" />
+                                                    <span>Expandir Todo</span>
+                                                </button>
+                                                <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                <button
+                                                    onClick={collapseAllFlowPhasesMacros}
+                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                    title="Colapsar todos los macroprocesos y procesos"
+                                                >
+                                                    <Layers size={14} className="text-slate-500" />
+                                                    <span>Colapsar Todo</span>
+                                                </button>
+                                            </div>
 
                                             <button
                                                 onClick={handleExportFlowPhasesExcel}
