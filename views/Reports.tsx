@@ -5539,63 +5539,63 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     </div>
 
                                     {/* Tabla Drill-down de Fases / Etapas */}
-                                    <div className="overflow-x-auto max-w-full pb-6">
-                                        <table className="w-full text-left border-collapse min-w-[1250px]">
+                                    <div className="w-full max-w-full overflow-x-hidden pb-4">
+                                        <table className="w-full text-left border-collapse table-fixed text-[11px]">
                                             <thead>
-                                                <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
-                                                    <th rowSpan={2} className="px-4 py-3 text-left border-r border-slate-200 min-w-[320px] sticky left-0 bg-slate-100 z-10 align-middle">
+                                                <tr className="bg-slate-100/90 border-b border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-700">
+                                                    <th rowSpan={2} className="w-[23%] px-2 py-2 text-left border-r border-slate-200 align-middle">
                                                         Estructura de Procesos
                                                     </th>
-                                                    <th colSpan={3} className="px-3 py-2 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900">
+                                                    <th colSpan={3} className="px-1 py-1.5 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900">
                                                         AS IS
                                                     </th>
-                                                    <th colSpan={3} className="px-3 py-2 text-center border-r border-slate-200 bg-red-50/70 font-extrabold text-red-900">
+                                                    <th colSpan={3} className="px-1 py-1.5 text-center border-r border-slate-200 bg-red-50/70 font-extrabold text-red-900">
                                                         FCE
                                                     </th>
-                                                    <th colSpan={3} className="px-3 py-2 text-center border-r border-slate-200 bg-amber-50/70 font-extrabold text-amber-900">
+                                                    <th colSpan={3} className="px-1 py-1.5 text-center border-r border-slate-200 bg-amber-50/70 font-extrabold text-amber-900">
                                                         PM
                                                     </th>
-                                                    <th colSpan={4} className="px-3 py-2 text-center border-r border-slate-200 bg-emerald-50/70 font-extrabold text-emerald-900">
+                                                    <th colSpan={4} className="px-1 py-1.5 text-center border-r border-slate-200 bg-emerald-50/70 font-extrabold text-emerald-900">
                                                         TO BE
                                                     </th>
-                                                    <th colSpan={5} className="px-3 py-2 text-center bg-indigo-50/80 font-black text-indigo-950">
+                                                    <th colSpan={5} className="px-1 py-1.5 text-center bg-indigo-50/80 font-black text-indigo-950">
                                                         Total Consolidado
                                                     </th>
                                                 </tr>
-                                                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-600">
+                                                <tr className="bg-slate-50 border-b border-slate-200 text-[9px] sm:text-[10px] font-bold text-slate-600">
                                                     {/* AS IS */}
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900">DGP</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900">Ref.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900">Term.</th>
 
                                                     {/* FCE */}
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900">DGP</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900">Ref.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900">Term.</th>
 
                                                     {/* PM */}
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900">DGP</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900">Ref.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900">Term.</th>
 
                                                     {/* TO BE */}
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-amber-50/40 text-amber-900 w-[55px]">C.G.</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900">DGP</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900">Ref.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-amber-50/40 text-amber-900">C.G.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900">Term.</th>
 
                                                     {/* Total Consolidado */}
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-100/40 text-blue-950 font-black w-[60px]">DGP</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-100/40 text-purple-950 font-black w-[60px]">Ref.</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-amber-100/40 text-amber-950 font-black w-[60px]">C.G.</th>
-                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-emerald-100/40 text-emerald-950 font-black w-[60px]">Term.</th>
-                                                    <th className="px-1.5 py-1.5 text-center bg-slate-200/80 text-slate-950 font-black w-[60px]">Total</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-blue-100/40 text-blue-950 font-black">DGP</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-purple-100/40 text-purple-950 font-black">Ref.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-amber-100/40 text-amber-950 font-black">C.G.</th>
+                                                    <th className="px-0.5 py-1 text-center border-r border-slate-200/60 bg-emerald-100/40 text-emerald-950 font-black">Term.</th>
+                                                    <th className="px-0.5 py-1 text-center bg-slate-200/80 text-slate-950 font-black">Total</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="text-xs text-slate-700">
+                                            <tbody className="text-[10px] sm:text-[11px] text-slate-700">
                                                 {macroprocessFlowPhasesDrillDownStats.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={18} className="text-center py-8 text-slate-500 italic">No hay datos disponibles.</td>
+                                                        <td colSpan={19} className="text-center py-8 text-slate-500 italic">No hay datos disponibles.</td>
                                                     </tr>
                                                 ) : (
                                                     macroprocessFlowPhasesDrillDownStats.map((macro) => {
@@ -5608,12 +5608,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                     className="border-b border-slate-200 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition-colors"
                                                                     onClick={() => setExpandedFlowPhasesMacros(p => ({ ...p, [macro.macroName]: !p[macro.macroName] }))}
                                                                 >
-                                                                    <td className="px-4 py-2.5 border-r border-slate-200 font-bold text-slate-900 sticky left-0 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                                        <div className="flex items-center gap-2">
-                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
-                                                                            <span className="truncate">{macro.macroName}</span>
-                                                                            <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                                                                                {macro.processCount} proc.
+                                                                    <td className="px-2 py-1.5 border-r border-slate-200 font-bold text-slate-900 overflow-hidden">
+                                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                                            {isMacroExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={13} className="shrink-0" />}
+                                                                            <span className="truncate text-[11px]" title={macro.macroName}>{macro.macroName}</span>
+                                                                            <span className="text-[9px] font-semibold text-slate-500 bg-white px-1 py-0.5 rounded border border-slate-200 shrink-0">
+                                                                                {macro.processCount} p.
                                                                             </span>
                                                                         </div>
                                                                     </td>
@@ -5621,55 +5621,55 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                         const dt = macro.docTypes[t];
                                                                         return (
                                                                             <React.Fragment key={t}>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60">
                                                                                     {dt.dgp > 0 ? <span className="font-semibold text-blue-700">{dt.dgp}</span> : <span className="text-slate-300">-</span>}
                                                                                 </td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60">
                                                                                     {dt.referent > 0 ? <span className="font-semibold text-purple-700">{dt.referent}</span> : <span className="text-slate-300">-</span>}
                                                                                 </td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200">
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200">
                                                                                     {dt.approved > 0 ? <span className="font-bold text-emerald-700">{dt.approved}</span> : <span className="text-slate-300">-</span>}
                                                                                 </td>
                                                                             </React.Fragment>
                                                                         );
                                                                     })}
                                                                     {/* TO BE */}
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60">
                                                                         {macro.docTypes['TO BE'].dgp > 0 ? <span className="font-semibold text-blue-700">{macro.docTypes['TO BE'].dgp}</span> : <span className="text-slate-300">-</span>}
                                                                     </td>
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60">
                                                                         {macro.docTypes['TO BE'].referent > 0 ? <span className="font-semibold text-purple-700">{macro.docTypes['TO BE'].referent}</span> : <span className="text-slate-300">-</span>}
                                                                     </td>
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60">
                                                                         {macro.docTypes['TO BE'].control > 0 ? <span className="font-semibold text-amber-700">{macro.docTypes['TO BE'].control}</span> : <span className="text-slate-300">-</span>}
                                                                     </td>
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200">
                                                                         {macro.docTypes['TO BE'].approved > 0 ? <span className="font-bold text-emerald-700">{macro.docTypes['TO BE'].approved}</span> : <span className="text-slate-300">-</span>}
                                                                     </td>
 
                                                                     {/* Totales Consolidados */}
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-blue-50/20">
-                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-blue-800 bg-blue-100/80 border border-blue-300">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-blue-800 bg-blue-100/80 border border-blue-300 min-w-[18px]">
                                                                             {macro.totalDgp}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-purple-50/20">
-                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-purple-800 bg-purple-100/80 border border-purple-300">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-purple-800 bg-purple-100/80 border border-purple-300 min-w-[18px]">
                                                                             {macro.totalReferent}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-amber-50/20">
-                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-amber-800 bg-amber-100/80 border border-amber-300">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 bg-amber-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-amber-800 bg-amber-100/80 border border-amber-300 min-w-[18px]">
                                                                             {macro.totalControl}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-emerald-50/20">
-                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-emerald-800 bg-emerald-100/80 border border-emerald-300">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 bg-emerald-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-emerald-800 bg-emerald-100/80 border border-emerald-300 min-w-[18px]">
                                                                             {macro.totalApproved}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-1.5 py-2 text-center bg-slate-100/80">
-                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-slate-900 bg-slate-200 border border-slate-300">
+                                                                    <td className="px-0.5 py-1.5 text-center bg-slate-100/80">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-slate-900 bg-slate-200 border border-slate-300 min-w-[18px]">
                                                                             {macro.totalRequired}
                                                                         </span>
                                                                     </td>
@@ -5684,12 +5684,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                 className="border-b border-slate-100 bg-white hover:bg-slate-50/60 cursor-pointer transition-colors"
                                                                                 onClick={() => setExpandedFlowPhasesProcesses(p => ({ ...p, [proc.processName]: !p[proc.processName] }))}
                                                                             >
-                                                                                <td className="px-4 py-2 border-r border-slate-200 font-semibold text-slate-700 pl-8 sticky left-0 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold" /> : <ChevronRight size={13} />}
-                                                                                        <span className="truncate">{proc.processName}</span>
-                                                                                        <span className="text-[10px] text-slate-400 font-normal">
-                                                                                            ({proc.microprocesses.length} microproc.)
+                                                                                <td className="px-2 py-1.5 border-r border-slate-200 font-semibold text-slate-700 pl-5 overflow-hidden">
+                                                                                    <div className="flex items-center gap-1 min-w-0">
+                                                                                        {isProcExpanded ? <ChevronDown size={12} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
+                                                                                        <span className="truncate text-[11px]" title={proc.processName}>{proc.processName}</span>
+                                                                                        <span className="text-[9px] text-slate-400 font-normal shrink-0">
+                                                                                            ({proc.microprocesses.length})
                                                                                         </span>
                                                                                     </div>
                                                                                 </td>
@@ -5697,85 +5697,85 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                     const dt = proc.docTypes[t];
                                                                                     return (
                                                                                         <React.Fragment key={t}>
-                                                                                            <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                            <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 text-slate-600">
                                                                                                 {dt.dgp > 0 ? <span className="font-semibold text-blue-700">{dt.dgp}</span> : <span className="text-slate-300">-</span>}
                                                                                             </td>
-                                                                                            <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                            <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 text-slate-600">
                                                                                                 {dt.referent > 0 ? <span className="font-semibold text-purple-700">{dt.referent}</span> : <span className="text-slate-300">-</span>}
                                                                                             </td>
-                                                                                            <td className="px-1.5 py-2 text-center border-r border-slate-200 text-slate-600">
+                                                                                            <td className="px-0.5 py-1.5 text-center border-r border-slate-200 text-slate-600">
                                                                                                 {dt.approved > 0 ? <span className="font-bold text-emerald-700">{dt.approved}</span> : <span className="text-slate-300">-</span>}
                                                                                             </td>
                                                                                         </React.Fragment>
                                                                                     );
                                                                                 })}
                                                                                 {/* TO BE */}
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 text-slate-600">
                                                                                     {proc.docTypes['TO BE'].dgp > 0 ? <span className="font-semibold text-blue-700">{proc.docTypes['TO BE'].dgp}</span> : <span className="text-slate-300">-</span>}
                                                                                 </td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 text-slate-600">
                                                                                     {proc.docTypes['TO BE'].referent > 0 ? <span className="font-semibold text-purple-700">{proc.docTypes['TO BE'].referent}</span> : <span className="text-slate-300">-</span>}
                                                                                 </td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 text-slate-600">
                                                                                     {proc.docTypes['TO BE'].control > 0 ? <span className="font-semibold text-amber-700">{proc.docTypes['TO BE'].control}</span> : <span className="text-slate-300">-</span>}
                                                                                 </td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200 text-slate-600">
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200 text-slate-600">
                                                                                     {proc.docTypes['TO BE'].approved > 0 ? <span className="font-bold text-emerald-700">{proc.docTypes['TO BE'].approved}</span> : <span className="text-slate-300">-</span>}
                                                                                 </td>
 
                                                                                 {/* Totales */}
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-bold text-blue-800 bg-blue-50/10">{proc.totalDgp}</td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-bold text-purple-800 bg-purple-50/10">{proc.totalReferent}</td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-bold text-amber-800 bg-amber-50/10">{proc.totalControl}</td>
-                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-black text-emerald-800 bg-emerald-50/10">{proc.totalApproved}</td>
-                                                                                <td className="px-1.5 py-2 text-center font-black text-slate-900 bg-slate-100/50">{proc.totalRequired}</td>
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 font-bold text-blue-800 bg-blue-50/10">{proc.totalDgp}</td>
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 font-bold text-purple-800 bg-purple-50/10">{proc.totalReferent}</td>
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 font-bold text-amber-800 bg-amber-50/10">{proc.totalControl}</td>
+                                                                                <td className="px-0.5 py-1.5 text-center border-r border-slate-200/60 font-black text-emerald-800 bg-emerald-50/10">{proc.totalApproved}</td>
+                                                                                <td className="px-0.5 py-1.5 text-center font-black text-slate-900 bg-slate-100/50">{proc.totalRequired}</td>
                                                                             </tr>
 
                                                                             {/* Microprocesos Rows */}
                                                                             {isProcExpanded && proc.microprocesses.map(micro => (
                                                                                 <tr key={micro.microName} className="border-b border-slate-50 bg-slate-50/20 hover:bg-slate-50/80 transition-colors">
-                                                                                    <td className="px-4 py-2 text-[11px] border-r border-slate-200 font-medium text-slate-600 pl-14 sticky left-0 bg-white/70 shadow-[2px_0_5px_rgba(0,0,0,0.01)] backdrop-blur-xs">
-                                                                                        <div className="flex items-center gap-1.5">
-                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-300"></div>
-                                                                                            <span className="truncate">{micro.microName}</span>
+                                                                                    <td className="px-2 py-1 text-[10px] sm:text-[11px] border-r border-slate-200 font-medium text-slate-600 pl-8 overflow-hidden">
+                                                                                        <div className="flex items-center gap-1 min-w-0">
+                                                                                            <div className="w-1 h-1 rounded-full bg-indigo-300 shrink-0"></div>
+                                                                                            <span className="truncate" title={micro.microName}>{micro.microName}</span>
                                                                                         </div>
                                                                                     </td>
                                                                                     {(['AS IS', 'FCE', 'PM'] as const).map(t => {
                                                                                         const dt = micro.docTypes[t];
                                                                                         return (
                                                                                             <React.Fragment key={t}>
-                                                                                                <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
-                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.dgp > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                                <td className="px-0.5 py-1 text-center border-r border-slate-200/60">
+                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.dgp > 0 ? <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
                                                                                                 </td>
-                                                                                                <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
-                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.referent > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                                <td className="px-0.5 py-1 text-center border-r border-slate-200/60">
+                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.referent > 0 ? <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
                                                                                                 </td>
-                                                                                                <td className="px-1.5 py-1.5 text-center border-r border-slate-200">
-                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.approved > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                                <td className="px-0.5 py-1 text-center border-r border-slate-200">
+                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.approved > 0 ? <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
                                                                                                 </td>
                                                                                             </React.Fragment>
                                                                                         );
                                                                                     })}
                                                                                     {/* TO BE */}
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
-                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].dgp > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200/60">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].dgp > 0 ? <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
                                                                                     </td>
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
-                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].referent > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200/60">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].referent > 0 ? <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
                                                                                     </td>
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
-                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].control > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200/60">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].control > 0 ? <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
                                                                                     </td>
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200">
-                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].approved > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].approved > 0 ? <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
                                                                                     </td>
 
                                                                                     {/* Totales */}
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-semibold text-blue-700 text-[11px] bg-blue-50/10">{micro.totalDgp}</td>
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-semibold text-purple-700 text-[11px] bg-purple-50/10">{micro.totalReferent}</td>
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-semibold text-amber-700 text-[11px] bg-amber-50/10">{micro.totalControl}</td>
-                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-bold text-emerald-700 text-[11px] bg-emerald-50/10">{micro.totalApproved}</td>
-                                                                                    <td className="px-1.5 py-1.5 text-center font-black text-slate-900 text-[11px] bg-slate-100/40">{micro.totalRequired}</td>
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200/60 font-semibold text-blue-700 text-[10px] sm:text-[11px] bg-blue-50/10">{micro.totalDgp}</td>
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200/60 font-semibold text-purple-700 text-[10px] sm:text-[11px] bg-purple-50/10">{micro.totalReferent}</td>
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200/60 font-semibold text-amber-700 text-[10px] sm:text-[11px] bg-amber-50/10">{micro.totalControl}</td>
+                                                                                    <td className="px-0.5 py-1 text-center border-r border-slate-200/60 font-bold text-emerald-700 text-[10px] sm:text-[11px] bg-emerald-50/10">{micro.totalApproved}</td>
+                                                                                    <td className="px-0.5 py-1 text-center font-black text-slate-900 text-[10px] sm:text-[11px] bg-slate-100/40">{micro.totalRequired}</td>
                                                                                 </tr>
                                                                             ))}
                                                                         </React.Fragment>
@@ -5788,27 +5788,27 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             </tbody>
 
                                             {macroprocessFlowPhasesDrillDownStats.length > 0 && (
-                                                <tfoot className="border-t-2 border-slate-300 bg-slate-100/95 font-bold text-xs text-slate-900 sticky bottom-0">
+                                                <tfoot className="border-t-2 border-slate-300 bg-slate-100/95 font-bold text-[11px] text-slate-900">
                                                     <tr>
-                                                        <td className="px-4 py-3 border-r border-slate-300 font-black text-slate-900 sticky left-0 bg-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.04)] z-10 uppercase tracking-wide text-[11px]">
+                                                        <td className="px-2 py-2 border-r border-slate-300 font-black text-slate-900 uppercase tracking-wide text-[10px] sm:text-[11px]">
                                                             TOTAL GENERAL
                                                         </td>
                                                         {(['AS IS', 'FCE', 'PM'] as const).map(t => {
                                                             const dt = grandTotalsFlowPhases.docTypes[t];
                                                             return (
                                                                 <React.Fragment key={t}>
-                                                                    <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-blue-50/50">
-                                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-blue-900 bg-blue-100/80 border border-blue-300">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-blue-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-blue-900 bg-blue-100/80 border border-blue-300 min-w-[18px]">
                                                                             {dt.dgp}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-purple-50/50">
-                                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-purple-900 bg-purple-100/80 border border-purple-300">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-purple-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-purple-900 bg-purple-100/80 border border-purple-300 min-w-[18px]">
                                                                             {dt.referent}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-1.5 py-2.5 text-center border-r border-slate-300 bg-emerald-50/50">
-                                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-emerald-900 bg-emerald-100/80 border border-emerald-300">
+                                                                    <td className="px-0.5 py-1.5 text-center border-r border-slate-300 bg-emerald-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-emerald-900 bg-emerald-100/80 border border-emerald-300 min-w-[18px]">
                                                                             {dt.approved}
                                                                         </span>
                                                                     </td>
@@ -5816,50 +5816,50 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                             );
                                                         })}
                                                         {/* TO BE */}
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-blue-50/50">
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-blue-900 bg-blue-100/80 border border-blue-300">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-blue-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-blue-900 bg-blue-100/80 border border-blue-300 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.docTypes['TO BE'].dgp}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-purple-50/50">
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-purple-900 bg-purple-100/80 border border-purple-300">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-purple-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-purple-900 bg-purple-100/80 border border-purple-300 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.docTypes['TO BE'].referent}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-amber-50/50">
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-amber-900 bg-amber-100/80 border border-amber-300">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-amber-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-amber-900 bg-amber-100/80 border border-amber-300 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.docTypes['TO BE'].control}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-300 bg-emerald-50/50">
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-emerald-900 bg-emerald-100/80 border border-emerald-300">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-300 bg-emerald-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-emerald-900 bg-emerald-100/80 border border-emerald-300 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.docTypes['TO BE'].approved}
                                                             </span>
                                                         </td>
 
                                                         {/* Totales Consolidados */}
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-blue-100/70">
-                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-blue-950 bg-blue-200/90 border border-blue-400">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-blue-100/70">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-blue-950 bg-blue-200/90 border border-blue-400 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.totalDgp}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-purple-100/70">
-                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-purple-950 bg-purple-200/90 border border-purple-400">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-purple-100/70">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-purple-950 bg-purple-200/90 border border-purple-400 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.totalReferent}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-amber-100/70">
-                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-amber-950 bg-amber-200/90 border border-amber-400">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-amber-100/70">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-amber-950 bg-amber-200/90 border border-amber-400 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.totalControl}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-emerald-100/70">
-                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-emerald-950 bg-emerald-200/90 border border-emerald-400">
+                                                        <td className="px-0.5 py-1.5 text-center border-r border-slate-200/80 bg-emerald-100/70">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-emerald-950 bg-emerald-200/90 border border-emerald-400 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.totalApproved}
                                                             </span>
                                                         </td>
-                                                        <td className="px-1.5 py-2.5 text-center bg-slate-200/90">
-                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-slate-950 bg-slate-300 border border-slate-400">
+                                                        <td className="px-0.5 py-1.5 text-center bg-slate-200/90">
+                                                            <span className="inline-flex items-center justify-center px-1 py-0.5 rounded text-[10px] font-black text-slate-950 bg-slate-300 border border-slate-400 min-w-[18px]">
                                                                 {grandTotalsFlowPhases.totalRequired}
                                                             </span>
                                                         </td>
