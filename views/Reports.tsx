@@ -8,7 +8,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, UserCheck
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, ChevronUp, UserCheck
 } from 'lucide-react';
 
 interface Props {
@@ -177,6 +177,11 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [expandedProgressPercentProcesses, setExpandedProgressPercentProcesses] = useState<Record<string, boolean>>({});
     const [expandedFlowPhasesMacros, setExpandedFlowPhasesMacros] = useState<Record<string, boolean>>({});
     const [expandedFlowPhasesProcesses, setExpandedFlowPhasesProcesses] = useState<Record<string, boolean>>({});
+
+    const [minimizedThreeMacros, setMinimizedThreeMacros] = useState<boolean>(true);
+    const [minimizedPendingCompleted, setMinimizedPendingCompleted] = useState<boolean>(true);
+    const [minimizedProgressPercent, setMinimizedProgressPercent] = useState<boolean>(true);
+    const [minimizedFlowPhases, setMinimizedFlowPhases] = useState<boolean>(false);
 
     const [microDrillDown, setMicroDrillDown] = useState<{ title: string, color: string, items: {name: string, project: string, ids: string[]}[] } | null>(null);
     const [selectedMacroDetail, setSelectedMacroDetail] = useState<any | null>(null);
@@ -4851,50 +4856,94 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                                 {/* Table 3 - Avance por Macroproceso (Drill Down) */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
-                                    <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                        <div>
-                                            <h4 className="text-sm font-bold text-slate-950">Desglose de Reportería por Macroproceso ({activeMapProject})</h4>
-                                            <p className="text-xs text-slate-500 mt-1">
-                                                Avance y estados detallados de la documentación, estructurado por macroprocesos.
-                                            </p>
+                                    <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => setMinimizedThreeMacros(prev => !prev)}
+                                                className="p-1.5 hover:bg-slate-200/70 rounded-lg text-slate-500 hover:text-slate-800 transition-colors flex items-center justify-center shrink-0"
+                                                title={minimizedThreeMacros ? "Expandir sección" : "Minimizar sección"}
+                                            >
+                                                {minimizedThreeMacros ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                                            </button>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 
+                                                        onClick={() => setMinimizedThreeMacros(prev => !prev)}
+                                                        className="text-sm font-bold text-slate-950 cursor-pointer hover:text-indigo-600 transition-colors"
+                                                    >
+                                                        Desglose de Reportería por Macroproceso ({activeMapProject})
+                                                    </h4>
+                                                    {minimizedThreeMacros && (
+                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-200">
+                                                            Minimizado
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Avance y estados detallados de la documentación, estructurado por macroprocesos.
+                                                </p>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
-                                                <button
-                                                    onClick={expandAllThreeMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Expandir todos los macroprocesos y procesos"
-                                                >
-                                                    <FolderTree size={14} className="text-indigo-600" />
-                                                    <span>Expandir Todo</span>
-                                                </button>
-                                                <div className="w-[1px] bg-slate-200 my-1"></div>
-                                                <button
-                                                    onClick={collapseAllThreeMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Colapsar todos los macroprocesos y procesos"
-                                                >
-                                                    <Layers size={14} className="text-slate-500" />
-                                                    <span>Colapsar Todo</span>
-                                                </button>
-                                            </div>
-                                            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
-                                                {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => (
-                                                    <button
-                                                        key={type}
-                                                        onClick={() => setSelectedChartDocType(type)}
-                                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                                                            selectedChartDocType === type
-                                                                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
-                                                                : 'text-slate-500 hover:text-slate-800'
-                                                        }`}
-                                                    >
-                                                        {type}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            {!minimizedThreeMacros && (
+                                                <>
+                                                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                                                        <button
+                                                            onClick={expandAllThreeMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Expandir todos los macroprocesos y procesos"
+                                                        >
+                                                            <FolderTree size={14} className="text-indigo-600" />
+                                                            <span>Expandir Todo</span>
+                                                        </button>
+                                                        <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                        <button
+                                                            onClick={collapseAllThreeMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Colapsar todos los macroprocesos y procesos"
+                                                        >
+                                                            <Layers size={14} className="text-slate-500" />
+                                                            <span>Colapsar Todo</span>
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
+                                                        {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(type => (
+                                                            <button
+                                                                key={type}
+                                                                onClick={() => setSelectedChartDocType(type)}
+                                                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                                                    selectedChartDocType === type
+                                                                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/50'
+                                                                        : 'text-slate-500 hover:text-slate-800'
+                                                                }`}
+                                                            >
+                                                                {type}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+                                            <button
+                                                onClick={() => setMinimizedThreeMacros(prev => !prev)}
+                                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs"
+                                                title={minimizedThreeMacros ? "Expandir sección" : "Minimizar sección"}
+                                            >
+                                                {minimizedThreeMacros ? (
+                                                    <>
+                                                        <ChevronDown size={14} />
+                                                        <span>Expandir Sección</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ChevronUp size={14} />
+                                                        <span>Minimizar</span>
+                                                    </>
+                                                )}
+                                            </button>
                                         </div>
                                     </div>
+                                    {!minimizedThreeMacros && (
+                                        <>
                                     {/* Gráfico de Barras por Macroproceso */}
                                     <div className="p-6 border-b border-slate-100 bg-slate-50/30">
                                         <h5 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Estados del Documento ({selectedChartDocType}) por Macroproceso</h5>
@@ -5115,62 +5164,103 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
-                                
-                                <div className="mt-8 text-xs text-slate-400 text-center flex items-center justify-center gap-2">
-                                    <span>N/R: No requerido</span> &bull; 
-                                    <span>N/I: No Iniciado</span> &bull; 
-                                    <span>E/P: En Proceso</span> &bull; 
-                                    <span>REF: Referente</span> &bull; 
-                                    <span>C/G: Control Gestión</span> &bull;
-                                    <span>TER: Terminados</span>
+                                    <div className="p-4 border-t border-slate-100 text-xs text-slate-400 text-center flex items-center justify-center gap-2 bg-slate-50/50">
+                                        <span>N/R: No requerido</span> &bull; 
+                                        <span>N/I: No Iniciado</span> &bull; 
+                                        <span>E/P: En Proceso</span> &bull; 
+                                        <span>REF: Referente</span> &bull; 
+                                        <span>C/G: Control Gestión</span> &bull;
+                                        <span>TER: Terminados</span>
+                                    </div>
+                                    </>
+                                )}
                                 </div>
 
                                 {/* Table - Reporte de Cantidades de Documentos Terminados y No Terminados (Drill Down) */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
                                     <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
-                                        <div>
-                                            <div className="flex items-center gap-2.5">
-                                                <h4 className="text-sm font-bold text-slate-900">
-                                                    Reporte de Cantidades de Documentos Terminados y No Terminados ({activeMapProject})
-                                                </h4>
-                                                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-black rounded-full border border-blue-200/80 uppercase tracking-wide">
-                                                    Cantidades
-                                                </span>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => setMinimizedPendingCompleted(prev => !prev)}
+                                                className="p-1.5 hover:bg-slate-200/70 rounded-lg text-slate-500 hover:text-slate-800 transition-colors flex items-center justify-center shrink-0"
+                                                title={minimizedPendingCompleted ? "Expandir sección" : "Minimizar sección"}
+                                            >
+                                                {minimizedPendingCompleted ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                                            </button>
+                                            <div>
+                                                <div className="flex items-center gap-2.5">
+                                                    <h4 
+                                                        onClick={() => setMinimizedPendingCompleted(prev => !prev)}
+                                                        className="text-sm font-bold text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors"
+                                                    >
+                                                        Reporte de Cantidades de Documentos Terminados y No Terminados ({activeMapProject})
+                                                    </h4>
+                                                    <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-black rounded-full border border-blue-200/80 uppercase tracking-wide">
+                                                        Cantidades
+                                                    </span>
+                                                    {minimizedPendingCompleted && (
+                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-200">
+                                                            Minimizado
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Detalle y consolidación jerárquica de cantidades de documentos no terminados (pendientes/en desarrollo) y terminados (aprobados) por tipo documental.
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-slate-500 mt-1">
-                                                Detalle y consolidación jerárquica de cantidades de documentos no terminados (pendientes/en desarrollo) y terminados (aprobados) por tipo documental.
-                                            </p>
                                         </div>
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
-                                                <button
-                                                    onClick={expandAllPendingCompletedMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Expandir todos los macroprocesos y procesos"
-                                                >
-                                                    <FolderTree size={14} className="text-indigo-600" />
-                                                    <span>Expandir Todo</span>
-                                                </button>
-                                                <div className="w-[1px] bg-slate-200 my-1"></div>
-                                                <button
-                                                    onClick={collapseAllPendingCompletedMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Colapsar todos los macroprocesos y procesos"
-                                                >
-                                                    <Layers size={14} className="text-slate-500" />
-                                                    <span>Colapsar Todo</span>
-                                                </button>
-                                            </div>
+                                            {!minimizedPendingCompleted && (
+                                                <>
+                                                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                                                        <button
+                                                            onClick={expandAllPendingCompletedMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Expandir todos los macroprocesos y procesos"
+                                                        >
+                                                            <FolderTree size={14} className="text-indigo-600" />
+                                                            <span>Expandir Todo</span>
+                                                        </button>
+                                                        <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                        <button
+                                                            onClick={collapseAllPendingCompletedMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Colapsar todos los macroprocesos y procesos"
+                                                        >
+                                                            <Layers size={14} className="text-slate-500" />
+                                                            <span>Colapsar Todo</span>
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        onClick={handleExportPendingCompletedExcel}
+                                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                                    >
+                                                        <FileSpreadsheet size={15} /> Exportar a Excel
+                                                    </button>
+                                                </>
+                                            )}
                                             <button
-                                                onClick={handleExportPendingCompletedExcel}
-                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                                onClick={() => setMinimizedPendingCompleted(prev => !prev)}
+                                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs"
+                                                title={minimizedPendingCompleted ? "Expandir sección" : "Minimizar sección"}
                                             >
-                                                <FileSpreadsheet size={15} /> Exportar a Excel
+                                                {minimizedPendingCompleted ? (
+                                                    <>
+                                                        <ChevronDown size={14} />
+                                                        <span>Expandir Sección</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ChevronUp size={14} />
+                                                        <span>Minimizar</span>
+                                                    </>
+                                                )}
                                             </button>
                                         </div>
                                     </div>
 
+                                    {!minimizedPendingCompleted && (
+                                        <>
                                     {/* Tabla Drill-down de Cantidades */}
                                     <div className="overflow-x-auto max-w-full pb-6">
                                         <table className="w-full text-left border-collapse min-w-[1100px]">
@@ -5416,53 +5506,95 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             )}
                                         </table>
                                     </div>
+                                    </>
+                                )}
                                 </div>
 
                                 {/* Table 4 - Reporte de Porcentaje de Avance por Documento y Proceso (Drill Down) */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
                                     <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
-                                        <div>
-                                            <div className="flex items-center gap-2.5">
-                                                <h4 className="text-sm font-bold text-slate-900">
-                                                    Reporte de Porcentaje de Avance por Documento ({activeMapProject})
-                                                </h4>
-                                                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-full border border-emerald-200/80 uppercase tracking-wide">
-                                                    % de Avance
-                                                </span>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => setMinimizedProgressPercent(prev => !prev)}
+                                                className="p-1.5 hover:bg-slate-200/70 rounded-lg text-slate-500 hover:text-slate-800 transition-colors flex items-center justify-center shrink-0"
+                                                title={minimizedProgressPercent ? "Expandir sección" : "Minimizar sección"}
+                                            >
+                                                {minimizedProgressPercent ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                                            </button>
+                                            <div>
+                                                <div className="flex items-center gap-2.5">
+                                                    <h4 
+                                                        onClick={() => setMinimizedProgressPercent(prev => !prev)}
+                                                        className="text-sm font-bold text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors"
+                                                    >
+                                                        Reporte de Porcentaje de Avance por Documento ({activeMapProject})
+                                                    </h4>
+                                                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-full border border-emerald-200/80 uppercase tracking-wide">
+                                                        % de Avance
+                                                    </span>
+                                                    {minimizedProgressPercent && (
+                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-200">
+                                                            Minimizado
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Porcentaje de avance por tipo de documento con consolidación y drill-down jerárquico desde macroproceso hasta proceso y microproceso.
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-slate-500 mt-1">
-                                                Porcentaje de avance por tipo de documento con consolidación y drill-down jerárquico desde macroproceso hasta proceso y microproceso.
-                                            </p>
                                         </div>
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
-                                                <button
-                                                    onClick={expandAllProgressMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Expandir todos los macroprocesos y procesos"
-                                                >
-                                                    <FolderTree size={14} className="text-indigo-600" />
-                                                    <span>Expandir Todo</span>
-                                                </button>
-                                                <div className="w-[1px] bg-slate-200 my-1"></div>
-                                                <button
-                                                    onClick={collapseAllProgressMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Colapsar todos los macroprocesos y procesos"
-                                                >
-                                                    <Layers size={14} className="text-slate-500" />
-                                                    <span>Colapsar Todo</span>
-                                                </button>
-                                            </div>
+                                            {!minimizedProgressPercent && (
+                                                <>
+                                                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                                                        <button
+                                                            onClick={expandAllProgressMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Expandir todos los macroprocesos y procesos"
+                                                        >
+                                                            <FolderTree size={14} className="text-indigo-600" />
+                                                            <span>Expandir Todo</span>
+                                                        </button>
+                                                        <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                        <button
+                                                            onClick={collapseAllProgressMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Colapsar todos los macroprocesos y procesos"
+                                                        >
+                                                            <Layers size={14} className="text-slate-500" />
+                                                            <span>Colapsar Todo</span>
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        onClick={handleExportProgressPercentExcel}
+                                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                                    >
+                                                        <FileSpreadsheet size={15} /> Exportar a Excel
+                                                    </button>
+                                                </>
+                                            )}
                                             <button
-                                                onClick={handleExportProgressPercentExcel}
-                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                                onClick={() => setMinimizedProgressPercent(prev => !prev)}
+                                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs"
+                                                title={minimizedProgressPercent ? "Expandir sección" : "Minimizar sección"}
                                             >
-                                                <FileSpreadsheet size={15} /> Exportar a Excel
+                                                {minimizedProgressPercent ? (
+                                                    <>
+                                                        <ChevronDown size={14} />
+                                                        <span>Expandir Sección</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ChevronUp size={14} />
+                                                        <span>Minimizar</span>
+                                                    </>
+                                                )}
                                             </button>
                                         </div>
                                     </div>
 
+                                    {!minimizedProgressPercent && (
+                                        <>
                                     {/* Tabla Drill-down de Porcentajes */}
                                     <div className="overflow-x-auto max-w-full pb-6">
                                         <table className="w-full text-left border-collapse min-w-[1000px]">
@@ -5580,66 +5712,107 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
-
-                                <div className="mt-6 text-xs text-slate-400 text-center flex items-center justify-center gap-2">
-                                    <span>N/R: No requerido</span> &bull; 
-                                    <span>0%: No Iniciado</span> &bull; 
-                                    <span>10%: Iniciado</span> &bull; 
-                                    <span>30%: En Proceso</span> &bull; 
-                                    <span>60%: Rev. Interna</span> &bull; 
-                                    <span>80%: Referente</span> &bull; 
-                                    <span>90%: Control Gestión</span> &bull; 
-                                    <span>100%: Aprobado</span>
+                                    <div className="p-4 border-t border-slate-100 text-xs text-slate-400 text-center flex items-center justify-center gap-2 bg-slate-50/50">
+                                        <span>N/R: No requerido</span> &bull; 
+                                        <span>0%: No Iniciado</span> &bull; 
+                                        <span>10%: Iniciado</span> &bull; 
+                                        <span>30%: En Proceso</span> &bull; 
+                                        <span>60%: Rev. Interna</span> &bull; 
+                                        <span>80%: Referente</span> &bull; 
+                                        <span>90%: Control Gestión</span> &bull; 
+                                        <span>100%: Aprobado</span>
+                                    </div>
+                                    </>
+                                )}
                                 </div>
 
                                 {/* Table 5 - Reporte de Cantidades por Fase de Gestión Documental (Drill Down) */}
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
                                     <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
-                                        <div>
-                                            <div className="flex items-center gap-2.5">
-                                                <h4 className="text-sm font-bold text-slate-900">
-                                                    Reporte de Cantidades por Fase de Gestión Documental ({activeMapProject})
-                                                </h4>
-                                                <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-black rounded-full border border-indigo-200/80 uppercase tracking-wide">
-                                                    Flujo por Etapas
-                                                </span>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => setMinimizedFlowPhases(prev => !prev)}
+                                                className="p-1.5 hover:bg-slate-200/70 rounded-lg text-slate-500 hover:text-slate-800 transition-colors flex items-center justify-center shrink-0"
+                                                title={minimizedFlowPhases ? "Expandir sección" : "Minimizar sección"}
+                                            >
+                                                {minimizedFlowPhases ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                                            </button>
+                                            <div>
+                                                <div className="flex items-center gap-2.5">
+                                                    <h4 
+                                                        onClick={() => setMinimizedFlowPhases(prev => !prev)}
+                                                        className="text-sm font-bold text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors"
+                                                    >
+                                                        Reporte de Cantidades por Fase de Gestión Documental ({activeMapProject})
+                                                    </h4>
+                                                    <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-black rounded-full border border-indigo-200/80 uppercase tracking-wide">
+                                                        Flujo por Etapas
+                                                    </span>
+                                                    {minimizedFlowPhases && (
+                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-200">
+                                                            Minimizado
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Conteo de documentos agrupados por Macroproceso, Proceso y Microproceso en sus respectivas etapas: DGP, Enviados Referente, Control Gestión y Terminado.
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-slate-500 mt-1">
-                                                Conteo de documentos agrupados por Macroproceso, Proceso y Microproceso en sus respectivas etapas: DGP, Enviados Referente, Control Gestión y Terminado.
-                                            </p>
                                         </div>
 
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
-                                                <button
-                                                    onClick={expandAllFlowPhasesMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Expandir todos los macroprocesos y procesos"
-                                                >
-                                                    <FolderTree size={14} className="text-indigo-600" />
-                                                    <span>Expandir Todo</span>
-                                                </button>
-                                                <div className="w-[1px] bg-slate-200 my-1"></div>
-                                                <button
-                                                    onClick={collapseAllFlowPhasesMacros}
-                                                    className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
-                                                    title="Colapsar todos los macroprocesos y procesos"
-                                                >
-                                                    <Layers size={14} className="text-slate-500" />
-                                                    <span>Colapsar Todo</span>
-                                                </button>
-                                            </div>
+                                            {!minimizedFlowPhases && (
+                                                <>
+                                                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                                                        <button
+                                                            onClick={expandAllFlowPhasesMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Expandir todos los macroprocesos y procesos"
+                                                        >
+                                                            <FolderTree size={14} className="text-indigo-600" />
+                                                            <span>Expandir Todo</span>
+                                                        </button>
+                                                        <div className="w-[1px] bg-slate-200 my-1"></div>
+                                                        <button
+                                                            onClick={collapseAllFlowPhasesMacros}
+                                                            className="px-2.5 py-1.5 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-md transition-colors flex items-center gap-1.5"
+                                                            title="Colapsar todos los macroprocesos y procesos"
+                                                        >
+                                                            <Layers size={14} className="text-slate-500" />
+                                                            <span>Colapsar Todo</span>
+                                                        </button>
+                                                    </div>
 
+                                                    <button
+                                                        onClick={handleExportFlowPhasesExcel}
+                                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                                    >
+                                                        <FileSpreadsheet size={15} /> Exportar a Excel
+                                                    </button>
+                                                </>
+                                            )}
                                             <button
-                                                onClick={handleExportFlowPhasesExcel}
-                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                                onClick={() => setMinimizedFlowPhases(prev => !prev)}
+                                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs"
+                                                title={minimizedFlowPhases ? "Expandir sección" : "Minimizar sección"}
                                             >
-                                                <FileSpreadsheet size={15} /> Exportar a Excel
+                                                {minimizedFlowPhases ? (
+                                                    <>
+                                                        <ChevronDown size={14} />
+                                                        <span>Expandir Sección</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ChevronUp size={14} />
+                                                        <span>Minimizar</span>
+                                                    </>
+                                                )}
                                             </button>
                                         </div>
                                     </div>
 
+                                    {!minimizedFlowPhases && (
+                                        <>
                                     {/* Tabla Drill-down de Fases / Etapas */}
                                     <div className="w-full max-w-full overflow-x-hidden pb-4">
                                         <table className="w-full text-left border-collapse table-fixed text-[11px]">
@@ -5970,14 +6143,15 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             )}
                                         </table>
                                     </div>
-                                </div>
-
-                                <div className="mt-6 text-xs text-slate-400 text-center flex flex-wrap items-center justify-center gap-3">
-                                    <span><strong>DGP:</strong> No Iniciado, Iniciado, En Proceso, Rev. Interna</span> &bull; 
-                                    <span><strong>Ref.:</strong> Enviados / En Revisión Referente (e incluye Control de Gestión para AS IS, FCE, PM)</span> &bull; 
-                                    <span><strong>C.G.:</strong> Enviados / En Revisión Control de Gestión (Solo TO BE)</span> &bull; 
-                                    <span><strong>Term.:</strong> Aprobado</span> &bull; 
-                                    <span><strong>Total:</strong> Suma Total de Documentos</span>
+                                    <div className="p-4 border-t border-slate-100 text-xs text-slate-400 text-center flex flex-wrap items-center justify-center gap-3 bg-slate-50/50">
+                                        <span><strong>DGP:</strong> No Iniciado, Iniciado, En Proceso, Rev. Interna</span> &bull; 
+                                        <span><strong>Ref.:</strong> Enviados / En Revisión Referente (e incluye Control de Gestión para AS IS, FCE, PM)</span> &bull; 
+                                        <span><strong>C.G.:</strong> Enviados / En Revisión Control de Gestión (Solo TO BE)</span> &bull; 
+                                        <span><strong>Term.:</strong> Aprobado</span> &bull; 
+                                        <span><strong>Total:</strong> Suma Total de Documentos</span>
+                                    </div>
+                                    </>
+                                )}
                                 </div>
                     </div>
                 )}
