@@ -175,6 +175,8 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [expandedPendingCompletedProcesses, setExpandedPendingCompletedProcesses] = useState<Record<string, boolean>>({});
     const [expandedProgressPercentMacros, setExpandedProgressPercentMacros] = useState<Record<string, boolean>>({});
     const [expandedProgressPercentProcesses, setExpandedProgressPercentProcesses] = useState<Record<string, boolean>>({});
+    const [expandedFlowPhasesMacros, setExpandedFlowPhasesMacros] = useState<Record<string, boolean>>({});
+    const [expandedFlowPhasesProcesses, setExpandedFlowPhasesProcesses] = useState<Record<string, boolean>>({});
 
     const [microDrillDown, setMicroDrillDown] = useState<{ title: string, color: string, items: {name: string, project: string, ids: string[]}[] } | null>(null);
     const [selectedMacroDetail, setSelectedMacroDetail] = useState<any | null>(null);
@@ -2123,6 +2125,368 @@ const Reports: React.FC<Props> = ({ user }) => {
         }
         setExpandedProgressPercentMacros(newMacroState);
         setExpandedProgressPercentProcesses(newProcState);
+    };
+
+    const macroprocessFlowPhasesDrillDownStats = useMemo(() => {
+        const grouped: Record<string, {
+            macroName: string;
+            category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE';
+            processes: Record<string, {
+                processName: string;
+                microprocesses: Array<{
+                    microName: string;
+                    docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                        isRequired: boolean;
+                        dgp: number;
+                        referent: number;
+                        control: number;
+                        approved: number;
+                        state?: DocState;
+                    }>;
+                    totalDgp: number;
+                    totalReferent: number;
+                    totalControl: number;
+                    totalApproved: number;
+                    totalRequired: number;
+                }>;
+                docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                    dgp: number;
+                    referent: number;
+                    control: number;
+                    approved: number;
+                    total: number;
+                }>;
+                microprocessCount: number;
+                totalDgp: number;
+                totalReferent: number;
+                totalControl: number;
+                totalApproved: number;
+                totalRequired: number;
+            }>;
+            docTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                dgp: number;
+                referent: number;
+                control: number;
+                approved: number;
+                total: number;
+            }>;
+            processCount: number;
+            microprocessCount: number;
+            totalDgp: number;
+            totalReferent: number;
+            totalControl: number;
+            totalApproved: number;
+            totalRequired: number;
+        }> = {};
+
+        filteredMicroprocessStats.forEach(micro => {
+            const macro = micro.macroName;
+            const proc = micro.processName;
+
+            if (!grouped[macro]) {
+                grouped[macro] = {
+                    macroName: macro,
+                    category: micro.category,
+                    processes: {},
+                    docTypes: {
+                        'AS IS': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 },
+                        'FCE': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 },
+                        'PM': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 },
+                        'TO BE': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 }
+                    },
+                    processCount: 0,
+                    microprocessCount: 0,
+                    totalDgp: 0,
+                    totalReferent: 0,
+                    totalControl: 0,
+                    totalApproved: 0,
+                    totalRequired: 0
+                };
+            }
+
+            if (!grouped[macro].processes[proc]) {
+                grouped[macro].processes[proc] = {
+                    processName: proc,
+                    microprocesses: [],
+                    docTypes: {
+                        'AS IS': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 },
+                        'FCE': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 },
+                        'PM': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 },
+                        'TO BE': { dgp: 0, referent: 0, control: 0, approved: 0, total: 0 }
+                    },
+                    microprocessCount: 0,
+                    totalDgp: 0,
+                    totalReferent: 0,
+                    totalControl: 0,
+                    totalApproved: 0,
+                    totalRequired: 0
+                };
+            }
+
+            const microDocTypes: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', {
+                isRequired: boolean;
+                dgp: number;
+                referent: number;
+                control: number;
+                approved: number;
+                state?: DocState;
+            }> = {
+                'AS IS': { isRequired: false, dgp: 0, referent: 0, control: 0, approved: 0 },
+                'FCE': { isRequired: false, dgp: 0, referent: 0, control: 0, approved: 0 },
+                'PM': { isRequired: false, dgp: 0, referent: 0, control: 0, approved: 0 },
+                'TO BE': { isRequired: false, dgp: 0, referent: 0, control: 0, approved: 0 }
+            };
+
+            let microDgp = 0;
+            let microReferent = 0;
+            let microControl = 0;
+            let microApproved = 0;
+            let microTotalRequired = 0;
+
+            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(dtype => {
+                const doc = micro.docs[dtype];
+                if (doc && doc.isRequired) {
+                    microTotalRequired++;
+                    let isDgp = 0;
+                    let isRef = 0;
+                    let isCtrl = 0;
+                    let isApp = 0;
+
+                    const st = doc.state;
+                    if ([DocState.NOT_STARTED, DocState.INITIATED, DocState.IN_PROCESS, DocState.INTERNAL_REVIEW].includes(st)) {
+                        isDgp = 1;
+                        microDgp++;
+                        grouped[macro].docTypes[dtype].dgp++;
+                        grouped[macro].processes[proc].docTypes[dtype].dgp++;
+                    } else if (dtype === 'TO BE') {
+                        if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW].includes(st)) {
+                            isRef = 1;
+                            microReferent++;
+                            grouped[macro].docTypes[dtype].referent++;
+                            grouped[macro].processes[proc].docTypes[dtype].referent++;
+                        } else if ([DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(st)) {
+                            isCtrl = 1;
+                            microControl++;
+                            grouped[macro].docTypes[dtype].control++;
+                            grouped[macro].processes[proc].docTypes[dtype].control++;
+                        } else if (st === DocState.APPROVED) {
+                            isApp = 1;
+                            microApproved++;
+                            grouped[macro].docTypes[dtype].approved++;
+                            grouped[macro].processes[proc].docTypes[dtype].approved++;
+                        }
+                    } else {
+                        // For AS IS, FCE, PM: Referente + Control de Gestión are counted in Referente
+                        if ([DocState.SENT_TO_REFERENT, DocState.REFERENT_REVIEW, DocState.SENT_TO_CONTROL, DocState.CONTROL_REVIEW].includes(st)) {
+                            isRef = 1;
+                            microReferent++;
+                            grouped[macro].docTypes[dtype].referent++;
+                            grouped[macro].processes[proc].docTypes[dtype].referent++;
+                        } else if (st === DocState.APPROVED) {
+                            isApp = 1;
+                            microApproved++;
+                            grouped[macro].docTypes[dtype].approved++;
+                            grouped[macro].processes[proc].docTypes[dtype].approved++;
+                        }
+                    }
+
+                    grouped[macro].docTypes[dtype].total++;
+                    grouped[macro].processes[proc].docTypes[dtype].total++;
+
+                    microDocTypes[dtype] = {
+                        isRequired: true,
+                        dgp: isDgp,
+                        referent: isRef,
+                        control: isCtrl,
+                        approved: isApp,
+                        state: doc.state
+                    };
+                }
+            });
+
+            grouped[macro].processes[proc].microprocesses.push({
+                microName: micro.microName,
+                docTypes: microDocTypes,
+                totalDgp: microDgp,
+                totalReferent: microReferent,
+                totalControl: microControl,
+                totalApproved: microApproved,
+                totalRequired: microTotalRequired
+            });
+
+            grouped[macro].processes[proc].microprocessCount++;
+            grouped[macro].processes[proc].totalDgp += microDgp;
+            grouped[macro].processes[proc].totalReferent += microReferent;
+            grouped[macro].processes[proc].totalControl += microControl;
+            grouped[macro].processes[proc].totalApproved += microApproved;
+            grouped[macro].processes[proc].totalRequired += microTotalRequired;
+
+            grouped[macro].microprocessCount++;
+            grouped[macro].totalDgp += microDgp;
+            grouped[macro].totalReferent += microReferent;
+            grouped[macro].totalControl += microControl;
+            grouped[macro].totalApproved += microApproved;
+            grouped[macro].totalRequired += microTotalRequired;
+        });
+
+        return Object.values(grouped).map(macro => {
+            const processesList = Object.values(macro.processes).map(proc => {
+                proc.microprocesses.sort((a, b) => a.microName.localeCompare(b.microName));
+                return proc;
+            }).sort((a, b) => a.processName.localeCompare(b.processName));
+
+            return {
+                macroName: macro.macroName,
+                category: macro.category,
+                processCount: processesList.length,
+                microprocessCount: macro.microprocessCount,
+                processes: processesList,
+                docTypes: macro.docTypes,
+                totalDgp: macro.totalDgp,
+                totalReferent: macro.totalReferent,
+                totalControl: macro.totalControl,
+                totalApproved: macro.totalApproved,
+                totalRequired: macro.totalRequired
+            };
+        }).sort((a, b) => {
+            const catOrder = { ESTRATEGICO: 1, OPERATIVO: 2, SOPORTE: 3 };
+            const orderA = catOrder[a.category] || 99;
+            const orderB = catOrder[b.category] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.macroName.localeCompare(b.macroName);
+        });
+    }, [filteredMicroprocessStats]);
+
+    const grandTotalsFlowPhases = useMemo(() => {
+        const totals = {
+            docTypes: {
+                'AS IS': { dgp: 0, referent: 0, control: 0, approved: 0 },
+                'FCE': { dgp: 0, referent: 0, control: 0, approved: 0 },
+                'PM': { dgp: 0, referent: 0, control: 0, approved: 0 },
+                'TO BE': { dgp: 0, referent: 0, control: 0, approved: 0 }
+            },
+            totalDgp: 0,
+            totalReferent: 0,
+            totalControl: 0,
+            totalApproved: 0,
+            totalRequired: 0
+        };
+        macroprocessFlowPhasesDrillDownStats.forEach(m => {
+            (['AS IS', 'FCE', 'PM', 'TO BE'] as const).forEach(t => {
+                totals.docTypes[t].dgp += m.docTypes[t].dgp;
+                totals.docTypes[t].referent += m.docTypes[t].referent;
+                totals.docTypes[t].control += m.docTypes[t].control;
+                totals.docTypes[t].approved += m.docTypes[t].approved;
+            });
+            totals.totalDgp += m.totalDgp;
+            totals.totalReferent += m.totalReferent;
+            totals.totalControl += m.totalControl;
+            totals.totalApproved += m.totalApproved;
+            totals.totalRequired += m.totalRequired;
+        });
+        return totals;
+    }, [macroprocessFlowPhasesDrillDownStats]);
+
+    const handleExportFlowPhasesExcel = () => {
+        if (macroprocessFlowPhasesDrillDownStats.length === 0) return;
+        
+        const headers = [
+            'PROYECTO',
+            'CATEGORIA',
+            'MACROPROCESO',
+            'PROCESO',
+            'MICROPROCESO',
+            'AS IS (DGP)',
+            'AS IS (Referente)',
+            'AS IS (Terminado)',
+            'FCE (DGP)',
+            'FCE (Referente)',
+            'FCE (Terminado)',
+            'PM (DGP)',
+            'PM (Referente)',
+            'PM (Terminado)',
+            'TO BE (DGP)',
+            'TO BE (Referente)',
+            'TO BE (Control Gestión)',
+            'TO BE (Terminado)',
+            'TOTAL DGP',
+            'TOTAL REFERENTE',
+            'TOTAL CONTROL GESTION',
+            'TOTAL TERMINADO',
+            'TOTAL DOCUMENTOS'
+        ];
+
+        const rows: string[][] = [];
+
+        macroprocessFlowPhasesDrillDownStats.forEach(macro => {
+            macro.processes.forEach(proc => {
+                proc.microprocesses.forEach(micro => {
+                    const getPhaseVal = (dtype: 'AS IS' | 'FCE' | 'PM' | 'TO BE', phase: 'dgp' | 'referent' | 'control' | 'approved') => {
+                        const dt = micro.docTypes[dtype];
+                        if (!dt.isRequired) return 'N/R';
+                        if (dtype !== 'TO BE' && phase === 'control') return 'N/A';
+                        return dt[phase] > 0 ? '1' : '0';
+                    };
+
+                    rows.push([
+                        activeMapProject,
+                        macro.category,
+                        macro.macroName,
+                        proc.processName,
+                        micro.microName,
+                        getPhaseVal('AS IS', 'dgp'),
+                        getPhaseVal('AS IS', 'referent'),
+                        getPhaseVal('AS IS', 'approved'),
+                        getPhaseVal('FCE', 'dgp'),
+                        getPhaseVal('FCE', 'referent'),
+                        getPhaseVal('FCE', 'approved'),
+                        getPhaseVal('PM', 'dgp'),
+                        getPhaseVal('PM', 'referent'),
+                        getPhaseVal('PM', 'approved'),
+                        getPhaseVal('TO BE', 'dgp'),
+                        getPhaseVal('TO BE', 'referent'),
+                        getPhaseVal('TO BE', 'control'),
+                        getPhaseVal('TO BE', 'approved'),
+                        String(micro.totalDgp),
+                        String(micro.totalReferent),
+                        String(micro.totalControl),
+                        String(micro.totalApproved),
+                        String(micro.totalRequired)
+                    ]);
+                });
+            });
+        });
+
+        const csvContent = [
+            headers.join(';'),
+            ...rows.map(r => r.map(cell => `"${cell}"`).join(';'))
+        ].join('\n');
+
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Reporte_Etapas_Gestion_Documental_${activeMapProject}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const toggleAllFlowPhasesMacros = () => {
+        const allExpanded = macroprocessFlowPhasesDrillDownStats.length > 0 && macroprocessFlowPhasesDrillDownStats.every(m => expandedFlowPhasesMacros[m.macroName]);
+        const newMacroState: Record<string, boolean> = {};
+        const newProcState: Record<string, boolean> = {};
+        
+        if (!allExpanded) {
+            macroprocessFlowPhasesDrillDownStats.forEach(m => {
+                newMacroState[m.macroName] = true;
+                m.processes.forEach(p => {
+                    newProcState[p.processName] = true;
+                });
+            });
+        }
+        setExpandedFlowPhasesMacros(newMacroState);
+        setExpandedFlowPhasesProcesses(newProcState);
     };
 
     const renderProgressBadge = (val: number | null, isBold = false) => {
@@ -5134,6 +5498,384 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     <span>80%: Referente</span> &bull; 
                                     <span>90%: Control Gestión</span> &bull; 
                                     <span>100%: Aprobado</span>
+                                </div>
+
+                                {/* Table 5 - Reporte de Cantidades por Fase de Gestión Documental (Drill Down) */}
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-8">
+                                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+                                        <div>
+                                            <div className="flex items-center gap-2.5">
+                                                <h4 className="text-sm font-bold text-slate-900">
+                                                    Reporte de Cantidades por Fase de Gestión Documental ({activeMapProject})
+                                                </h4>
+                                                <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-black rounded-full border border-indigo-200/80 uppercase tracking-wide">
+                                                    Flujo por Etapas
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Conteo de documentos agrupados por Macroproceso, Proceso y Microproceso en sus respectivas etapas: DGP, Enviados Referente, Control Gestión y Terminado.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center gap-2.5">
+                                            <button
+                                                onClick={toggleAllFlowPhasesMacros}
+                                                className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
+                                            >
+                                                <FolderTree size={14} className="text-indigo-600" />
+                                                {macroprocessFlowPhasesDrillDownStats.length > 0 && macroprocessFlowPhasesDrillDownStats.every(m => expandedFlowPhasesMacros[m.macroName])
+                                                    ? 'Colapsar Todo'
+                                                    : 'Expandir Todo'
+                                                }
+                                            </button>
+
+                                            <button
+                                                onClick={handleExportFlowPhasesExcel}
+                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                            >
+                                                <FileSpreadsheet size={15} /> Exportar a Excel
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Tabla Drill-down de Fases / Etapas */}
+                                    <div className="overflow-x-auto max-w-full pb-6">
+                                        <table className="w-full text-left border-collapse min-w-[1250px]">
+                                            <thead>
+                                                <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
+                                                    <th rowSpan={2} className="px-4 py-3 text-left border-r border-slate-200 min-w-[320px] sticky left-0 bg-slate-100 z-10 align-middle">
+                                                        Estructura de Procesos
+                                                    </th>
+                                                    <th colSpan={3} className="px-3 py-2 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900">
+                                                        AS IS
+                                                    </th>
+                                                    <th colSpan={3} className="px-3 py-2 text-center border-r border-slate-200 bg-red-50/70 font-extrabold text-red-900">
+                                                        FCE
+                                                    </th>
+                                                    <th colSpan={3} className="px-3 py-2 text-center border-r border-slate-200 bg-amber-50/70 font-extrabold text-amber-900">
+                                                        PM
+                                                    </th>
+                                                    <th colSpan={4} className="px-3 py-2 text-center border-r border-slate-200 bg-emerald-50/70 font-extrabold text-emerald-900">
+                                                        TO BE
+                                                    </th>
+                                                    <th colSpan={5} className="px-3 py-2 text-center bg-indigo-50/80 font-black text-indigo-950">
+                                                        Total Consolidado
+                                                    </th>
+                                                </tr>
+                                                <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-600">
+                                                    {/* AS IS */}
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+
+                                                    {/* FCE */}
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+
+                                                    {/* PM */}
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+
+                                                    {/* TO BE */}
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-50/30 text-blue-900 w-[55px]">DGP</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-50/30 text-purple-900 w-[55px]">Ref.</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-amber-50/40 text-amber-900 w-[55px]">C.G.</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200 bg-emerald-50/30 text-emerald-900 w-[55px]">Term.</th>
+
+                                                    {/* Total Consolidado */}
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-blue-100/40 text-blue-950 font-black w-[60px]">DGP</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-purple-100/40 text-purple-950 font-black w-[60px]">Ref.</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-amber-100/40 text-amber-950 font-black w-[60px]">C.G.</th>
+                                                    <th className="px-1.5 py-1.5 text-center border-r border-slate-200/60 bg-emerald-100/40 text-emerald-950 font-black w-[60px]">Term.</th>
+                                                    <th className="px-1.5 py-1.5 text-center bg-slate-200/80 text-slate-950 font-black w-[60px]">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-xs text-slate-700">
+                                                {macroprocessFlowPhasesDrillDownStats.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={18} className="text-center py-8 text-slate-500 italic">No hay datos disponibles.</td>
+                                                    </tr>
+                                                ) : (
+                                                    macroprocessFlowPhasesDrillDownStats.map((macro) => {
+                                                        const isMacroExpanded = expandedFlowPhasesMacros[macro.macroName];
+                                                        
+                                                        return (
+                                                            <React.Fragment key={macro.macroName}>
+                                                                {/* Macroproceso Row */}
+                                                                <tr 
+                                                                    className="border-b border-slate-200 bg-slate-50 hover:bg-slate-100/80 cursor-pointer transition-colors"
+                                                                    onClick={() => setExpandedFlowPhasesMacros(p => ({ ...p, [macro.macroName]: !p[macro.macroName] }))}
+                                                                >
+                                                                    <td className="px-4 py-2.5 border-r border-slate-200 font-bold text-slate-900 sticky left-0 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                        <div className="flex items-center gap-2">
+                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold" /> : <ChevronRight size={14} />}
+                                                                            <span className="truncate">{macro.macroName}</span>
+                                                                            <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                                                                {macro.processCount} proc.
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    {(['AS IS', 'FCE', 'PM'] as const).map(t => {
+                                                                        const dt = macro.docTypes[t];
+                                                                        return (
+                                                                            <React.Fragment key={t}>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                                    {dt.dgp > 0 ? <span className="font-semibold text-blue-700">{dt.dgp}</span> : <span className="text-slate-300">-</span>}
+                                                                                </td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                                    {dt.referent > 0 ? <span className="font-semibold text-purple-700">{dt.referent}</span> : <span className="text-slate-300">-</span>}
+                                                                                </td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200">
+                                                                                    {dt.approved > 0 ? <span className="font-bold text-emerald-700">{dt.approved}</span> : <span className="text-slate-300">-</span>}
+                                                                                </td>
+                                                                            </React.Fragment>
+                                                                        );
+                                                                    })}
+                                                                    {/* TO BE */}
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                        {macro.docTypes['TO BE'].dgp > 0 ? <span className="font-semibold text-blue-700">{macro.docTypes['TO BE'].dgp}</span> : <span className="text-slate-300">-</span>}
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                        {macro.docTypes['TO BE'].referent > 0 ? <span className="font-semibold text-purple-700">{macro.docTypes['TO BE'].referent}</span> : <span className="text-slate-300">-</span>}
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60">
+                                                                        {macro.docTypes['TO BE'].control > 0 ? <span className="font-semibold text-amber-700">{macro.docTypes['TO BE'].control}</span> : <span className="text-slate-300">-</span>}
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200">
+                                                                        {macro.docTypes['TO BE'].approved > 0 ? <span className="font-bold text-emerald-700">{macro.docTypes['TO BE'].approved}</span> : <span className="text-slate-300">-</span>}
+                                                                    </td>
+
+                                                                    {/* Totales Consolidados */}
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-blue-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-blue-800 bg-blue-100/80 border border-blue-300">
+                                                                            {macro.totalDgp}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-purple-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-purple-800 bg-purple-100/80 border border-purple-300">
+                                                                            {macro.totalReferent}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-amber-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-amber-800 bg-amber-100/80 border border-amber-300">
+                                                                            {macro.totalControl}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2 text-center border-r border-slate-200/60 bg-emerald-50/20">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-emerald-800 bg-emerald-100/80 border border-emerald-300">
+                                                                            {macro.totalApproved}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2 text-center bg-slate-100/80">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-slate-900 bg-slate-200 border border-slate-300">
+                                                                            {macro.totalRequired}
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                                
+                                                                {/* Procesos Rows */}
+                                                                {isMacroExpanded && macro.processes.map((proc) => {
+                                                                    const isProcExpanded = expandedFlowPhasesProcesses[proc.processName];
+                                                                    return (
+                                                                        <React.Fragment key={proc.processName}>
+                                                                            <tr 
+                                                                                className="border-b border-slate-100 bg-white hover:bg-slate-50/60 cursor-pointer transition-colors"
+                                                                                onClick={() => setExpandedFlowPhasesProcesses(p => ({ ...p, [proc.processName]: !p[proc.processName] }))}
+                                                                            >
+                                                                                <td className="px-4 py-2 border-r border-slate-200 font-semibold text-slate-700 pl-8 sticky left-0 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold" /> : <ChevronRight size={13} />}
+                                                                                        <span className="truncate">{proc.processName}</span>
+                                                                                        <span className="text-[10px] text-slate-400 font-normal">
+                                                                                            ({proc.microprocesses.length} microproc.)
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </td>
+                                                                                {(['AS IS', 'FCE', 'PM'] as const).map(t => {
+                                                                                    const dt = proc.docTypes[t];
+                                                                                    return (
+                                                                                        <React.Fragment key={t}>
+                                                                                            <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                                {dt.dgp > 0 ? <span className="font-semibold text-blue-700">{dt.dgp}</span> : <span className="text-slate-300">-</span>}
+                                                                                            </td>
+                                                                                            <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                                {dt.referent > 0 ? <span className="font-semibold text-purple-700">{dt.referent}</span> : <span className="text-slate-300">-</span>}
+                                                                                            </td>
+                                                                                            <td className="px-1.5 py-2 text-center border-r border-slate-200 text-slate-600">
+                                                                                                {dt.approved > 0 ? <span className="font-bold text-emerald-700">{dt.approved}</span> : <span className="text-slate-300">-</span>}
+                                                                                            </td>
+                                                                                        </React.Fragment>
+                                                                                    );
+                                                                                })}
+                                                                                {/* TO BE */}
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                    {proc.docTypes['TO BE'].dgp > 0 ? <span className="font-semibold text-blue-700">{proc.docTypes['TO BE'].dgp}</span> : <span className="text-slate-300">-</span>}
+                                                                                </td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                    {proc.docTypes['TO BE'].referent > 0 ? <span className="font-semibold text-purple-700">{proc.docTypes['TO BE'].referent}</span> : <span className="text-slate-300">-</span>}
+                                                                                </td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 text-slate-600">
+                                                                                    {proc.docTypes['TO BE'].control > 0 ? <span className="font-semibold text-amber-700">{proc.docTypes['TO BE'].control}</span> : <span className="text-slate-300">-</span>}
+                                                                                </td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200 text-slate-600">
+                                                                                    {proc.docTypes['TO BE'].approved > 0 ? <span className="font-bold text-emerald-700">{proc.docTypes['TO BE'].approved}</span> : <span className="text-slate-300">-</span>}
+                                                                                </td>
+
+                                                                                {/* Totales */}
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-bold text-blue-800 bg-blue-50/10">{proc.totalDgp}</td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-bold text-purple-800 bg-purple-50/10">{proc.totalReferent}</td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-bold text-amber-800 bg-amber-50/10">{proc.totalControl}</td>
+                                                                                <td className="px-1.5 py-2 text-center border-r border-slate-200/60 font-black text-emerald-800 bg-emerald-50/10">{proc.totalApproved}</td>
+                                                                                <td className="px-1.5 py-2 text-center font-black text-slate-900 bg-slate-100/50">{proc.totalRequired}</td>
+                                                                            </tr>
+
+                                                                            {/* Microprocesos Rows */}
+                                                                            {isProcExpanded && proc.microprocesses.map(micro => (
+                                                                                <tr key={micro.microName} className="border-b border-slate-50 bg-slate-50/20 hover:bg-slate-50/80 transition-colors">
+                                                                                    <td className="px-4 py-2 text-[11px] border-r border-slate-200 font-medium text-slate-600 pl-14 sticky left-0 bg-white/70 shadow-[2px_0_5px_rgba(0,0,0,0.01)] backdrop-blur-xs">
+                                                                                        <div className="flex items-center gap-1.5">
+                                                                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-300"></div>
+                                                                                            <span className="truncate">{micro.microName}</span>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    {(['AS IS', 'FCE', 'PM'] as const).map(t => {
+                                                                                        const dt = micro.docTypes[t];
+                                                                                        return (
+                                                                                            <React.Fragment key={t}>
+                                                                                                <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
+                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.dgp > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                                </td>
+                                                                                                <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
+                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.referent > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                                </td>
+                                                                                                <td className="px-1.5 py-1.5 text-center border-r border-slate-200">
+                                                                                                    {!dt.isRequired ? <span className="text-slate-300 text-[10px]">-</span> : dt.approved > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                                </td>
+                                                                                            </React.Fragment>
+                                                                                        );
+                                                                                    })}
+                                                                                    {/* TO BE */}
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].dgp > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    </td>
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].referent > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    </td>
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].control > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    </td>
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200">
+                                                                                        {!micro.docTypes['TO BE'].isRequired ? <span className="text-slate-300 text-[10px]">-</span> : micro.docTypes['TO BE'].approved > 0 ? <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">1</span> : <span className="text-slate-300 text-[10px]">-</span>}
+                                                                                    </td>
+
+                                                                                    {/* Totales */}
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-semibold text-blue-700 text-[11px] bg-blue-50/10">{micro.totalDgp}</td>
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-semibold text-purple-700 text-[11px] bg-purple-50/10">{micro.totalReferent}</td>
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-semibold text-amber-700 text-[11px] bg-amber-50/10">{micro.totalControl}</td>
+                                                                                    <td className="px-1.5 py-1.5 text-center border-r border-slate-200/60 font-bold text-emerald-700 text-[11px] bg-emerald-50/10">{micro.totalApproved}</td>
+                                                                                    <td className="px-1.5 py-1.5 text-center font-black text-slate-900 text-[11px] bg-slate-100/40">{micro.totalRequired}</td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
+                                                            </React.Fragment>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+
+                                            {macroprocessFlowPhasesDrillDownStats.length > 0 && (
+                                                <tfoot className="border-t-2 border-slate-300 bg-slate-100/95 font-bold text-xs text-slate-900 sticky bottom-0">
+                                                    <tr>
+                                                        <td className="px-4 py-3 border-r border-slate-300 font-black text-slate-900 sticky left-0 bg-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.04)] z-10 uppercase tracking-wide text-[11px]">
+                                                            TOTAL GENERAL
+                                                        </td>
+                                                        {(['AS IS', 'FCE', 'PM'] as const).map(t => {
+                                                            const dt = grandTotalsFlowPhases.docTypes[t];
+                                                            return (
+                                                                <React.Fragment key={t}>
+                                                                    <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-blue-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-blue-900 bg-blue-100/80 border border-blue-300">
+                                                                            {dt.dgp}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-purple-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-purple-900 bg-purple-100/80 border border-purple-300">
+                                                                            {dt.referent}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-1.5 py-2.5 text-center border-r border-slate-300 bg-emerald-50/50">
+                                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-emerald-900 bg-emerald-100/80 border border-emerald-300">
+                                                                            {dt.approved}
+                                                                        </span>
+                                                                    </td>
+                                                                </React.Fragment>
+                                                            );
+                                                        })}
+                                                        {/* TO BE */}
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-blue-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-blue-900 bg-blue-100/80 border border-blue-300">
+                                                                {grandTotalsFlowPhases.docTypes['TO BE'].dgp}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-purple-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-purple-900 bg-purple-100/80 border border-purple-300">
+                                                                {grandTotalsFlowPhases.docTypes['TO BE'].referent}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-amber-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-amber-900 bg-amber-100/80 border border-amber-300">
+                                                                {grandTotalsFlowPhases.docTypes['TO BE'].control}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-300 bg-emerald-50/50">
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-black text-emerald-900 bg-emerald-100/80 border border-emerald-300">
+                                                                {grandTotalsFlowPhases.docTypes['TO BE'].approved}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Totales Consolidados */}
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-blue-100/70">
+                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-blue-950 bg-blue-200/90 border border-blue-400">
+                                                                {grandTotalsFlowPhases.totalDgp}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-purple-100/70">
+                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-purple-950 bg-purple-200/90 border border-purple-400">
+                                                                {grandTotalsFlowPhases.totalReferent}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-amber-100/70">
+                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-amber-950 bg-amber-200/90 border border-amber-400">
+                                                                {grandTotalsFlowPhases.totalControl}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-1.5 py-2.5 text-center border-r border-slate-200/80 bg-emerald-100/70">
+                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-emerald-950 bg-emerald-200/90 border border-emerald-400">
+                                                                {grandTotalsFlowPhases.totalApproved}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-1.5 py-2.5 text-center bg-slate-200/90">
+                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-black text-slate-950 bg-slate-300 border border-slate-400">
+                                                                {grandTotalsFlowPhases.totalRequired}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            )}
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 text-xs text-slate-400 text-center flex flex-wrap items-center justify-center gap-3">
+                                    <span><strong>DGP:</strong> No Iniciado, Iniciado, En Proceso, Rev. Interna</span> &bull; 
+                                    <span><strong>Ref.:</strong> Enviados / En Revisión Referente (e incluye Control de Gestión para AS IS, FCE, PM)</span> &bull; 
+                                    <span><strong>C.G.:</strong> Enviados / En Revisión Control de Gestión (Solo TO BE)</span> &bull; 
+                                    <span><strong>Term.:</strong> Aprobado</span> &bull; 
+                                    <span><strong>Total:</strong> Suma Total de Documentos</span>
                                 </div>
                     </div>
                 )}
