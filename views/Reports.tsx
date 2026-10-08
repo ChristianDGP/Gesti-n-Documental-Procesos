@@ -5336,18 +5336,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <table className="w-full text-left border-collapse min-w-[1100px]">
                                             <thead>
                                                 <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
-                                                    <th rowSpan={2} className="px-4 py-3 text-left border-r border-slate-200 min-w-[340px] sticky left-0 bg-slate-100 z-10 align-middle">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span>Estructura de Procesos</span>
-                                                            <div className="flex items-center gap-1.5 font-normal">
-                                                                <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs" title={`Total de ${grandTotalsPendingCompleted.totalProcesses} procesos`}>
-                                                                    {grandTotalsPendingCompleted.totalProcesses} proc.
-                                                                </span>
-                                                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shadow-2xs" title={`Total de ${grandTotalsPendingCompleted.totalMicroprocesses} microprocesos`}>
-                                                                    {grandTotalsPendingCompleted.totalMicroprocesses} microproc.
-                                                                </span>
-                                                            </div>
-                                                        </div>
+                                                    <th rowSpan={2} className="px-4 py-3 text-left border-r border-slate-200 min-w-[320px] sticky left-0 bg-slate-100 z-10 align-middle">
+                                                        Estructura de Procesos
                                                     </th>
                                                     <th colSpan={2} className="px-3 py-2 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900">
                                                         AS IS
@@ -5402,11 +5392,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                         <div className="flex items-center gap-2">
                                                                             {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
                                                                             <span className="truncate">{macro.macroName}</span>
-                                                                            <span className="text-[10px] font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0" title={`${macro.processCount} procesos`}>
-                                                                                {macro.processCount} proc.
-                                                                            </span>
-                                                                            <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/80 px-2 py-0.5 rounded border border-indigo-200/80 shrink-0" title={`${macro.microprocessCount} microprocesos`}>
-                                                                                {macro.microprocessCount} microproc.
+                                                                            <span className="text-[10px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                                                                {macro.processCount} procesos
                                                                             </span>
                                                                         </div>
                                                                     </td>
@@ -5460,9 +5447,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                     <div className="flex items-center gap-2">
                                                                                         {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={13} className="shrink-0" />}
                                                                                         <span className="truncate">{proc.processName}</span>
-                                                                                        <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/60 px-2 py-0.5 rounded border border-indigo-200/60 shrink-0" title={`${proc.microprocesses.length} microprocesos`}>
-                                                                                            {proc.microprocesses.length} microproc.
-                                                                                        </span>
                                                                                     </div>
                                                                                 </td>
                                                                                 {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
@@ -5554,18 +5538,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             {macroprocessPendingCompletedDrillDownStats.length > 0 && (
                                                 <tfoot className="border-t-2 border-slate-300 bg-slate-100/95 font-bold text-xs text-slate-900 sticky bottom-0">
                                                     <tr>
-                                                        <td className="px-4 py-3 border-r border-slate-300 font-black text-slate-900 sticky left-0 bg-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.04)] z-10">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span className="uppercase tracking-wide text-[11px]">TOTAL GENERAL</span>
-                                                                <div className="flex items-center gap-1.5 font-normal">
-                                                                    <span className="text-[10px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-300 shadow-2xs">
-                                                                        {grandTotalsPendingCompleted.totalProcesses} proc.
-                                                                    </span>
-                                                                    <span className="text-[10px] font-bold text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded border border-indigo-300 shadow-2xs">
-                                                                        {grandTotalsPendingCompleted.totalMicroprocesses} microproc.
-                                                                    </span>
-                                                                </div>
-                                                            </div>
+                                                        <td className="px-4 py-3 border-r border-slate-300 font-black text-slate-900 sticky left-0 bg-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.04)] z-10 uppercase tracking-wide text-[11px]">
+                                                            TOTAL GENERAL
                                                         </td>
                                                         {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => {
                                                             const dt = grandTotalsPendingCompleted.docTypes[t];
@@ -5693,14 +5667,14 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <table className="w-full text-left border-collapse min-w-[1000px]">
                                             <thead>
                                                 <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
-                                                    <th className="px-4 py-3 text-left border-r border-slate-200 min-w-[340px] sticky left-0 bg-slate-100 z-10">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span>Estructura de Procesos</span>
-                                                            <div className="flex items-center gap-1.5 font-normal">
-                                                                <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs" title={`Total de ${grandTotalsProgress.totalProcesses} procesos`}>
+                                                    <th className="px-4 py-3 text-left border-r border-slate-200 min-w-[360px] sticky left-0 bg-slate-100 z-10">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span className="font-bold text-slate-700">Estructura de Procesos</span>
+                                                            <div className="flex items-center gap-1.5 ml-auto shrink-0 font-normal">
+                                                                <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs" title={`Total de ${grandTotalsProgress.totalProcesses} procesos`}>
                                                                     {grandTotalsProgress.totalProcesses} proc.
                                                                 </span>
-                                                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shadow-2xs" title={`Total de ${grandTotalsProgress.totalMicroprocesses} microprocesos`}>
+                                                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 shadow-2xs" title={`Total de ${grandTotalsProgress.totalMicroprocesses} microprocesos`}>
                                                                     {grandTotalsProgress.totalMicroprocesses} microproc.
                                                                 </span>
                                                             </div>
@@ -5740,15 +5714,19 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                     onClick={() => setExpandedProgressPercentMacros(p => ({ ...p, [macro.macroName]: !p[macro.macroName] }))}
                                                                 >
                                                                     <td className="px-4 py-2.5 border-r border-slate-200 font-bold text-slate-900 sticky left-0 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                                        <div className="flex items-center gap-2">
-                                                                            {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
-                                                                            <span className="truncate">{macro.macroName}</span>
-                                                                            <span className="text-[10px] font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0" title={`${macro.processCount} procesos`}>
-                                                                                {macro.processCount} proc.
-                                                                            </span>
-                                                                            <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/80 px-2 py-0.5 rounded border border-indigo-200/80 shrink-0" title={`${macro.microprocessCount} microprocesos`}>
-                                                                                {macro.microprocessCount} microproc.
-                                                                            </span>
+                                                                        <div className="flex items-center justify-between gap-3 min-w-0">
+                                                                            <div className="flex items-center gap-2 min-w-0 truncate">
+                                                                                {isMacroExpanded ? <ChevronDown size={14} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={14} className="shrink-0 text-slate-400" />}
+                                                                                <span className="truncate" title={macro.macroName}>{macro.macroName}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1.5 ml-auto shrink-0 font-normal">
+                                                                                <span className="text-[10px] font-semibold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs shrink-0" title={`${macro.processCount} procesos`}>
+                                                                                    {macro.processCount} proc.
+                                                                                </span>
+                                                                                <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/80 px-2 py-0.5 rounded-md border border-indigo-200/80 shadow-2xs shrink-0" title={`${macro.microprocessCount} microprocesos`}>
+                                                                                    {macro.microprocessCount} microproc.
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
                                                                     </td>
                                                                     {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => (
@@ -5771,12 +5749,16 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                 onClick={() => setExpandedProgressPercentProcesses(p => ({ ...p, [proc.processName]: !p[proc.processName] }))}
                                                                             >
                                                                                 <td className="px-4 py-2 border-r border-slate-200 font-semibold text-slate-700 pl-8 sticky left-0 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={13} className="shrink-0" />}
-                                                                                        <span className="truncate">{proc.processName}</span>
-                                                                                        <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/60 px-2 py-0.5 rounded border border-indigo-200/60 shrink-0" title={`${proc.microprocessCount} microprocesos`}>
-                                                                                            {proc.microprocessCount} microproc.
-                                                                                        </span>
+                                                                                    <div className="flex items-center justify-between gap-3 min-w-0">
+                                                                                        <div className="flex items-center gap-2 min-w-0 truncate">
+                                                                                            {isProcExpanded ? <ChevronDown size={13} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={13} className="shrink-0 text-slate-400" />}
+                                                                                            <span className="truncate" title={proc.processName}>{proc.processName}</span>
+                                                                                        </div>
+                                                                                        <div className="flex items-center ml-auto shrink-0 font-normal">
+                                                                                            <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50/60 px-2 py-0.5 rounded-md border border-indigo-200/60 shadow-2xs shrink-0" title={`${proc.microprocessCount} microprocesos`}>
+                                                                                                {proc.microprocessCount} microproc.
+                                                                                            </span>
+                                                                                        </div>
                                                                                     </div>
                                                                                 </td>
                                                                                 {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => (
@@ -5820,13 +5802,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 <tfoot className="border-t-2 border-slate-300 bg-slate-100/95 font-bold text-xs text-slate-900 sticky bottom-0">
                                                     <tr>
                                                         <td className="px-4 py-3 border-r border-slate-300 font-black text-slate-900 sticky left-0 bg-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.04)] z-10">
-                                                            <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center justify-between gap-3">
                                                                 <span className="uppercase tracking-wide text-[11px]">TOTAL GENERAL</span>
-                                                                <div className="flex items-center gap-1.5 font-normal">
-                                                                    <span className="text-[10px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-300 shadow-2xs">
+                                                                <div className="flex items-center gap-1.5 ml-auto shrink-0 font-normal">
+                                                                    <span className="text-[10px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-300 shadow-2xs">
                                                                         {grandTotalsProgress.totalProcesses} proc.
                                                                     </span>
-                                                                    <span className="text-[10px] font-bold text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded border border-indigo-300 shadow-2xs">
+                                                                    <span className="text-[10px] font-bold text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded-md border border-indigo-300 shadow-2xs">
                                                                         {grandTotalsProgress.totalMicroprocesses} microproc.
                                                                     </span>
                                                                 </div>
@@ -6023,9 +6005,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                             <span className="text-[9px] font-semibold text-slate-500 bg-white px-1 py-0.5 rounded border border-slate-200 shrink-0" title={`${macro.processCount} procesos`}>
                                                                                 {macro.processCount} p.
                                                                             </span>
-                                                                            <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50/80 px-1 py-0.5 rounded border border-indigo-200/80 shrink-0" title={`${macro.microprocessCount} microprocesos`}>
-                                                                                {macro.microprocessCount} mp.
-                                                                            </span>
                                                                         </div>
                                                                     </td>
                                                                     {(['AS IS', 'FCE', 'PM'] as const).map(t => {
@@ -6099,9 +6078,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                     <div className="flex items-center gap-1 min-w-0">
                                                                                         {isProcExpanded ? <ChevronDown size={12} className="text-indigo-600 font-bold shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
                                                                                         <span className="truncate text-[11px]" title={proc.processName}>{proc.processName}</span>
-                                                                                        <span className="text-[9px] font-semibold text-indigo-700 bg-indigo-50/60 px-1 py-0.5 rounded border border-indigo-200/60 shrink-0" title={`${proc.microprocesses.length} microprocesos`}>
-                                                                                            {proc.microprocesses.length} mp.
-                                                                                        </span>
                                                                                     </div>
                                                                                 </td>
                                                                                 {(['AS IS', 'FCE', 'PM'] as const).map(t => {
