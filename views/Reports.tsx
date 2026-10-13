@@ -5667,18 +5667,8 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <table className="w-full text-left border-collapse min-w-[1000px]">
                                             <thead>
                                                 <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-700">
-                                                    <th className="px-4 py-3 text-left border-r border-slate-200 min-w-[360px] sticky left-0 bg-slate-100 z-10">
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <span className="font-bold text-slate-700">Estructura de Procesos</span>
-                                                            <div className="flex items-center gap-1.5 ml-auto shrink-0 font-normal">
-                                                                <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs" title={`Total de ${grandTotalsProgress.totalProcesses} procesos`}>
-                                                                    {grandTotalsProgress.totalProcesses} proc.
-                                                                </span>
-                                                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 shadow-2xs" title={`Total de ${grandTotalsProgress.totalMicroprocesses} microprocesos`}>
-                                                                    {grandTotalsProgress.totalMicroprocesses} microproc.
-                                                                </span>
-                                                            </div>
-                                                        </div>
+                                                    <th className="px-4 py-3 text-left border-r border-slate-200 min-w-[360px] sticky left-0 bg-slate-100 z-10 font-bold text-slate-700">
+                                                        Estructura de Procesos
                                                     </th>
                                                     <th className="px-3 py-2.5 text-center border-r border-slate-200 bg-blue-50/70 font-extrabold text-blue-900 w-[140px]">
                                                         AS IS (%)
