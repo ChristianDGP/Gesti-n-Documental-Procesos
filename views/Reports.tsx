@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader } from '../services/firebaseBackend';
+import { DocumentService, UserService, HierarchyService, HistoryService, normalizeHeader, formatVersionForDisplay } from '../services/firebaseBackend';
 import { Document, User, DocState, FullHierarchy, DocType, UserRole, DocHistory } from '../types';
 import { STATE_CONFIG } from '../constants';
 import AdminBI from './AdminBI';
@@ -130,6 +130,27 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [activeType, setActiveType] = useState<string | null>(null);
     const [mapDocTypeFilter, setMapDocTypeFilter] = useState<'TODOS' | 'AS IS' | 'FCE' | 'PM' | 'TO BE'>('TODOS');
     const [mapSubTab, setMapSubTab] = useState<'DIAGRAM' | 'REPORTS'>('DIAGRAM');
+
+    const [docProgressTooltip, setDocProgressTooltip] = useState<{
+        x: number;
+        y: number;
+        docType: 'AS IS' | 'FCE' | 'PM' | 'TO BE';
+        microName: string;
+        version: string;
+        date: string;
+        stateLabel: string;
+        progress: number;
+        isVirtual?: boolean;
+        docId?: string;
+    } | null>(null);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            if (docProgressTooltip) setDocProgressTooltip(null);
+        };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [docProgressTooltip]);
 
     const [macroClassifications, setMacroClassifications] = useState<Record<string, 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE'>>({});
 
@@ -267,7 +288,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     microprocess: node.name, 
                                     docType: type as DocType, 
                                     state: DocState.NOT_STARTED, 
+                                    version: '0.0',
                                     updatedAt: new Date(0).toISOString(), 
+                                    createdAt: new Date(0).toISOString(),
                                     assignees: node.assignees || [], 
                                     isVirtual: true 
                                 } as any);
@@ -754,7 +777,16 @@ const Reports: React.FC<Props> = ({ user }) => {
             macroName: string;
             processName: string;
             category: 'ESTRATEGICO' | 'OPERATIVO' | 'SOPORTE';
-            docs: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', { state: DocState; isVirtual: boolean; id: string; isRequired: boolean }>;
+            docs: Record<'AS IS' | 'FCE' | 'PM' | 'TO BE', { 
+                state: DocState; 
+                isVirtual: boolean; 
+                id: string; 
+                isRequired: boolean;
+                version?: string;
+                updatedAt?: string;
+                createdAt?: string;
+                title?: string;
+            }>;
         }> = {};
 
         let projectDocs = unifiedData.filter(d => d.project === activeMapProject);
@@ -777,10 +809,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                     processName: proc,
                     category: cat,
                     docs: {
-                        'AS IS': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'AS IS') },
-                        'FCE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'FCE') },
-                        'PM': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'PM') },
-                        'TO BE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'TO BE') }
+                        'AS IS': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'AS IS') },
+                        'FCE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'FCE') },
+                        'PM': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'PM') },
+                        'TO BE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'TO BE') }
                     }
                 };
             }
@@ -791,6 +823,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                     state: d.state,
                     isVirtual: d.isVirtual || false,
                     id: d.id,
+                    version: d.version,
+                    updatedAt: d.updatedAt,
+                    createdAt: d.createdAt,
+                    title: d.title,
                     isRequired: isDocTypeRequired(activeMapProject, macro, proc, micro, type)
                 };
             }
@@ -1543,6 +1579,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                         isRequired: boolean;
                         progress: number | null;
                         state?: DocState;
+                        version?: string;
+                        updatedAt?: string;
+                        createdAt?: string;
+                        title?: string;
+                        docId?: string;
+                        isVirtual?: boolean;
                     }>;
                     totalRequired: number;
                     totalProgress: number;
@@ -1607,6 +1649,12 @@ const Reports: React.FC<Props> = ({ user }) => {
                 isRequired: boolean;
                 progress: number | null;
                 state?: DocState;
+                version?: string;
+                updatedAt?: string;
+                createdAt?: string;
+                title?: string;
+                docId?: string;
+                isVirtual?: boolean;
             }> = {
                 'AS IS': { isRequired: false, progress: null },
                 'FCE': { isRequired: false, progress: null },
@@ -1624,7 +1672,13 @@ const Reports: React.FC<Props> = ({ user }) => {
                     microDocTypes[dtype] = {
                         isRequired: true,
                         progress: prog,
-                        state: doc.state
+                        state: doc.state,
+                        version: doc.version,
+                        updatedAt: doc.updatedAt,
+                        createdAt: doc.createdAt,
+                        title: doc.title,
+                        docId: doc.id,
+                        isVirtual: doc.isVirtual
                     };
                     microRequiredCount++;
                     microSumProgress += prog;
@@ -2612,10 +2666,55 @@ const Reports: React.FC<Props> = ({ user }) => {
         }
     };
 
-    const renderProgressBadge = (val: number | null, isBold = false) => {
+    interface ProgressBadgeDocInfo {
+        docType: 'AS IS' | 'FCE' | 'PM' | 'TO BE';
+        microName: string;
+        version?: string;
+        updatedAt?: string;
+        createdAt?: string;
+        state?: DocState;
+        title?: string;
+        isVirtual?: boolean;
+        docId?: string;
+        isRequired?: boolean;
+    }
+
+    const formatDocVersion = (ver?: string, isVirtual?: boolean, state?: DocState): string => {
+        if (isVirtual || state === DocState.NOT_STARTED) {
+            if (!ver || ver === '0.0' || ver === '-') return '0.0 (No iniciado)';
+            return formatVersionForDisplay(ver);
+        }
+        if (!ver || ver === '-' || ver === '0') return '1.0';
+        return formatVersionForDisplay(ver);
+    };
+
+    const formatDocDate = (dateStr?: string, state?: DocState): string => {
+        if (!dateStr || dateStr === new Date(0).toISOString() || state === DocState.NOT_STARTED) {
+            return 'Sin actividad registrada';
+        }
+        try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime()) || d.getTime() === 0) return 'Sin actividad registrada';
+            return d.toLocaleDateString('es-CL', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch {
+            return dateStr;
+        }
+    };
+
+    const renderProgressBadge = (
+        val: number | null, 
+        isBold = false, 
+        docInfo?: ProgressBadgeDocInfo
+    ) => {
         if (val === null) {
             return (
-                <span className="text-slate-300 font-semibold text-[11px]">N/R</span>
+                <span className="text-slate-300 font-semibold text-[11px]" title="No requerido">N/R</span>
             );
         }
         
@@ -2635,8 +2734,36 @@ const Reports: React.FC<Props> = ({ user }) => {
             barColor = 'bg-amber-500';
         }
 
+        const docVersionText = docInfo ? formatDocVersion(docInfo.version, docInfo.isVirtual, docInfo.state) : '';
+        const docDateText = docInfo ? formatDocDate(docInfo.updatedAt, docInfo.state) : '';
+        const stateLabel = docInfo?.state ? (STATE_CONFIG[docInfo.state]?.label || docInfo.state) : `${val}%`;
+
+        const nativeTitle = docInfo 
+            ? `Documento: ${docInfo.docType} (${docInfo.microName})\nVersión: ${docVersionText}\nFecha: ${docDateText}\nEstado: ${stateLabel} (${val}%)`
+            : undefined;
+
         return (
-            <div className="flex flex-col items-center justify-center gap-1 w-full max-w-[85px] mx-auto">
+            <div 
+                className={`flex flex-col items-center justify-center gap-1 w-full max-w-[85px] mx-auto transition-transform ${docInfo ? 'cursor-pointer hover:scale-105 group/badge' : ''}`}
+                title={nativeTitle}
+                onMouseEnter={docInfo ? (e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setDocProgressTooltip({
+                        x: rect.left + rect.width / 2,
+                        y: rect.top,
+                        docType: docInfo.docType,
+                        microName: docInfo.microName,
+                        version: docVersionText,
+                        date: docDateText,
+                        stateLabel,
+                        progress: val,
+                        isVirtual: docInfo.isVirtual,
+                        docId: docInfo.docId
+                    });
+                } : undefined}
+                onMouseLeave={docInfo ? () => setDocProgressTooltip(null) : undefined}
+                onClick={docInfo && !docInfo.isVirtual && docInfo.docId ? () => navigate(`/doc/${docInfo.docId}`) : undefined}
+            >
                 <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md border text-[11px] ${isBold ? 'font-black' : 'font-bold'} ${colorClass}`}>
                     {val}%
                 </span>
@@ -5606,7 +5733,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                     )}
                                                 </div>
                                                 <p className="text-xs text-slate-500 mt-1">
-                                                    Porcentaje de avance por tipo de documento con consolidación y drill-down jerárquico desde macroproceso hasta proceso y microproceso.
+                                                    Porcentaje de avance por tipo de documento con consolidación jerárquica. Posicione el cursor sobre el porcentaje de cualquier documento para ver su versión y fecha.
                                                 </p>
                                             </div>
                                         </div>
@@ -5772,7 +5899,17 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                     </td>
                                                                                     {(['AS IS', 'FCE', 'PM', 'TO BE'] as const).map(t => (
                                                                                         <td key={t} className="px-2 py-1.5 text-[11px] text-center border-r border-slate-200/60">
-                                                                                            {renderProgressBadge(micro.docTypes[t].progress)}
+                                                                                            {renderProgressBadge(micro.docTypes[t].progress, false, {
+                                                                                                docType: t,
+                                                                                                microName: micro.microName,
+                                                                                                version: micro.docTypes[t].version,
+                                                                                                updatedAt: micro.docTypes[t].updatedAt,
+                                                                                                createdAt: micro.docTypes[t].createdAt,
+                                                                                                state: micro.docTypes[t].state,
+                                                                                                isVirtual: micro.docTypes[t].isVirtual,
+                                                                                                docId: micro.docTypes[t].docId,
+                                                                                                isRequired: micro.docTypes[t].isRequired
+                                                                                            })}
                                                                                         </td>
                                                                                     ))}
                                                                                     <td className="px-3 py-1.5 text-[11px] text-center bg-indigo-50/10 font-bold">
@@ -5817,7 +5954,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             )}
                                         </table>
                                     </div>
-                                    <div className="p-4 border-t border-slate-100 text-xs text-slate-400 text-center flex items-center justify-center gap-2 bg-slate-50/50">
+                                    <div className="p-4 border-t border-slate-100 text-xs text-slate-400 text-center flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-slate-50/50">
                                         <span>N/R: No requerido</span> &bull; 
                                         <span>0%: No Iniciado</span> &bull; 
                                         <span>10%: Iniciado</span> &bull; 
@@ -5825,8 +5962,96 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         <span>60%: Rev. Interna</span> &bull; 
                                         <span>80%: Referente</span> &bull; 
                                         <span>90%: Control Gestión</span> &bull; 
-                                        <span>100%: Aprobado</span>
+                                        <span>100%: Aprobado</span> &bull;
+                                        <span className="text-indigo-600 font-semibold inline-flex items-center gap-1">
+                                            <Info size={12} /> Posicione el cursor sobre el % para ver fecha y versión
+                                        </span>
                                     </div>
+
+                                    {/* Tooltip flotante de Fecha y Versión al posicionar el cursor sobre el porcentaje */}
+                                    {docProgressTooltip && (
+                                        <div 
+                                            className="fixed z-50 pointer-events-none transition-all duration-150 transform"
+                                            style={{
+                                                left: `${docProgressTooltip.x}px`,
+                                                top: docProgressTooltip.y < 170 
+                                                    ? `${docProgressTooltip.y + 40}px` 
+                                                    : `${docProgressTooltip.y - 12}px`,
+                                                transform: docProgressTooltip.y < 170 
+                                                    ? 'translateX(-50%)' 
+                                                    : 'translate(-50%, -100%)'
+                                            }}
+                                        >
+                                            <div className="bg-slate-900/95 text-white backdrop-blur-md rounded-xl p-3 shadow-2xl border border-slate-700/80 min-w-[240px] max-w-[300px]">
+                                                {/* Header: Document Type & Title */}
+                                                <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-800">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <span 
+                                                            className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase text-white tracking-wide shrink-0 shadow-2xs"
+                                                            style={{ backgroundColor: TYPE_COLORS[docProgressTooltip.docType] || '#3b82f6' }}
+                                                        >
+                                                            {docProgressTooltip.docType}
+                                                        </span>
+                                                        <span className="text-[11px] font-bold text-slate-200 truncate" title={docProgressTooltip.microName}>
+                                                            {docProgressTooltip.microName}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[11px] font-extrabold text-indigo-400 bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-800/60 shrink-0">
+                                                        {docProgressTooltip.progress}%
+                                                    </span>
+                                                </div>
+
+                                                {/* Versión */}
+                                                <div className="flex items-center justify-between gap-2 py-1 text-[11px]">
+                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                        <Layers size={13} className="text-indigo-400 shrink-0" />
+                                                        <span>Versión:</span>
+                                                    </div>
+                                                    <span className="font-bold text-white font-mono bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-[10.5px]">
+                                                        {docProgressTooltip.version}
+                                                    </span>
+                                                </div>
+
+                                                {/* Fecha */}
+                                                <div className="flex items-center justify-between gap-2 py-1 text-[11px]">
+                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                        <CalendarDays size={13} className="text-emerald-400 shrink-0" />
+                                                        <span>Fecha:</span>
+                                                    </div>
+                                                    <span className="font-semibold text-slate-100 text-[10.5px]">
+                                                        {docProgressTooltip.date}
+                                                    </span>
+                                                </div>
+
+                                                {/* Estado */}
+                                                <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
+                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                        <Activity size={13} className="text-amber-400 shrink-0" />
+                                                        <span>Estado:</span>
+                                                    </div>
+                                                    <span className="font-semibold text-slate-200 text-[10.5px]">
+                                                        {docProgressTooltip.stateLabel}
+                                                    </span>
+                                                </div>
+
+                                                {!docProgressTooltip.isVirtual && docProgressTooltip.docId && (
+                                                    <div className="mt-2 pt-1.5 border-t border-slate-800/80 text-[9.5px] text-slate-400 text-center flex items-center justify-center gap-1">
+                                                        <span>Click para abrir documento</span>
+                                                        <ExternalLink size={10} className="text-slate-400" />
+                                                    </div>
+                                                )}
+
+                                                {/* Flecha indicadora */}
+                                                <div 
+                                                    className={`absolute left-1/2 -translate-x-1/2 w-0 h-0 border-x-[5px] border-x-transparent ${
+                                                        docProgressTooltip.y < 170 
+                                                            ? '-top-[5px] border-b-[5px] border-b-slate-900' 
+                                                            : '-bottom-[5px] border-t-[5px] border-t-slate-900'
+                                                    }`}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                     </>
                                 )}
                                 </div>

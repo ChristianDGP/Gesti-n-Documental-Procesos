@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HierarchyService, UserService, NotificationService, DocumentService } from '../services/firebaseBackend';
 import { User, FullHierarchy, ProcessNode, DocType, UserRole } from '../types';
+import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 import { 
-  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2
+  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2, FileSpreadsheet, Download, RotateCcw
 } from 'lucide-react';
 
 interface Props {
@@ -14,6 +16,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   
   // State for deletion tracking
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
@@ -37,6 +42,17 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [currentAssignees, setCurrentAssignees] = useState<string[]>([]);
   const [originalAssignees, setOriginalAssignees] = useState<string[]>([]);
   const [matrixKeyToUpdate, setMatrixKeyToUpdate] = useState<string | null>(null);
+
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Permissions
   const roleUpper = (user.role || '').toString().toUpperCase();
@@ -84,8 +100,6 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
           const docs = await DocumentService.getAll();
           let count = 0;
           for (const d of docs) {
-              const autoInfo = (window as any).determineStateFromVersion ? (window as any).determineStateFromVersion(d.version) : null;
-              // We use syncMetadata which already has the logic
               await DocumentService.syncMetadata(d.id, user);
               count++;
           }
@@ -106,7 +120,6 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       e.preventDefault();
       e.stopPropagation();
       
-      // Fix: Ensure we show the warning even if ID is unusual
       const confirmMsg = `¿Estás seguro de que deseas eliminar el microproceso "${microName}" de la matriz?\n\nEsta acción eliminará la configuración de analistas y documentos requeridos para este nodo.`;
 
       if(!window.confirm(confirmMsg)) return;
@@ -145,8 +158,8 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
 
   const handleEditAssignment = (proj: string, macro: string, proc: string, microObj: ProcessNode) => {
       setModalProject(proj);
-      setModalMacro(modalMacro);
-      setModalProcess(modalProcess);
+      setModalMacro(macro);
+      setModalProcess(proc);
       setModalMicro(microObj.name);
       setMatrixKeyToUpdate(microObj.docId);
       const existing = [...(microObj.assignees || [])];
@@ -190,7 +203,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       const macros = new Set<string>();
       Object.keys(hierarchy).forEach(proj => {
           if (filterProject && proj !== filterProject) return;
-          Object.keys(hierarchy[proj]).forEach(m => macros.add(m));
+          Object.keys(hierarchy[proj] || {}).forEach(m => macros.add(m));
       });
       return Array.from(macros).sort();
   };
@@ -199,9 +212,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       const processes = new Set<string>();
       Object.keys(hierarchy).forEach(proj => {
           if (filterProject && proj !== filterProject) return;
-          Object.keys(hierarchy[proj]).forEach(m => {
+          Object.keys(hierarchy[proj] || {}).forEach(m => {
               if (filterMacro && m !== filterMacro) return;
-              Object.keys(hierarchy[proj][m]).forEach(p => processes.add(p));
+              Object.keys(hierarchy[proj][m] || {}).forEach(p => processes.add(p));
           });
       });
       return Array.from(processes).sort();
@@ -212,9 +225,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       const macrosData = hierarchy[project] || {};
       Object.keys(macrosData).forEach(macro => {
           if (filterMacro && macro !== filterMacro) return;
-          Object.keys(macrosData[macro]).forEach(proc => {
+          Object.keys(macrosData[macro] || {}).forEach(proc => {
               if (filterProcess && proc !== filterProcess) return;
-              const nodes = macrosData[macro][proc];
+              const nodes = macrosData[macro][proc] || [];
               nodes.forEach(node => {
                   if (hiddenIds.has(node.docId) || node.active === false) return; 
                   if (filterMicro && !node.name.toLowerCase().includes(filterMicro.toLowerCase())) return;
@@ -226,22 +239,330 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       return rows;
   };
 
+  const hasActiveFilters = Boolean(filterProject || filterMacro || filterProcess || filterMicro || filterAnalyst);
+
+  const handleClearFilters = () => {
+      setFilterProject('');
+      setFilterMacro('');
+      setFilterProcess('');
+      setFilterMicro('');
+      setFilterAnalyst('');
+  };
+
+  const totalFilteredCount = Object.keys(hierarchy).reduce((acc, p) => {
+      if (filterProject && p !== filterProject) return acc;
+      return acc + getFlattenedRows(p).length;
+  }, 0);
+
+  // Excel / CSV Export Logic
+  const handleExport = (targetProject?: string, format: 'xlsx' | 'csv' = 'xlsx', forceAll: boolean = false) => {
+      setExporting(true);
+      setShowExportMenu(false);
+      try {
+          const projectsToExport = targetProject 
+              ? [targetProject] 
+              : (filterProject && !forceAll ? [filterProject] : Object.keys(hierarchy));
+
+          if (projectsToExport.length === 0) {
+              toast.error('No hay proyectos registrados para exportar');
+              return;
+          }
+
+          const allRows: any[] = [];
+          const projectSummaries: any[] = [];
+          const analystWorkloadMap = new Map<string, { name: string; email: string; role: string; count: number; projects: Set<string> }>();
+
+          allUsers.filter(u => u.role === UserRole.ANALYST).forEach(u => {
+              analystWorkloadMap.set(u.id, {
+                  name: u.name,
+                  email: u.email || '-',
+                  role: u.role,
+                  count: 0,
+                  projects: new Set()
+              });
+          });
+
+          projectsToExport.forEach(projKey => {
+              const macrosData = hierarchy[projKey] || {};
+              let projTotal = 0;
+              let projAssigned = 0;
+              let projAsIs = 0;
+              let projFce = 0;
+              let projPm = 0;
+              let projToBe = 0;
+              let projTotalDocsReq = 0;
+
+              Object.keys(macrosData).forEach(macro => {
+                  if (!forceAll && filterMacro && macro !== filterMacro) return;
+                  Object.keys(macrosData[macro] || {}).forEach(proc => {
+                      if (!forceAll && filterProcess && proc !== filterProcess) return;
+                      const nodes = macrosData[macro][proc] || [];
+                      nodes.forEach(node => {
+                          if (hiddenIds.has(node.docId) || node.active === false) return;
+                          if (!forceAll && filterMicro && !node.name.toLowerCase().includes(filterMicro.toLowerCase())) return;
+                          if (!forceAll && filterAnalyst && (!node.assignees || !node.assignees.includes(filterAnalyst))) return;
+
+                          projTotal++;
+                          const hasAssignees = Array.isArray(node.assignees) && node.assignees.length > 0;
+                          if (hasAssignees) {
+                              projAssigned++;
+                              node.assignees.forEach(aid => {
+                                  const a = analystWorkloadMap.get(aid);
+                                  if (a) {
+                                      a.count++;
+                                      a.projects.add(projKey);
+                                  }
+                              });
+                          }
+
+                          const reqTypes = node.requiredTypes || [];
+                          const reqAsIs = reqTypes.includes('AS IS' as DocType);
+                          const reqFce = reqTypes.includes('FCE' as DocType);
+                          const reqPm = reqTypes.includes('PM' as DocType);
+                          const reqToBe = reqTypes.includes('TO BE' as DocType);
+
+                          if (reqAsIs) projAsIs++;
+                          if (reqFce) projFce++;
+                          if (reqPm) projPm++;
+                          if (reqToBe) projToBe++;
+                          projTotalDocsReq += reqTypes.length;
+
+                          const analystNames = hasAssignees
+                              ? node.assignees.map((aid: string) => allUsers.find(u => u.id === aid)?.name || aid).join(', ')
+                              : 'Sin asignar';
+
+                          const analystEmails = hasAssignees
+                              ? node.assignees.map((aid: string) => allUsers.find(u => u.id === aid)?.email || '-').join(', ')
+                              : '-';
+
+                          allRows.push({
+                              'Proyecto': projKey,
+                              'Macroproceso': macro,
+                              'Proceso': proc,
+                              'Microproceso': node.name,
+                              'ID Matriz': node.docId,
+                              'Estado Asignación': hasAssignees ? 'Asignado' : 'Sin asignar',
+                              'Analistas Responsables': analystNames,
+                              'Correos Analistas': analystEmails,
+                              'Cant. Analistas': hasAssignees ? node.assignees.length : 0,
+                              'Docs Requeridos': reqTypes.length > 0 ? reqTypes.join(', ') : 'Ninguno',
+                              'Requiere AS IS': reqAsIs ? 'SÍ' : 'NO',
+                              'Requiere FCE': reqFce ? 'SÍ' : 'NO',
+                              'Requiere PM': reqPm ? 'SÍ' : 'NO',
+                              'Requiere TO BE': reqToBe ? 'SÍ' : 'NO',
+                              'Cant. Docs Requeridos': reqTypes.length
+                          });
+                      });
+                  });
+              });
+
+              if (projTotal > 0) {
+                  projectSummaries.push({
+                      'Proyecto': projKey,
+                      'Total Microprocesos': projTotal,
+                      'Asignados': projAssigned,
+                      'Sin Asignar': projTotal - projAssigned,
+                      '% Cobertura': `${projTotal > 0 ? ((projAssigned / projTotal) * 100).toFixed(1) : '0.0'}%`,
+                      'Requieren AS IS': projAsIs,
+                      'Requieren FCE': projFce,
+                      'Requieren PM': projPm,
+                      'Requieren TO BE': projToBe,
+                      'Total Docs Requeridos': projTotalDocsReq
+                  });
+              }
+          });
+
+          if (allRows.length === 0) {
+              toast.error('No hay microprocesos que coincidan con la búsqueda');
+              return;
+          }
+
+          const analystSummaries = Array.from(analystWorkloadMap.values())
+              .map(a => ({
+                  'Analista': a.name,
+                  'Correo': a.email,
+                  'Rol': a.role,
+                  'Microprocesos Asignados': a.count,
+                  'Proyectos Activos': Array.from(a.projects).join(', ') || 'Ninguno'
+              }))
+              .sort((a, b) => b['Microprocesos Asignados'] - a['Microprocesos Asignados']);
+
+          const dateStr = new Date().toISOString().split('T')[0];
+          const fileNamePrefix = targetProject 
+              ? `SGD_Asignaciones_${targetProject}_${dateStr}`
+              : (hasActiveFilters && !forceAll 
+                  ? `SGD_Asignaciones_Filtrado_${dateStr}`
+                  : `SGD_Gestor_Asignaciones_${dateStr}`);
+
+          if (format === 'csv') {
+              const headers = Object.keys(allRows[0]);
+              const csvLines = [
+                  headers.join(';'),
+                  ...allRows.map(r => headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(';'))
+              ];
+              const csvContent = csvLines.join('\n');
+              const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.setAttribute('href', url);
+              link.setAttribute('download', `${fileNamePrefix}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              toast.success(`Exportado archivo CSV con ${allRows.length} registros`);
+              return;
+          }
+
+          // Generate real Excel (.xlsx) workbook with multiple sheets
+          const wb = XLSX.utils.book_new();
+
+          // Sheet 1: Detalle de Asignaciones
+          const wsDetails = XLSX.utils.json_to_sheet(allRows);
+          wsDetails['!cols'] = [
+              { wch: 12 }, // Proyecto
+              { wch: 28 }, // Macroproceso
+              { wch: 30 }, // Proceso
+              { wch: 38 }, // Microproceso
+              { wch: 14 }, // ID Matriz
+              { wch: 18 }, // Estado Asignación
+              { wch: 40 }, // Analistas Responsables
+              { wch: 40 }, // Correos Analistas
+              { wch: 14 }, // Cant. Analistas
+              { wch: 24 }, // Docs Requeridos
+              { wch: 16 }, // Requiere AS IS
+              { wch: 16 }, // Requiere FCE
+              { wch: 16 }, // Requiere PM
+              { wch: 16 }, // Requiere TO BE
+              { wch: 20 }  // Cant. Docs Requeridos
+          ];
+          XLSX.utils.book_append_sheet(wb, wsDetails, 'Asignaciones');
+
+          // Sheet 2: Resumen por Proyecto
+          if (projectSummaries.length > 0) {
+              const wsSummary = XLSX.utils.json_to_sheet(projectSummaries);
+              wsSummary['!cols'] = [
+                  { wch: 14 }, // Proyecto
+                  { wch: 22 }, // Total Microprocesos
+                  { wch: 14 }, // Asignados
+                  { wch: 14 }, // Sin Asignar
+                  { wch: 16 }, // % Cobertura
+                  { wch: 18 }, // Requieren AS IS
+                  { wch: 18 }, // Requieren FCE
+                  { wch: 18 }, // Requieren PM
+                  { wch: 18 }, // Requieren TO BE
+                  { wch: 24 }  // Total Docs Requeridos
+              ];
+              XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen Proyectos');
+          }
+
+          // Sheet 3: Carga por Analista
+          if (analystSummaries.length > 0) {
+              const wsAnalysts = XLSX.utils.json_to_sheet(analystSummaries);
+              wsAnalysts['!cols'] = [
+                  { wch: 28 }, // Analista
+                  { wch: 34 }, // Correo
+                  { wch: 14 }, // Rol
+                  { wch: 26 }, // Microprocesos Asignados
+                  { wch: 24 }  // Proyectos Activos
+              ];
+              XLSX.utils.book_append_sheet(wb, wsAnalysts, 'Carga Analistas');
+          }
+
+          XLSX.writeFile(wb, `${fileNamePrefix}.xlsx`);
+          toast.success(`Archivo Excel (.xlsx) generado exitosamente con ${allRows.length} registros`);
+      } catch (err: any) {
+          console.error("Error al exportar asignaciones a Excel:", err);
+          toast.error("Ocurrió un error al generar el archivo Excel");
+      } finally {
+          setExporting(false);
+      }
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-500 flex flex-col items-center"><Loader2 className="animate-spin mb-2" /> Cargando matriz de asignaciones...</div>;
 
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div><h1 className="text-2xl font-bold text-slate-900">Gestor de Asignaciones</h1><p className="text-slate-500">Administre analistas responsables y prioridades técnicas.</p></div>
-        {user.role === UserRole.ADMIN && (
-            <div className="flex gap-2">
-                <button onClick={handleSyncMetadata} disabled={seeding} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-indigo-700 transition-all">
-                    {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Sincronizar Metadatos
+        <div>
+            <h1 className="text-2xl font-bold text-slate-900">Gestor de Asignaciones</h1>
+            <p className="text-slate-500">Administre analistas responsables y prioridades técnicas.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+            {/* Exportar a Excel Controls */}
+            <div className="relative inline-flex items-center shadow-xs rounded-lg" ref={exportMenuRef}>
+                <button
+                    onClick={() => handleExport(undefined, 'xlsx', false)}
+                    disabled={exporting}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-l-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all disabled:opacity-50"
+                    title="Exportar vista actual a formato Excel (.xlsx)"
+                >
+                    {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />}
+                    <span>Exportar a Excel</span>
                 </button>
-                <button onClick={handleSeedDefaults} disabled={seeding} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-slate-900 transition-all">
-                    {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Restablecer Matriz
+                <button
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    disabled={exporting}
+                    className="px-2 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-r-lg border-l border-emerald-500 text-xs transition-all disabled:opacity-50"
+                    title="Más opciones de exportación"
+                >
+                    <ChevronDown size={14} className={`transform transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
                 </button>
+
+                {showExportMenu && (
+                    <div className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-lg shadow-xl border border-slate-200 py-1.5 z-30 text-xs animate-fadeIn">
+                        <div className="px-3 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-100">
+                            Opciones de Exportación
+                        </div>
+                        <button
+                            onClick={() => handleExport(undefined, 'xlsx', false)}
+                            className="w-full text-left px-3 py-2 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2"
+                        >
+                            <FileSpreadsheet size={14} className="text-emerald-600" />
+                            <div>
+                                <div className="font-semibold">Descargar Excel (.xlsx)</div>
+                                <div className="text-[10px] text-slate-500">
+                                    {hasActiveFilters ? `Con filtros actuales (${totalFilteredCount} nodos)` : 'Todas las asignaciones'}
+                                </div>
+                            </div>
+                        </button>
+                        {hasActiveFilters && (
+                            <button
+                                onClick={() => handleExport(undefined, 'xlsx', true)}
+                                className="w-full text-left px-3 py-2 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2"
+                            >
+                                <FileSpreadsheet size={14} className="text-emerald-600" />
+                                <div>
+                                    <div className="font-semibold">Exportar Matriz Completa (.xlsx)</div>
+                                    <div className="text-[10px] text-slate-500">Ignorar filtros y exportar todo</div>
+                                </div>
+                            </button>
+                        )}
+                        <button
+                            onClick={() => handleExport(undefined, 'csv', false)}
+                            className="w-full text-left px-3 py-2 text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100 mt-1"
+                        >
+                            <Download size={14} className="text-slate-500" />
+                            <div>
+                                <div className="font-semibold">Descargar como CSV (.csv)</div>
+                                <div className="text-[10px] text-slate-500">Delimitado por punto y coma (;)</div>
+                            </div>
+                        </button>
+                    </div>
+                )}
             </div>
-        )}
+
+            {user.role === UserRole.ADMIN && (
+                <>
+                    <button onClick={handleSyncMetadata} disabled={seeding} className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xs">
+                        {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Sincronizar Metadatos
+                    </button>
+                    <button onClick={handleSeedDefaults} disabled={seeding} className="px-3.5 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-slate-900 transition-all shadow-xs">
+                        {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Restablecer Matriz
+                    </button>
+                </>
+            )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
@@ -252,6 +573,23 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
               <div className="relative"><Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="Microproceso..." value={filterMicro} onChange={(e) => setFilterMicro(e.target.value)} className="w-full pl-8 p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none" /></div>
               <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none"><option value="">Analista (Todos)</option>{allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
           </div>
+
+          {hasActiveFilters && (
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                  <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-700">Filtros aplicados:</span>
+                      <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+                          {totalFilteredCount} microprocesos encontrados
+                      </span>
+                  </div>
+                  <button
+                      onClick={handleClearFilters}
+                      className="text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium hover:underline transition-all"
+                  >
+                      <RotateCcw size={12} /> Limpiar filtros
+                  </button>
+              </div>
+          )}
       </div>
       
       <div className="space-y-4">
@@ -263,7 +601,21 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                 <div key={projectKey} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div onClick={() => toggleProject(projectKey)} className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors border-b border-slate-200">
                         <div className="flex items-center gap-2 font-bold text-slate-800 text-lg">{expandedProjects[projectKey] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}<FolderTree size={20} className="text-indigo-600" />Proyecto {projectKey}</div>
-                        <span className="text-xs text-slate-500 font-medium bg-white px-2 py-1 rounded border border-slate-200">{rows.length} Microprocesos</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500 font-medium bg-white px-2.5 py-1 rounded border border-slate-200 shadow-2xs">{rows.length} Microprocesos</span>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExport(projectKey, 'xlsx', false);
+                                }}
+                                disabled={exporting}
+                                className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                                title={`Exportar asignaciones de Proyecto ${projectKey} a Excel (.xlsx)`}
+                            >
+                                <FileSpreadsheet size={13} className="text-emerald-600" />
+                                <span>Exportar</span>
+                            </button>
+                        </div>
                     </div>
 
                     {expandedProjects[projectKey] && (
