@@ -5,10 +5,10 @@ import { Document, User, DocState, FullHierarchy, DocType, UserRole, DocHistory 
 import { STATE_CONFIG } from '../constants';
 import AdminBI from './AdminBI';
 import { 
-    PieChart, Pie, Cell, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
+    PieChart, Pie, Cell, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, ChevronUp, UserCheck
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, ChevronUp, UserCheck, Search
 } from 'lucide-react';
 
 interface Props {
@@ -41,6 +41,8 @@ const TYPE_COLORS: Record<string, string> = {
 const STUCK_ITEMS_PER_PAGE = 6;
 
 type ChartScale = 'ANNUAL' | 'MONTHLY' | 'WEEKLY';
+
+export type BottleneckDimension = 'PROJECT' | 'MACRO' | 'PROCESS' | 'MICRO' | 'ANALYST' | 'COORDINATOR' | 'DOCUMENT';
 
 const Reports: React.FC<Props> = ({ user }) => {
     const navigate = useNavigate();
@@ -130,6 +132,15 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [activeType, setActiveType] = useState<string | null>(null);
     const [mapDocTypeFilter, setMapDocTypeFilter] = useState<'TODOS' | 'AS IS' | 'FCE' | 'PM' | 'TO BE'>('TODOS');
     const [mapSubTab, setMapSubTab] = useState<'DIAGRAM' | 'REPORTS'>('DIAGRAM');
+
+    // Estados para el Monitor de Cuellos de Botella y Envejecimiento (Aging WIP)
+    const [bottleneckDimension, setBottleneckDimension] = useState<BottleneckDimension>('MACRO');
+    const [bottleneckMetric, setBottleneckMetric] = useState<'DAYS' | 'COUNT'>('DAYS');
+    const [bottleneckPhaseFilter, setBottleneckPhaseFilter] = useState<'ALL' | 'EN_PROCESO' | 'REFERENTE' | 'CONTROL'>('ALL');
+    const [bottleneckSearchTerm, setBottleneckSearchTerm] = useState('');
+    const [bottleneckTopLimit, setBottleneckTopLimit] = useState<number>(10);
+    const [selectedBottleneckEntity, setSelectedBottleneckEntity] = useState<string | null>(null);
+    const [includeBacklogInBottlenecks, setIncludeBacklogInBottlenecks] = useState(false);
 
     const [docProgressTooltip, setDocProgressTooltip] = useState<{
         x: number;
@@ -436,6 +447,217 @@ const Reports: React.FC<Props> = ({ user }) => {
         }
         return data;
     }, [filteredDocs, history, cfdRange]);
+
+    const activeBottleneckDocs = useMemo(() => {
+        const nowMs = new Date().getTime();
+        return filteredDocs
+            .filter(d => {
+                if (d.state === DocState.APPROVED) return false;
+                if (!includeBacklogInBottlenecks && (d.state === DocState.NOT_STARTED || d.isVirtual)) return false;
+                return true;
+            })
+            .map(d => {
+                let days = 0;
+                if (d.state !== DocState.NOT_STARTED || !d.isVirtual) {
+                    const docHist = history.filter(h => h.documentId === d.id);
+                    if (docHist.length > 0) {
+                        const stateHist = docHist.filter(h => h.newState === d.state);
+                        if (stateHist.length > 0) {
+                            const latest = stateHist.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+                            const time = new Date(latest.timestamp).getTime();
+                            if (!isNaN(time) && time > 0) {
+                                days = Math.max(0, Math.floor((nowMs - time) / (1000 * 60 * 60 * 24)));
+                            }
+                        }
+                    }
+                    if (days === 0) {
+                        const dateStr = (d.updatedAt && d.updatedAt !== new Date(0).toISOString()) ? d.updatedAt : d.createdAt;
+                        if (dateStr && dateStr !== new Date(0).toISOString()) {
+                            const time = new Date(dateStr).getTime();
+                            if (!isNaN(time) && time > 0) {
+                                days = Math.max(0, Math.floor((nowMs - time) / (1000 * 60 * 60 * 24)));
+                            }
+                        }
+                    }
+                }
+
+                let phase: 'EN_PROCESO' | 'REFERENTE' | 'CONTROL' | 'NO_INICIADO' = 'EN_PROCESO';
+                if (d.state === DocState.SENT_TO_REFERENT || d.state === DocState.REFERENT_REVIEW) {
+                    phase = 'REFERENTE';
+                } else if (d.state === DocState.SENT_TO_CONTROL || d.state === DocState.CONTROL_REVIEW) {
+                    phase = 'CONTROL';
+                } else if (d.state === DocState.NOT_STARTED) {
+                    phase = 'NO_INICIADO';
+                }
+
+                return {
+                    ...d,
+                    daysStuck: days,
+                    phase
+                };
+            });
+    }, [filteredDocs, history, includeBacklogInBottlenecks]);
+
+    const bottleneckStats = useMemo(() => {
+        const userMap = new Map<string, string>();
+        users.forEach(u => userMap.set(u.id, u.name || u.email));
+
+        const grouped: Record<string, typeof activeBottleneckDocs> = {};
+
+        activeBottleneckDocs.forEach(doc => {
+            if (bottleneckPhaseFilter !== 'ALL' && doc.phase !== bottleneckPhaseFilter) {
+                return;
+            }
+
+            let keys: string[] = [];
+            switch (bottleneckDimension) {
+                case 'PROJECT':
+                    keys = [doc.project || 'Sin Proyecto'];
+                    break;
+                case 'MACRO':
+                    keys = [doc.macroprocess || 'Sin Macroproceso'];
+                    break;
+                case 'PROCESS':
+                    keys = [doc.process || 'Sin Proceso'];
+                    break;
+                case 'MICRO':
+                    keys = [doc.microprocess || doc.title.split(' - ')[0] || 'Sin Microproceso'];
+                    break;
+                case 'ANALYST':
+                    if (doc.assignees && doc.assignees.length > 0) {
+                        keys = doc.assignees.map(id => userMap.get(id) || id);
+                    } else if (doc.authorName) {
+                        keys = [doc.authorName];
+                    } else {
+                        keys = ['Sin Asignar'];
+                    }
+                    break;
+                case 'COORDINATOR':
+                    if (doc.assignedByName && doc.assignedByName.trim()) {
+                        keys = [doc.assignedByName];
+                    } else {
+                        const coordUser = users.find(u => [UserRole.COORDINATOR, UserRole.ADMIN].includes(u.role) && (u.name === doc.authorName || u.email === doc.authorName));
+                        if (coordUser) {
+                            keys = [coordUser.name];
+                        } else {
+                            keys = ['Sin Coordinador Asignado'];
+                        }
+                    }
+                    break;
+                case 'DOCUMENT':
+                    keys = [doc.title || `${doc.microprocess || 'Doc'} (${doc.docType || 'AS IS'})`];
+                    break;
+            }
+
+            keys.forEach(k => {
+                const cleanKey = k.trim() || 'Sin Definir';
+                if (!grouped[cleanKey]) grouped[cleanKey] = [];
+                grouped[cleanKey].push(doc);
+            });
+        });
+
+        const items = Object.entries(grouped).map(([name, docs]) => {
+            const totalCount = docs.length;
+            const enProcesoDocs = docs.filter(d => d.phase === 'EN_PROCESO');
+            const referenteDocs = docs.filter(d => d.phase === 'REFERENTE');
+            const controlDocs = docs.filter(d => d.phase === 'CONTROL');
+            const noIniciadoDocs = docs.filter(d => d.phase === 'NO_INICIADO');
+
+            const sumDays = docs.reduce((acc, d) => acc + d.daysStuck, 0);
+            const avgDays = totalCount > 0 ? Math.round(sumDays / totalCount) : 0;
+            const maxDays = docs.reduce((max, d) => Math.max(max, d.daysStuck), 0);
+
+            const sumEnProceso = enProcesoDocs.reduce((acc, d) => acc + d.daysStuck, 0);
+            const avgDaysEnProceso = enProcesoDocs.length > 0 ? Math.round(sumEnProceso / enProcesoDocs.length) : 0;
+
+            const sumReferente = referenteDocs.reduce((acc, d) => acc + d.daysStuck, 0);
+            const avgDaysReferente = referenteDocs.length > 0 ? Math.round(sumReferente / referenteDocs.length) : 0;
+
+            const sumControl = controlDocs.reduce((acc, d) => acc + d.daysStuck, 0);
+            const avgDaysControl = controlDocs.length > 0 ? Math.round(sumControl / controlDocs.length) : 0;
+
+            const criticalCount = docs.filter(d => d.daysStuck > 30).length;
+            const warningCount = docs.filter(d => d.daysStuck >= 15 && d.daysStuck <= 30).length;
+
+            return {
+                name,
+                dimension: bottleneckDimension,
+                docs,
+                totalCount,
+                countEnProceso: enProcesoDocs.length,
+                countReferente: referenteDocs.length,
+                countControl: controlDocs.length,
+                countNoIniciado: noIniciadoDocs.length,
+                avgDays,
+                maxDays,
+                avgDaysEnProceso,
+                avgDaysReferente,
+                avgDaysControl,
+                criticalCount,
+                warningCount
+            };
+        });
+
+        // Sort items
+        items.sort((a, b) => {
+            if (bottleneckMetric === 'DAYS') {
+                if (b.avgDays !== a.avgDays) return b.avgDays - a.avgDays;
+                return b.totalCount - a.totalCount;
+            } else {
+                if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
+                return b.avgDays - a.avgDays;
+            }
+        });
+
+        // Filter by search
+        let filtered = items;
+        if (bottleneckSearchTerm.trim()) {
+            const query = bottleneckSearchTerm.toLowerCase();
+            filtered = filtered.filter(item => item.name.toLowerCase().includes(query));
+        }
+
+        // Slice by top limit
+        const displayItems = bottleneckTopLimit > 0 ? filtered.slice(0, bottleneckTopLimit) : filtered;
+
+        // Overall metrics
+        const allActiveDocs = activeBottleneckDocs;
+        const totalActiveWip = allActiveDocs.length;
+        const totalCriticalDocs = allActiveDocs.filter(d => d.daysStuck > 30).length;
+        const overallAvgDays = totalActiveWip > 0 ? Math.round(allActiveDocs.reduce((a, b) => a + b.daysStuck, 0) / totalActiveWip) : 0;
+
+        // Phase breakdown for entire system
+        const sysEnProceso = allActiveDocs.filter(d => d.phase === 'EN_PROCESO');
+        const sysReferente = allActiveDocs.filter(d => d.phase === 'REFERENTE');
+        const sysControl = allActiveDocs.filter(d => d.phase === 'CONTROL');
+
+        const sysAvgEnProceso = sysEnProceso.length > 0 ? Math.round(sysEnProceso.reduce((a, b) => a + b.daysStuck, 0) / sysEnProceso.length) : 0;
+        const sysAvgReferente = sysReferente.length > 0 ? Math.round(sysReferente.reduce((a, b) => a + b.daysStuck, 0) / sysReferente.length) : 0;
+        const sysAvgControl = sysControl.length > 0 ? Math.round(sysControl.reduce((a, b) => a + b.daysStuck, 0) / sysControl.length) : 0;
+
+        let slowestPhase = { name: 'En Proceso', days: sysAvgEnProceso, count: sysEnProceso.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' };
+        if (sysAvgReferente >= sysAvgEnProceso && sysAvgReferente >= sysAvgControl && sysReferente.length > 0) {
+            slowestPhase = { name: 'Revisión Referente', days: sysAvgReferente, count: sysReferente.length, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' };
+        } else if (sysAvgControl >= sysAvgEnProceso && sysAvgControl >= sysAvgReferente && sysControl.length > 0) {
+            slowestPhase = { name: 'Control de Gestión', days: sysAvgControl, count: sysControl.length, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' };
+        } else if (sysEnProceso.length > 0) {
+            slowestPhase = { name: 'En Proceso', days: sysAvgEnProceso, count: sysEnProceso.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' };
+        }
+
+        const topBottleneck = items.length > 0 ? items[0] : null;
+
+        return {
+            items: displayItems,
+            totalItemsCount: items.length,
+            totalActiveWip,
+            totalCriticalDocs,
+            overallAvgDays,
+            slowestPhase,
+            topBottleneck,
+            sysAvgEnProceso,
+            sysAvgReferente,
+            sysAvgControl
+        };
+    }, [activeBottleneckDocs, bottleneckDimension, bottleneckMetric, bottleneckPhaseFilter, bottleneckSearchTerm, bottleneckTopLimit, users]);
 
     const closureBoardData = useMemo(() => {
         if (!closureMonth || !unifiedData.length) return [];
@@ -4372,6 +4594,540 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 </ResponsiveContainer>
                             </div>
                         </div>
+
+                        {/* Monitor de Cuellos de Botella y Envejecimiento de Flujo (Aging WIP) */}
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                            {/* Header y Selector de Métrica */}
+                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-5 pb-4 border-b border-slate-100">
+                                <div>
+                                    <div className="flex items-center gap-2.5">
+                                        <h3 className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
+                                            <Activity size={18} className="text-red-500" />
+                                            Monitor de Cuellos de Botella y Envejecimiento de Flujo (Aging WIP)
+                                        </h3>
+                                        <span className="px-2 py-0.5 bg-red-50 text-red-700 text-[10px] font-black rounded-full border border-red-200 uppercase tracking-wide">
+                                            Lead Time &amp; WIP
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Identificación de puntos críticos de retención y acumulación de documentos por dimensión jerárquica y responsable.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2.5">
+                                    {/* Métrica: Días vs Cantidad */}
+                                    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1 text-xs font-semibold">
+                                        <button
+                                            type="button"
+                                            onClick={() => setBottleneckMetric('DAYS')}
+                                            className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                                                bottleneckMetric === 'DAYS'
+                                                    ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                                                    : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <Clock size={13} />
+                                            <span>Días de Retención (Aging)</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setBottleneckMetric('COUNT')}
+                                            className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                                                bottleneckMetric === 'COUNT'
+                                                    ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                                                    : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <Layers size={13} />
+                                            <span>Volumen (Docs WIP)</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Checkbox Backlog */}
+                                    <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={includeBacklogInBottlenecks}
+                                            onChange={(e) => setIncludeBacklogInBottlenecks(e.target.checked)}
+                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <span>Incluir No Iniciados</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Selector de Dimensión (7 Dimensiones Solicitadas) */}
+                            <div className="mb-5">
+                                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                    <Filter size={13} />
+                                    <span>Nivel de Desglose / Dimensión:</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[
+                                        { id: 'PROJECT' as const, label: 'Proyecto', icon: Briefcase },
+                                        { id: 'MACRO' as const, label: 'Macroproceso', icon: Layers },
+                                        { id: 'PROCESS' as const, label: 'Proceso', icon: FolderTree },
+                                        { id: 'MICRO' as const, label: 'Microproceso', icon: FileText },
+                                        { id: 'ANALYST' as const, label: 'Analista', icon: Users },
+                                        { id: 'COORDINATOR' as const, label: 'Coordinador', icon: UserCheck },
+                                        { id: 'DOCUMENT' as const, label: 'Documento', icon: Activity }
+                                    ].map((dim) => {
+                                        const Icon = dim.icon;
+                                        const isSelected = bottleneckDimension === dim.id;
+                                        return (
+                                            <button
+                                                key={dim.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setBottleneckDimension(dim.id);
+                                                    setSelectedBottleneckEntity(null);
+                                                }}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                                    isSelected
+                                                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
+                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+                                                }`}
+                                            >
+                                                <Icon size={14} className={isSelected ? 'text-white' : 'text-slate-500'} />
+                                                <span>{dim.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Tarjetas Diagnóstico Ejecutivo */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                                <div className="p-3.5 bg-red-50/70 border border-red-200/80 rounded-xl flex items-center gap-3">
+                                    <div className="p-2.5 bg-red-100 text-red-600 rounded-lg shrink-0">
+                                        <AlertTriangle size={20} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Mayor Cuello de Botella</p>
+                                        <p className="text-xs font-black text-slate-900 truncate" title={bottleneckStats.topBottleneck?.name || 'N/A'}>
+                                            {bottleneckStats.topBottleneck?.name || 'Sin datos'}
+                                        </p>
+                                        <p className="text-[11px] font-bold text-red-600">
+                                            {bottleneckStats.topBottleneck ? `${bottleneckStats.topBottleneck.avgDays} d prom. (${bottleneckStats.topBottleneck.totalCount} docs)` : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-center gap-3">
+                                    <div className="p-2.5 bg-purple-100 text-purple-600 rounded-lg shrink-0">
+                                        <Clock size={20} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wide">Fase Más Lenta del Sistema</p>
+                                        <p className={`text-xs font-black truncate ${bottleneckStats.slowestPhase.color}`}>
+                                            {bottleneckStats.slowestPhase.name}
+                                        </p>
+                                        <p className="text-[11px] font-bold text-purple-700">
+                                            {bottleneckStats.slowestPhase.days} días promedio ({bottleneckStats.slowestPhase.count} docs)
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-center gap-3">
+                                    <div className="p-2.5 bg-amber-100 text-amber-600 rounded-lg shrink-0">
+                                        <ShieldAlert size={20} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">En Alerta Crítica (&gt;30d)</p>
+                                        <p className="text-lg font-black text-amber-900 leading-tight">
+                                            {bottleneckStats.totalCriticalDocs}
+                                        </p>
+                                        <p className="text-[11px] font-medium text-amber-700">
+                                            Documentos con flujo detenido
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex items-center gap-3">
+                                    <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-lg shrink-0">
+                                        <Activity size={20} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide">Carga Activa en Flujo</p>
+                                        <p className="text-lg font-black text-indigo-950 leading-tight">
+                                            {bottleneckStats.totalActiveWip} docs
+                                        </p>
+                                        <p className="text-[11px] font-medium text-indigo-700">
+                                            {bottleneckStats.overallAvgDays} días de permanencia global
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Barra de Filtros secundarios y Búsqueda */}
+                            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mb-4 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-slate-600">Filtrar Fase:</span>
+                                    <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5 text-[11px]">
+                                        {[
+                                            { id: 'ALL' as const, label: 'Todas' },
+                                            { id: 'EN_PROCESO' as const, label: 'En Proceso' },
+                                            { id: 'REFERENTE' as const, label: 'Referente' },
+                                            { id: 'CONTROL' as const, label: 'Control' }
+                                        ].map(f => (
+                                            <button
+                                                key={f.id}
+                                                type="button"
+                                                onClick={() => setBottleneckPhaseFilter(f.id)}
+                                                className={`px-2.5 py-1 rounded transition-colors ${
+                                                    bottleneckPhaseFilter === f.id
+                                                        ? 'bg-slate-900 text-white font-bold'
+                                                        : 'text-slate-600 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                {f.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="h-4 w-[1px] bg-slate-200 hidden sm:block"></div>
+
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                                        <span>Mostrar:</span>
+                                        <select
+                                            value={bottleneckTopLimit}
+                                            onChange={(e) => setBottleneckTopLimit(Number(e.target.value))}
+                                            className="px-2 py-1 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                        >
+                                            <option value={5}>Top 5</option>
+                                            <option value={10}>Top 10</option>
+                                            <option value={15}>Top 15</option>
+                                            <option value={25}>Top 25</option>
+                                            <option value={0}>Todos ({bottleneckStats.totalItemsCount})</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="relative min-w-[200px]">
+                                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder={`Buscar en ${bottleneckDimension.toLowerCase()}...`}
+                                        value={bottleneckSearchTerm}
+                                        onChange={(e) => setBottleneckSearchTerm(e.target.value)}
+                                        className="w-full pl-8 pr-3 py-1 bg-white border border-slate-200 rounded-md text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    {bottleneckSearchTerm && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setBottleneckSearchTerm('')}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Gráfico Recharts de Barras Horizontales Apiladas */}
+                            {bottleneckStats.items.length === 0 ? (
+                                <div className="py-16 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                                    <CheckCircle size={32} className="mx-auto mb-2 text-emerald-300" />
+                                    <p className="text-xs font-bold text-slate-600">No se detectaron cuellos de botella con los filtros aplicados.</p>
+                                    <p className="text-[11px] text-slate-400 mt-1">Todos los documentos están terminados o no hay trabajo activo en esta selección.</p>
+                                </div>
+                            ) : (
+                                <div className="w-full overflow-hidden">
+                                    <div style={{ height: Math.max(300, Math.min(800, (bottleneckStats.items.length * 38) + 60)) }}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart
+                                                layout="vertical"
+                                                data={bottleneckStats.items}
+                                                margin={{ top: 10, right: 40, left: 130, bottom: 10 }}
+                                                onClick={(state: any) => {
+                                                    if (state && state.activeLabel) {
+                                                        setSelectedBottleneckEntity(String(state.activeLabel));
+                                                    }
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                                <XAxis 
+                                                    type="number" 
+                                                    tick={{ fontSize: 10, fill: '#64748b' }} 
+                                                    unit={bottleneckMetric === 'DAYS' ? ' d' : ' docs'} 
+                                                />
+                                                <YAxis 
+                                                    type="category" 
+                                                    dataKey="name" 
+                                                    tick={{ fontSize: 11, fill: '#1e293b', fontWeight: 600 }} 
+                                                    width={125}
+                                                    tickFormatter={(val: string) => val.length > 22 ? val.substring(0, 20) + '...' : val}
+                                                />
+                                                <Tooltip 
+                                                    content={({ active, payload, label }: any) => {
+                                                        if (!active || !payload || !payload.length) return null;
+                                                        const item = bottleneckStats.items.find(i => i.name === label);
+                                                        if (!item) return null;
+
+                                                        return (
+                                                            <div className="bg-slate-900/95 text-white backdrop-blur-md rounded-xl p-3.5 shadow-2xl border border-slate-700/80 text-xs min-w-[240px] max-w-[320px]">
+                                                                <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-800">
+                                                                    <span className="font-bold text-white text-[12px] truncate" title={item.name}>
+                                                                        {item.name}
+                                                                    </span>
+                                                                    <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 shrink-0">
+                                                                        {bottleneckDimension}
+                                                                    </span>
+                                                                </div>
+
+                                                                <div className="space-y-1.5 mb-2.5">
+                                                                    <div className="flex justify-between items-center text-slate-300">
+                                                                        <span className="text-slate-400">Total en curso (WIP):</span>
+                                                                        <span className="font-bold text-white font-mono">{item.totalCount} docs</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center text-slate-300">
+                                                                        <span className="text-slate-400">Permanencia promedio:</span>
+                                                                        <span className={`font-bold font-mono ${item.avgDays > 30 ? 'text-red-400' : item.avgDays >= 15 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                                                            {item.avgDays} días
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center text-slate-300">
+                                                                        <span className="text-slate-400">Caso más antiguo:</span>
+                                                                        <span className="font-bold font-mono text-slate-200">{item.maxDays} días</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="pt-2 border-t border-slate-800 space-y-1 text-[11px]">
+                                                                    <div className="flex justify-between items-center text-blue-300">
+                                                                        <span className="flex items-center gap-1.5">
+                                                                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                                            En Proceso:
+                                                                        </span>
+                                                                        <span>{item.countEnProceso} docs ({item.avgDaysEnProceso} d prom.)</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center text-purple-300">
+                                                                        <span className="flex items-center gap-1.5">
+                                                                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                                                            Referente:
+                                                                        </span>
+                                                                        <span>{item.countReferente} docs ({item.avgDaysReferente} d prom.)</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center text-orange-300">
+                                                                        <span className="flex items-center gap-1.5">
+                                                                            <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                                                            Control Gestión:
+                                                                        </span>
+                                                                        <span>{item.countControl} docs ({item.avgDaysControl} d prom.)</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {item.criticalCount > 0 && (
+                                                                    <div className="mt-2.5 pt-2 border-t border-red-900/50 flex items-center gap-1.5 text-red-400 text-[10.5px] font-bold">
+                                                                        <AlertTriangle size={12} className="shrink-0" />
+                                                                        <span>{item.criticalCount} documento(s) con más de 30 días</span>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="mt-2 pt-1.5 border-t border-slate-800 text-[9.5px] text-slate-400 text-center">
+                                                                    Click en la barra para auditar documentos
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }}
+                                                />
+                                                <Legend 
+                                                    verticalAlign="top" 
+                                                    align="right" 
+                                                    wrapperStyle={{ paddingBottom: 10, fontSize: 11 }} 
+                                                />
+                                                {bottleneckMetric === 'DAYS' ? (
+                                                    <>
+                                                        <Bar dataKey="avgDaysEnProceso" name="En Proceso (días)" stackId="a" fill="#3b82f6" />
+                                                        <Bar dataKey="avgDaysReferente" name="Referente (días)" stackId="a" fill="#a855f7" />
+                                                        <Bar dataKey="avgDaysControl" name="Control Gestión (días)" stackId="a" fill="#f97316" radius={[0, 4, 4, 0]}>
+                                                            <LabelList 
+                                                                dataKey="avgDays" 
+                                                                position="right" 
+                                                                formatter={(val: any) => `${val} d`} 
+                                                                style={{ fontSize: 10, fontWeight: 700, fill: '#475569' }} 
+                                                            />
+                                                        </Bar>
+                                                        <ReferenceLine x={30} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Alerta 30d', fill: '#ef4444', fontSize: 10, position: 'top' }} />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Bar dataKey="countEnProceso" name="En Proceso (docs)" stackId="a" fill="#3b82f6" />
+                                                        <Bar dataKey="countReferente" name="Referente (docs)" stackId="a" fill="#a855f7" />
+                                                        <Bar dataKey="countControl" name="Control Gestión (docs)" stackId="a" fill="#f97316" radius={[0, 4, 4, 0]}>
+                                                            <LabelList 
+                                                                dataKey="totalCount" 
+                                                                position="right" 
+                                                                formatter={(val: any) => `${val} docs`} 
+                                                                style={{ fontSize: 10, fontWeight: 700, fill: '#475569' }} 
+                                                            />
+                                                        </Bar>
+                                                    </>
+                                                )}
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+
+                                    <div className="mt-3 p-2 bg-slate-50 border border-slate-200/80 rounded-lg text-slate-500 text-[11px] flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-slate-700">Interpretación:</span>
+                                            <span>
+                                                {bottleneckMetric === 'DAYS'
+                                                    ? 'Barras más largas indican mayor lentitud en la resolución (Lead Time).'
+                                                    : 'Barras más largas indican mayor congestión y acumulación de documentos (WIP).'}
+                                            </span>
+                                        </div>
+                                        <span className="text-indigo-600 font-semibold flex items-center gap-1">
+                                            <Info size={12} /> Haga clic en cualquier barra para ver el listado de documentos
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Modal / Panel Desplegable de Documentos para la Entidad Seleccionada */}
+                            {selectedBottleneckEntity && (() => {
+                                const entityData = bottleneckStats.items.find(i => i.name === selectedBottleneckEntity);
+                                if (!entityData) return null;
+
+                                return (
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+                                        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+                                            {/* Header Modal */}
+                                            <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-4">
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-indigo-100 text-indigo-800">
+                                                            {bottleneckDimension}
+                                                        </span>
+                                                        <h4 className="text-base font-black text-slate-900 truncate">
+                                                            {entityData.name}
+                                                        </h4>
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        {entityData.docs.length} documentos activos en flujo &bull; Permanencia promedio: <b>{entityData.avgDays} días</b> (Máx: {entityData.maxDays} días)
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedBottleneckEntity(null)}
+                                                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors"
+                                                >
+                                                    <X size={18} />
+                                                </button>
+                                            </div>
+
+                                            {/* Resumen de Fase en Modal */}
+                                            <div className="px-5 py-3 bg-white border-b border-slate-100 flex items-center justify-between flex-wrap gap-2 text-xs">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-bold">
+                                                        En Proceso: {entityData.countEnProceso}
+                                                    </span>
+                                                    <span className="px-2.5 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-bold">
+                                                        Referente: {entityData.countReferente}
+                                                    </span>
+                                                    <span className="px-2.5 py-1 rounded-md bg-orange-50 text-orange-700 border border-orange-200 font-bold">
+                                                        Control: {entityData.countControl}
+                                                    </span>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const ids = entityData.docs.map(d => d.id).filter(id => !id.startsWith('virtual-'));
+                                                        if (ids.length > 0) goToDashboard(ids);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors flex items-center gap-1.5 text-xs shadow-xs"
+                                                >
+                                                    <ExternalLink size={13} />
+                                                    <span>Abrir todos en Dashboard</span>
+                                                </button>
+                                            </div>
+
+                                            {/* Lista de Documentos con Scroll */}
+                                            <div className="p-5 overflow-y-auto max-h-[55vh] space-y-3">
+                                                {entityData.docs.map(doc => {
+                                                    const isCritical = doc.daysStuck > 30;
+                                                    const isWarning = doc.daysStuck >= 15 && doc.daysStuck <= 30;
+
+                                                    return (
+                                                        <div
+                                                            key={doc.id}
+                                                            className="p-3.5 bg-slate-50 hover:bg-white rounded-xl border border-slate-200 hover:border-indigo-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                                                        >
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                                    <span className="text-[10px] font-bold text-indigo-700 uppercase bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                                                        {doc.project}
+                                                                    </span>
+                                                                    <span className="text-[10px] font-bold text-slate-500 truncate">
+                                                                        {doc.macroprocess} &gt; {doc.process}
+                                                                    </span>
+                                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                                                                        isCritical
+                                                                            ? 'bg-red-50 text-red-700 border-red-200 animate-pulse'
+                                                                            : isWarning
+                                                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                                                                    }`}>
+                                                                        {doc.daysStuck} días en fase
+                                                                    </span>
+                                                                </div>
+
+                                                                <h5 className="text-xs font-bold text-slate-900 truncate">
+                                                                    {doc.title}
+                                                                </h5>
+
+                                                                <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-500">
+                                                                    <span>
+                                                                        Estado: <b className="text-slate-700">{STATE_CONFIG[doc.state]?.label || doc.state}</b>
+                                                                    </span>
+                                                                    <span>&bull;</span>
+                                                                    <span>
+                                                                        Analistas: <b className="text-slate-700">
+                                                                            {doc.assignees && doc.assignees.length > 0
+                                                                                ? doc.assignees.map(id => {
+                                                                                    const u = users.find(user => user.id === id);
+                                                                                    return u ? (u.name || u.email) : id;
+                                                                                }).join(', ')
+                                                                                : (doc.authorName || 'Sin Asignar')}
+                                                                        </b>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                                                {!doc.isVirtual && !doc.id.startsWith('virtual-') && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => navigate(`/doc/${doc.id}`)}
+                                                                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
+                                                                    >
+                                                                        <span>Ver Detalle</span>
+                                                                        <ArrowRight size={12} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Footer Modal */}
+                                            <div className="p-3.5 border-t border-slate-100 bg-slate-50 text-right">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedBottleneckEntity(null)}
+                                                    className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors"
+                                                >
+                                                    Cerrar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                             <div className="p-6 pb-2">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">

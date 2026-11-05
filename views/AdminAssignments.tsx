@@ -4,7 +4,8 @@ import { User, FullHierarchy, ProcessNode, DocType, UserRole } from '../types';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { 
-  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2, FileSpreadsheet, Download, RotateCcw
+  FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2, FileSpreadsheet, Download, RotateCcw,
+  BookOpen, CheckCircle2, Target, ArrowRight, HelpCircle, ChevronUp, FileText, Sparkles, ShieldCheck
 } from 'lucide-react';
 
 interface Props {
@@ -32,6 +33,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [filterAnalyst, setFilterAnalyst] = useState('');
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({ 'HPC': true, 'HSR': true, 'REU': true });
+  const [showMethodology, setShowMethodology] = useState(true);
 
   // Edit Assignment Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -552,6 +554,20 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                 )}
             </div>
 
+            {/* Botón para Alternar Guía Metodológica */}
+            <button
+                onClick={() => setShowMethodology(!showMethodology)}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs ${
+                    showMethodology 
+                        ? 'bg-indigo-700 text-white hover:bg-indigo-800' 
+                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
+                }`}
+                title="Mostrar u ocultar la explicación de la forma de trabajo y documentos requeridos"
+            >
+                <BookOpen size={15} />
+                <span>{showMethodology ? 'Ocultar Metodología' : 'Ver Forma de Trabajo'}</span>
+            </button>
+
             {user.role === UserRole.ADMIN && (
                 <>
                     <button onClick={handleSyncMetadata} disabled={seeding} className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xs">
@@ -563,6 +579,212 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                 </>
             )}
         </div>
+      </div>
+
+      {/* SECCIÓN INFORMATIVA: FORMA DE TRABAJO Y ENUMERACIÓN DE DOCUMENTOS */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-md border border-indigo-800/40 overflow-hidden transition-all duration-300">
+        <div 
+          onClick={() => setShowMethodology(!showMethodology)}
+          className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-white/5 transition-colors"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/80 border border-indigo-400/40 flex items-center justify-center text-white shadow-inner flex-shrink-0">
+              <BookOpen size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-white tracking-tight">Forma de Trabajo del Analista y Documentos Requeridos</h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                  Metodología SGD
+                </span>
+              </div>
+              <p className="text-xs text-indigo-200/80 font-medium mt-0.5">
+                Flujo metodológico de levantamiento y desglose de los 4 documentos obligatorios que cada analista debe generar por proceso asignado.
+              </p>
+            </div>
+          </div>
+          <button 
+            type="button"
+            className="flex items-center gap-1.5 self-start sm:self-center px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white border border-white/20 transition-all flex-shrink-0"
+          >
+            {showMethodology ? (
+              <>
+                <ChevronUp size={15} />
+                <span>Ocultar Guía</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={15} />
+                <span>Ver Explicación Completa</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {showMethodology && (
+          <div className="p-6 pt-2 border-t border-indigo-800/40 space-y-6 text-slate-100 bg-slate-950/40 backdrop-blur-xs">
+            {/* PARTE 1: EXPLICACIÓN DE LA FORMA DE TRABAJO */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-indigo-300 font-black text-xs uppercase tracking-wider">
+                <Sparkles size={14} className="text-indigo-400" />
+                1. Explicación de la Forma de Trabajo del Analista
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Cada analista es asignado a uno o más microprocesos dentro de la estructura institucional (<strong className="text-white">Proyecto → Macroproceso → Proceso → Microproceso</strong>). La labor del analista consiste en conducir el levantamiento integral de la operación actual, detectar brechas o cuellos de botella con los referentes clave de cada servicio, diseñar las propuestas de mejora y formalizar el nuevo modelo de proceso futuro optimizado, gestionando cada informe a través del ciclo formal de revisión y aprobación.
+              </p>
+
+              {/* Fases de la forma de trabajo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1.5">
+                  <div className="flex items-center justify-between text-indigo-400 font-mono text-[11px] font-bold">
+                    <span>FASE 1</span>
+                    <FolderTree size={14} />
+                  </div>
+                  <h4 className="text-xs font-bold text-white">Asignación & Alcance</h4>
+                  <p className="text-[11px] text-slate-300 leading-normal">
+                    Revisión de los microprocesos asignados, delimitación del alcance técnico y coordinación de reuniones con los referentes institucionales designados.
+                  </p>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1.5">
+                  <div className="flex items-center justify-between text-indigo-400 font-mono text-[11px] font-bold">
+                    <span>FASE 2</span>
+                    <Target size={14} />
+                  </div>
+                  <h4 className="text-xs font-bold text-white">Levantamiento & FCE</h4>
+                  <p className="text-[11px] text-slate-300 leading-normal">
+                    Entrevistas directas, recopilación de normativas, mapeo paso a paso del flujo real vigente e identificación de variables y factores críticos de éxito.
+                  </p>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1.5">
+                  <div className="flex items-center justify-between text-indigo-400 font-mono text-[11px] font-bold">
+                    <span>FASE 3</span>
+                    <Sparkles size={14} />
+                  </div>
+                  <h4 className="text-xs font-bold text-white">Optimización & Rediseño</h4>
+                  <p className="text-[11px] text-slate-300 leading-normal">
+                    Detección de puntos de dolor, simplificación de trámites, eliminación de redundancias y formulación del modelo futuro (TO BE) y mejoras (PM).
+                  </p>
+                </div>
+
+                <div className="bg-white/5 border border-emerald-400 font-mono text-[11px] font-bold">
+                  <div className="flex items-center justify-between text-emerald-400 font-mono text-[11px] font-bold">
+                    <span>FASE 4</span>
+                    <ShieldCheck size={14} />
+                  </div>
+                  <h4 className="text-xs font-bold text-white">Validación & Aprobación</h4>
+                  <p className="text-[11px] text-slate-300 leading-normal font-sans">
+                    Tránsito formal: Revisión Interna con Coordinador (v0.n) → Revisión Referente (v1.n) → Control de Gestión (v1.nAR) → Aprobado Definitivo (100%).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* PARTE 2: ENUMERACIÓN DE DOCUMENTOS POR PROCESO */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-indigo-300 font-black text-xs uppercase tracking-wider">
+                  <FileText size={14} className="text-indigo-400" />
+                  2. Enumeración de Documentos Obligatorios que cada Analista debe Generar por Proceso Asignado
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  4 Documentos Técnicos Estándar
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                {/* 1. AS IS */}
+                <div className="bg-white/5 border border-indigo-500/30 hover:border-indigo-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                        1. AS IS
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Estado Actual</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
+                      Levantamiento de Proceso Actual
+                    </h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Mapea y diagnostica la situación operativa actual sin juicios previos. Modela las actividades tal y como se ejecutan hoy en la institución.
+                    </p>
+                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
+                      <div><strong className="text-slate-300">Contenido:</strong> Diagrama de flujo actual, actores, tareas, entradas, salidas y puntos de dolor.</div>
+                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-indigo-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - AS IS - v0.1</code></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. FCE */}
+                <div className="bg-white/5 border border-amber-500/30 hover:border-amber-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                        2. FCE
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Factores Clave</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
+                      Factores Críticos de Éxito
+                    </h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Determina los elementos, condiciones y controles indispensables para garantizar que el proceso opere con seguridad, calidad y continuidad.
+                    </p>
+                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
+                      <div><strong className="text-slate-300">Contenido:</strong> Puntos críticos de control (PCC), variables de riesgo, normativas y tiempos meta.</div>
+                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-amber-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - FCE - v0.1</code></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. PM */}
+                <div className="bg-white/5 border border-emerald-500/30 hover:border-emerald-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        3. PM
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Optimización</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                      Propuesta de Mejora
+                    </h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Formula soluciones técnicas fundamentadas para superar los cuellos de botella detectados en el levantamiento AS IS.
+                    </p>
+                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
+                      <div><strong className="text-slate-300">Contenido:</strong> Supresión de duplicidades, automatizaciones propuestas y justificación de impacto.</div>
+                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-emerald-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - PM - v0.1</code></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. TO BE */}
+                <div className="bg-white/5 border border-blue-500/30 hover:border-blue-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                        4. TO BE
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Estado Futuro</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors">
+                      Diseño del Proceso Futuro
+                    </h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Modela formalmente el proceso objetivo que entrará en vigencia, incorporando las mejoras aprobadas y nuevas reglas de negocio.
+                    </p>
+                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
+                      <div><strong className="text-slate-300">Contenido:</strong> Diagrama de flujo futuro, manual de procedimientos optimizado y catálogo de KPIs.</div>
+                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-blue-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - TO BE - v0.1</code></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
