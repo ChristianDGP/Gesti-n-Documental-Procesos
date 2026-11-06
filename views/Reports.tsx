@@ -8,7 +8,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, ChevronUp, UserCheck, Search
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, ChevronUp, UserCheck, Search, RotateCcw
 } from 'lucide-react';
 
 interface Props {
@@ -135,7 +135,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
     // Estados para el Monitor de Cuellos de Botella y Envejecimiento (Aging WIP)
     const [bottleneckDimension, setBottleneckDimension] = useState<BottleneckDimension>('MACRO');
-    const [bottleneckMetric, setBottleneckMetric] = useState<'DAYS' | 'COUNT'>('DAYS');
+    const [bottleneckMetric, setBottleneckMetric] = useState<'DAYS' | 'COUNT' | 'ITERATIONS'>('DAYS');
     const [bottleneckPhaseFilter, setBottleneckPhaseFilter] = useState<'ALL' | 'EN_PROCESO' | 'REFERENTE' | 'CONTROL'>('ALL');
     const [bottleneckSearchTerm, setBottleneckSearchTerm] = useState('');
     const [bottleneckTopLimit, setBottleneckTopLimit] = useState<number>(10);
@@ -458,8 +458,8 @@ const Reports: React.FC<Props> = ({ user }) => {
             })
             .map(d => {
                 let days = 0;
+                const docHist = history.filter(h => h.documentId === d.id);
                 if (d.state !== DocState.NOT_STARTED || !d.isVirtual) {
-                    const docHist = history.filter(h => h.documentId === d.id);
                     if (docHist.length > 0) {
                         const stateHist = docHist.filter(h => h.newState === d.state);
                         if (stateHist.length > 0) {
@@ -490,10 +490,80 @@ const Reports: React.FC<Props> = ({ user }) => {
                     phase = 'NO_INICIADO';
                 }
 
+                // Cálculo de Iteraciones y Retrabajo
+                let internalIter = 1;
+                let referentIter = 0;
+                let controlIter = 0;
+                let rejectionCount = 0;
+                const versionSet = new Set<string>();
+                if (d.version) versionSet.add(d.version);
+
+                if (docHist.length > 0) {
+                    docHist.forEach(h => {
+                        if (h.version) versionSet.add(h.version);
+                        const act = (h.action || '').toLowerCase();
+                        const comm = (h.comment || '').toLowerCase();
+                        const isRejection = act.includes('rechazo') || act.includes('observaci') || act.includes('devoluci') || comm.includes('rechaz') || comm.includes('observ');
+                        const isBackwardToEnProceso = (h.previousState === DocState.SENT_TO_REFERENT || h.previousState === DocState.REFERENT_REVIEW || h.previousState === DocState.SENT_TO_CONTROL || h.previousState === DocState.CONTROL_REVIEW) && 
+                            (h.newState === DocState.IN_PROCESS || h.newState === DocState.INTERNAL_REVIEW || h.newState === DocState.INITIATED);
+                        const isBackwardToReferente = (h.previousState === DocState.SENT_TO_CONTROL || h.previousState === DocState.CONTROL_REVIEW) && 
+                            (h.newState === DocState.SENT_TO_REFERENT || h.newState === DocState.REFERENT_REVIEW);
+
+                        if (isRejection || isBackwardToEnProceso || isBackwardToReferente) {
+                            rejectionCount++;
+                            if (h.previousState === DocState.SENT_TO_CONTROL || h.previousState === DocState.CONTROL_REVIEW || act.includes('control')) {
+                                controlIter++;
+                            } else if (h.previousState === DocState.SENT_TO_REFERENT || h.previousState === DocState.REFERENT_REVIEW || act.includes('referente')) {
+                                referentIter++;
+                            } else {
+                                internalIter++;
+                            }
+                        }
+                    });
+
+                    let versionCycles = 1;
+                    const vMatch = (d.version || '').match(/v?(\d+)[._](\d+)/i);
+                    if (vMatch) {
+                        const major = parseInt(vMatch[1], 10);
+                        const minor = parseInt(vMatch[2], 10);
+                        versionCycles = Math.max(1, (major * 2) + minor);
+                    }
+                    const versionCount = Math.max(versionSet.size, versionCycles);
+                    const reworkTotal = referentIter + controlIter + (internalIter - 1);
+                    const totalIter = Math.max(1, 1 + reworkTotal, versionCount);
+                    const currentSum = internalIter + referentIter + controlIter;
+                    if (totalIter > currentSum) {
+                        internalIter += (totalIter - currentSum);
+                    }
+                } else {
+                    const vMatch = (d.version || '').match(/v?(\d+)[._](\d+)/i);
+                    if (vMatch) {
+                        const major = parseInt(vMatch[1], 10);
+                        const minor = parseInt(vMatch[2], 10);
+                        const total = Math.max(1, (major * 2) + minor);
+                        if (minor > 1) {
+                            rejectionCount = Math.floor(minor / 2);
+                            referentIter = rejectionCount;
+                            internalIter = Math.max(1, total - referentIter);
+                        } else {
+                            internalIter = total;
+                        }
+                    }
+                }
+
+                const totalIterations = internalIter + referentIter + controlIter;
+
                 return {
                     ...d,
                     daysStuck: days,
-                    phase
+                    phase,
+                    iterations: {
+                        total: totalIterations,
+                        internal: internalIter,
+                        referent: referentIter,
+                        control: controlIter,
+                        rejectionCount
+                    }
                 };
             });
     }, [filteredDocs, history, includeBacklogInBottlenecks]);
@@ -579,6 +649,23 @@ const Reports: React.FC<Props> = ({ user }) => {
             const criticalCount = docs.filter(d => d.daysStuck > 30).length;
             const warningCount = docs.filter(d => d.daysStuck >= 15 && d.daysStuck <= 30).length;
 
+            // Métricas de Iteraciones
+            const sumIterations = docs.reduce((acc, d) => acc + d.iterations.total, 0);
+            const avgIterations = totalCount > 0 ? Number((sumIterations / totalCount).toFixed(1)) : 0;
+            const maxIterations = docs.reduce((max, d) => Math.max(max, d.iterations.total), 0);
+
+            const sumIterInternal = docs.reduce((acc, d) => acc + d.iterations.internal, 0);
+            const avgIterInternal = totalCount > 0 ? Number((sumIterInternal / totalCount).toFixed(1)) : 0;
+
+            const sumIterReferent = docs.reduce((acc, d) => acc + d.iterations.referent, 0);
+            const avgIterReferent = totalCount > 0 ? Number((sumIterReferent / totalCount).toFixed(1)) : 0;
+
+            const sumIterControl = docs.reduce((acc, d) => acc + d.iterations.control, 0);
+            const avgIterControl = totalCount > 0 ? Number((sumIterControl / totalCount).toFixed(1)) : 0;
+
+            const totalRejections = docs.reduce((acc, d) => acc + d.iterations.rejectionCount, 0);
+            const highReworkCount = docs.filter(d => d.iterations.total > 2).length;
+
             return {
                 name,
                 dimension: bottleneckDimension,
@@ -594,7 +681,14 @@ const Reports: React.FC<Props> = ({ user }) => {
                 avgDaysReferente,
                 avgDaysControl,
                 criticalCount,
-                warningCount
+                warningCount,
+                avgIterations,
+                maxIterations,
+                avgIterInternal,
+                avgIterReferent,
+                avgIterControl,
+                totalRejections,
+                highReworkCount
             };
         });
 
@@ -603,9 +697,13 @@ const Reports: React.FC<Props> = ({ user }) => {
             if (bottleneckMetric === 'DAYS') {
                 if (b.avgDays !== a.avgDays) return b.avgDays - a.avgDays;
                 return b.totalCount - a.totalCount;
-            } else {
+            } else if (bottleneckMetric === 'COUNT') {
                 if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
                 return b.avgDays - a.avgDays;
+            } else {
+                if (b.avgIterations !== a.avgIterations) return b.avgIterations - a.avgIterations;
+                if (b.maxIterations !== a.maxIterations) return b.maxIterations - a.maxIterations;
+                return b.totalCount - a.totalCount;
             }
         });
 
@@ -625,7 +723,29 @@ const Reports: React.FC<Props> = ({ user }) => {
         const totalCriticalDocs = allActiveDocs.filter(d => d.daysStuck > 30).length;
         const overallAvgDays = totalActiveWip > 0 ? Math.round(allActiveDocs.reduce((a, b) => a + b.daysStuck, 0) / totalActiveWip) : 0;
 
-        // Phase breakdown for entire system
+        // Overall iteration metrics
+        const totalSysIterations = allActiveDocs.reduce((acc, d) => acc + d.iterations.total, 0);
+        const overallAvgIterations = totalActiveWip > 0 ? Number((totalSysIterations / totalActiveWip).toFixed(1)) : 0;
+        const totalHighReworkDocs = allActiveDocs.filter(d => d.iterations.total > 2).length;
+        const totalSystemRejections = allActiveDocs.reduce((acc, d) => acc + d.iterations.rejectionCount, 0);
+
+        // System rework phase breakdown
+        const sysIterInternal = allActiveDocs.reduce((acc, d) => acc + d.iterations.internal, 0);
+        const sysIterReferente = allActiveDocs.reduce((acc, d) => acc + d.iterations.referent, 0);
+        const sysIterControl = allActiveDocs.reduce((acc, d) => acc + d.iterations.control, 0);
+
+        let mostBouncedPhase = { name: 'En Proceso', count: sysIterInternal, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' };
+        if (sysIterReferente >= sysIterInternal && sysIterReferente >= sysIterControl && sysIterReferente > 0) {
+            mostBouncedPhase = { name: 'Referente', count: sysIterReferente, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' };
+        } else if (sysIterControl >= sysIterInternal && sysIterControl >= sysIterReferente && sysIterControl > 0) {
+            mostBouncedPhase = { name: 'Control de Gestión', count: sysIterControl, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' };
+        } else if (sysIterReferente > 0) {
+            mostBouncedPhase = { name: 'Referente', count: sysIterReferente, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' };
+        }
+
+        const topReworkEntity = [...items].sort((a, b) => b.avgIterations - a.avgIterations)[0] || null;
+
+        // Phase breakdown for entire system (Days)
         const sysEnProceso = allActiveDocs.filter(d => d.phase === 'EN_PROCESO');
         const sysReferente = allActiveDocs.filter(d => d.phase === 'REFERENTE');
         const sysControl = allActiveDocs.filter(d => d.phase === 'CONTROL');
@@ -636,7 +756,7 @@ const Reports: React.FC<Props> = ({ user }) => {
 
         let slowestPhase = { name: 'En Proceso', days: sysAvgEnProceso, count: sysEnProceso.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' };
         if (sysAvgReferente >= sysAvgEnProceso && sysAvgReferente >= sysAvgControl && sysReferente.length > 0) {
-            slowestPhase = { name: 'Revisión Referente', days: sysAvgReferente, count: sysReferente.length, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' };
+            slowestPhase = { name: 'Referente', days: sysAvgReferente, count: sysReferente.length, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' };
         } else if (sysAvgControl >= sysAvgEnProceso && sysAvgControl >= sysAvgReferente && sysControl.length > 0) {
             slowestPhase = { name: 'Control de Gestión', days: sysAvgControl, count: sysControl.length, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' };
         } else if (sysEnProceso.length > 0) {
@@ -655,7 +775,12 @@ const Reports: React.FC<Props> = ({ user }) => {
             topBottleneck,
             sysAvgEnProceso,
             sysAvgReferente,
-            sysAvgControl
+            sysAvgControl,
+            overallAvgIterations,
+            totalHighReworkDocs,
+            totalSystemRejections,
+            mostBouncedPhase,
+            topReworkEntity
         };
     }, [activeBottleneckDocs, bottleneckDimension, bottleneckMetric, bottleneckPhaseFilter, bottleneckSearchTerm, bottleneckTopLimit, users]);
 
@@ -4615,7 +4740,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2.5">
-                                    {/* Métrica: Días vs Cantidad */}
+                                    {/* Métrica: Días vs Cantidad vs Iteraciones */}
                                     <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1 text-xs font-semibold">
                                         <button
                                             type="button"
@@ -4640,6 +4765,18 @@ const Reports: React.FC<Props> = ({ user }) => {
                                         >
                                             <Layers size={13} />
                                             <span>Volumen (Docs WIP)</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setBottleneckMetric('ITERATIONS')}
+                                            className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 ${
+                                                bottleneckMetric === 'ITERATIONS'
+                                                    ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                                                    : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <RotateCcw size={13} />
+                                            <span>Iteraciones (Retrabajo)</span>
                                         </button>
                                     </div>
 
@@ -4698,65 +4835,131 @@ const Reports: React.FC<Props> = ({ user }) => {
 
                             {/* Tarjetas Diagnóstico Ejecutivo */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                                <div className="p-3.5 bg-red-50/70 border border-red-200/80 rounded-xl flex items-center gap-3">
-                                    <div className="p-2.5 bg-red-100 text-red-600 rounded-lg shrink-0">
-                                        <AlertTriangle size={20} />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Mayor Cuello de Botella</p>
-                                        <p className="text-xs font-black text-slate-900 truncate" title={bottleneckStats.topBottleneck?.name || 'N/A'}>
-                                            {bottleneckStats.topBottleneck?.name || 'Sin datos'}
-                                        </p>
-                                        <p className="text-[11px] font-bold text-red-600">
-                                            {bottleneckStats.topBottleneck ? `${bottleneckStats.topBottleneck.avgDays} d prom. (${bottleneckStats.topBottleneck.totalCount} docs)` : '-'}
-                                        </p>
-                                    </div>
-                                </div>
+                                {bottleneckMetric === 'ITERATIONS' ? (
+                                    <>
+                                        <div className="p-3.5 bg-rose-50/70 border border-rose-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-rose-100 text-rose-600 rounded-lg shrink-0">
+                                                <RotateCcw size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wide">Mayor Retrabajo (Iteraciones)</p>
+                                                <p className="text-xs font-black text-slate-900 truncate" title={bottleneckStats.topReworkEntity?.name || 'N/A'}>
+                                                    {bottleneckStats.topReworkEntity?.name || 'Sin datos'}
+                                                </p>
+                                                <p className="text-[11px] font-bold text-rose-600">
+                                                    {bottleneckStats.topReworkEntity ? `${bottleneckStats.topReworkEntity.avgIterations} iter. prom. (${bottleneckStats.topReworkEntity.totalCount} docs)` : '-'}
+                                                </p>
+                                            </div>
+                                        </div>
 
-                                <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-center gap-3">
-                                    <div className="p-2.5 bg-purple-100 text-purple-600 rounded-lg shrink-0">
-                                        <Clock size={20} />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wide">Fase Más Lenta del Sistema</p>
-                                        <p className={`text-xs font-black truncate ${bottleneckStats.slowestPhase.color}`}>
-                                            {bottleneckStats.slowestPhase.name}
-                                        </p>
-                                        <p className="text-[11px] font-bold text-purple-700">
-                                            {bottleneckStats.slowestPhase.days} días promedio ({bottleneckStats.slowestPhase.count} docs)
-                                        </p>
-                                    </div>
-                                </div>
+                                        <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-purple-100 text-purple-600 rounded-lg shrink-0">
+                                                <AlertTriangle size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wide">Fase con Más Devoluciones</p>
+                                                <p className={`text-xs font-black truncate ${bottleneckStats.mostBouncedPhase.color}`}>
+                                                    {bottleneckStats.mostBouncedPhase.name}
+                                                </p>
+                                                <p className="text-[11px] font-bold text-purple-700">
+                                                    {bottleneckStats.mostBouncedPhase.count} ciclos registrados
+                                                </p>
+                                            </div>
+                                        </div>
 
-                                <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-center gap-3">
-                                    <div className="p-2.5 bg-amber-100 text-amber-600 rounded-lg shrink-0">
-                                        <ShieldAlert size={20} />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">En Alerta Crítica (&gt;30d)</p>
-                                        <p className="text-lg font-black text-amber-900 leading-tight">
-                                            {bottleneckStats.totalCriticalDocs}
-                                        </p>
-                                        <p className="text-[11px] font-medium text-amber-700">
-                                            Documentos con flujo detenido
-                                        </p>
-                                    </div>
-                                </div>
+                                        <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-amber-100 text-amber-600 rounded-lg shrink-0">
+                                                <ShieldAlert size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">Alto Retrabajo (&gt; 2.0 iter.)</p>
+                                                <p className="text-lg font-black text-amber-900 leading-tight">
+                                                    {bottleneckStats.totalHighReworkDocs} docs
+                                                </p>
+                                                <p className="text-[11px] font-medium text-amber-700">
+                                                    Superan umbral de fricción
+                                                </p>
+                                            </div>
+                                        </div>
 
-                                <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex items-center gap-3">
-                                    <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-lg shrink-0">
-                                        <Activity size={20} />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide">Carga Activa en Flujo</p>
-                                        <p className="text-lg font-black text-indigo-950 leading-tight">
-                                            {bottleneckStats.totalActiveWip} docs
-                                        </p>
-                                        <p className="text-[11px] font-medium text-indigo-700">
-                                            {bottleneckStats.overallAvgDays} días de permanencia global
-                                        </p>
-                                    </div>
-                                </div>
+                                        <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-lg shrink-0">
+                                                <Activity size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide">Promedio General del Sistema</p>
+                                                <p className="text-lg font-black text-indigo-950 leading-tight">
+                                                    {bottleneckStats.overallAvgIterations} iter. / doc
+                                                </p>
+                                                <p className="text-[11px] font-medium text-indigo-700">
+                                                    {bottleneckStats.totalSystemRejections} rechazos/observaciones totales
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="p-3.5 bg-red-50/70 border border-red-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-red-100 text-red-600 rounded-lg shrink-0">
+                                                <AlertTriangle size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Mayor Cuello de Botella</p>
+                                                <p className="text-xs font-black text-slate-900 truncate" title={bottleneckStats.topBottleneck?.name || 'N/A'}>
+                                                    {bottleneckStats.topBottleneck?.name || 'Sin datos'}
+                                                </p>
+                                                <p className="text-[11px] font-bold text-red-600">
+                                                    {bottleneckStats.topBottleneck ? `${bottleneckStats.topBottleneck.avgDays} d prom. (${bottleneckStats.topBottleneck.totalCount} docs)` : '-'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-purple-100 text-purple-600 rounded-lg shrink-0">
+                                                <Clock size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wide">Fase Más Lenta del Sistema</p>
+                                                <p className={`text-xs font-black truncate ${bottleneckStats.slowestPhase.color}`}>
+                                                    {bottleneckStats.slowestPhase.name}
+                                                </p>
+                                                <p className="text-[11px] font-bold text-purple-700">
+                                                    {bottleneckStats.slowestPhase.days} días promedio ({bottleneckStats.slowestPhase.count} docs)
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-amber-100 text-amber-600 rounded-lg shrink-0">
+                                                <ShieldAlert size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">En Alerta Crítica (&gt;30d)</p>
+                                                <p className="text-lg font-black text-amber-900 leading-tight">
+                                                    {bottleneckStats.totalCriticalDocs}
+                                                </p>
+                                                <p className="text-[11px] font-medium text-amber-700">
+                                                    Documentos con flujo detenido
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex items-center gap-3">
+                                            <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-lg shrink-0">
+                                                <Activity size={20} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide">Carga Activa en Flujo</p>
+                                                <p className="text-lg font-black text-indigo-950 leading-tight">
+                                                    {bottleneckStats.totalActiveWip} docs
+                                                </p>
+                                                <p className="text-[11px] font-medium text-indigo-700">
+                                                    {bottleneckStats.overallAvgDays} días de permanencia global
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Barra de Filtros secundarios y Búsqueda */}
@@ -4768,7 +4971,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             { id: 'ALL' as const, label: 'Todas' },
                                             { id: 'EN_PROCESO' as const, label: 'En Proceso' },
                                             { id: 'REFERENTE' as const, label: 'Referente' },
-                                            { id: 'CONTROL' as const, label: 'Control' }
+                                            { id: 'CONTROL' as const, label: 'Control de Gestión' }
                                         ].map(f => (
                                             <button
                                                 key={f.id}
@@ -4850,7 +5053,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 <XAxis 
                                                     type="number" 
                                                     tick={{ fontSize: 10, fill: '#64748b' }} 
-                                                    unit={bottleneckMetric === 'DAYS' ? ' d' : ' docs'} 
+                                                    unit={bottleneckMetric === 'DAYS' ? ' d' : bottleneckMetric === 'COUNT' ? ' docs' : ' iter.'} 
                                                 />
                                                 <YAxis 
                                                     type="category" 
@@ -4864,6 +5067,77 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         if (!active || !payload || !payload.length) return null;
                                                         const item = bottleneckStats.items.find(i => i.name === label);
                                                         if (!item) return null;
+
+                                                        if (bottleneckMetric === 'ITERATIONS') {
+                                                            return (
+                                                                <div className="bg-slate-900/95 text-white backdrop-blur-md rounded-xl p-3.5 shadow-2xl border border-slate-700/80 text-xs min-w-[240px] max-w-[320px]">
+                                                                    <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-800">
+                                                                        <span className="font-bold text-white text-[12px] truncate" title={item.name}>
+                                                                            {item.name}
+                                                                        </span>
+                                                                        <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 shrink-0">
+                                                                            {bottleneckDimension}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <div className="space-y-1.5 mb-2.5">
+                                                                        <div className="flex justify-between items-center text-slate-300">
+                                                                            <span className="text-slate-400">Total en curso (WIP):</span>
+                                                                            <span className="font-bold text-white font-mono">{item.totalCount} docs</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center text-slate-300">
+                                                                            <span className="text-slate-400">Iteraciones promedio:</span>
+                                                                            <span className={`font-bold font-mono ${item.avgIterations > 2.0 ? 'text-red-400' : item.avgIterations > 1.5 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                                                                {item.avgIterations} iter.
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center text-slate-300">
+                                                                            <span className="text-slate-400">Máx. iteraciones en un doc:</span>
+                                                                            <span className="font-bold font-mono text-slate-200">{item.maxIterations} iter.</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center text-slate-300">
+                                                                            <span className="text-slate-400">Rechazos / Observaciones:</span>
+                                                                            <span className="font-bold font-mono text-amber-300">{item.totalRejections}</span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="pt-2 border-t border-slate-800 space-y-1 text-[11px]">
+                                                                        <div className="flex justify-between items-center text-blue-300">
+                                                                            <span className="flex items-center gap-1.5">
+                                                                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                                                En Proceso:
+                                                                            </span>
+                                                                            <span>{item.avgIterInternal} iter. prom.</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center text-purple-300">
+                                                                            <span className="flex items-center gap-1.5">
+                                                                                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                                                                Referente:
+                                                                            </span>
+                                                                            <span>{item.avgIterReferent} iter. prom.</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center text-orange-300">
+                                                                            <span className="flex items-center gap-1.5">
+                                                                                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                                                                Control de Gestión:
+                                                                            </span>
+                                                                            <span>{item.avgIterControl} iter. prom.</span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {item.highReworkCount > 0 && (
+                                                                        <div className="mt-2.5 pt-2 border-t border-rose-900/50 flex items-center gap-1.5 text-rose-400 text-[10.5px] font-bold">
+                                                                            <AlertTriangle size={12} className="shrink-0" />
+                                                                            <span>{item.highReworkCount} documento(s) con más de 2 iteraciones</span>
+                                                                        </div>
+                                                                    )}
+
+                                                                    <div className="mt-2 pt-1.5 border-t border-slate-800 text-[9.5px] text-slate-400 text-center">
+                                                                        Click en la barra para auditar documentos
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
 
                                                         return (
                                                             <div className="bg-slate-900/95 text-white backdrop-blur-md rounded-xl p-3.5 shadow-2xl border border-slate-700/80 text-xs min-w-[240px] max-w-[320px]">
@@ -4911,7 +5185,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                     <div className="flex justify-between items-center text-orange-300">
                                                                         <span className="flex items-center gap-1.5">
                                                                             <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                                                                            Control Gestión:
+                                                                            Control de Gestión:
                                                                         </span>
                                                                         <span>{item.countControl} docs ({item.avgDaysControl} d prom.)</span>
                                                                     </div>
@@ -4940,7 +5214,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                     <>
                                                         <Bar dataKey="avgDaysEnProceso" name="En Proceso (días)" stackId="a" fill="#3b82f6" />
                                                         <Bar dataKey="avgDaysReferente" name="Referente (días)" stackId="a" fill="#a855f7" />
-                                                        <Bar dataKey="avgDaysControl" name="Control Gestión (días)" stackId="a" fill="#f97316" radius={[0, 4, 4, 0]}>
+                                                        <Bar dataKey="avgDaysControl" name="Control de Gestión (días)" stackId="a" fill="#f97316" radius={[0, 4, 4, 0]}>
                                                             <LabelList 
                                                                 dataKey="avgDays" 
                                                                 position="right" 
@@ -4950,11 +5224,11 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         </Bar>
                                                         <ReferenceLine x={30} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Alerta 30d', fill: '#ef4444', fontSize: 10, position: 'top' }} />
                                                     </>
-                                                ) : (
+                                                ) : bottleneckMetric === 'COUNT' ? (
                                                     <>
                                                         <Bar dataKey="countEnProceso" name="En Proceso (docs)" stackId="a" fill="#3b82f6" />
                                                         <Bar dataKey="countReferente" name="Referente (docs)" stackId="a" fill="#a855f7" />
-                                                        <Bar dataKey="countControl" name="Control Gestión (docs)" stackId="a" fill="#f97316" radius={[0, 4, 4, 0]}>
+                                                        <Bar dataKey="countControl" name="Control de Gestión (docs)" stackId="a" fill="#f97316" radius={[0, 4, 4, 0]}>
                                                             <LabelList 
                                                                 dataKey="totalCount" 
                                                                 position="right" 
@@ -4962,6 +5236,20 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                 style={{ fontSize: 10, fontWeight: 700, fill: '#475569' }} 
                                                             />
                                                         </Bar>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Bar dataKey="avgIterInternal" name="En Proceso (iter.)" stackId="a" fill="#3b82f6" />
+                                                        <Bar dataKey="avgIterReferent" name="Referente (iter.)" stackId="a" fill="#a855f7" />
+                                                        <Bar dataKey="avgIterControl" name="Control de Gestión (iter.)" stackId="a" fill="#f97316" radius={[0, 4, 4, 0]}>
+                                                            <LabelList 
+                                                                dataKey="avgIterations" 
+                                                                position="right" 
+                                                                formatter={(val: any) => `${val} iter.`} 
+                                                                style={{ fontSize: 10, fontWeight: 700, fill: '#475569' }} 
+                                                            />
+                                                        </Bar>
+                                                        <ReferenceLine x={2} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Umbral Fricción (2.0 iter.)', fill: '#ef4444', fontSize: 10, position: 'top' }} />
                                                     </>
                                                 )}
                                             </BarChart>
@@ -4974,7 +5262,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                             <span>
                                                 {bottleneckMetric === 'DAYS'
                                                     ? 'Barras más largas indican mayor lentitud en la resolución (Lead Time).'
-                                                    : 'Barras más largas indican mayor congestión y acumulación de documentos (WIP).'}
+                                                    : bottleneckMetric === 'COUNT'
+                                                    ? 'Barras más largas indican mayor congestión y acumulación de documentos (WIP).'
+                                                    : 'Barras más largas indican mayor cantidad de iteraciones y retrabajo (revisión y devolución de versiones). La línea roja marca el umbral de fricción (> 2.0 iteraciones).'}
                                             </span>
                                         </div>
                                         <span className="text-indigo-600 font-semibold flex items-center gap-1">
@@ -5004,7 +5294,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         </h4>
                                                     </div>
                                                     <p className="text-xs text-slate-500 mt-1">
-                                                        {entityData.docs.length} documentos activos en flujo &bull; Permanencia promedio: <b>{entityData.avgDays} días</b> (Máx: {entityData.maxDays} días)
+                                                        {entityData.docs.length} documentos activos en flujo &bull; Permanencia prom.: <b>{entityData.avgDays} días</b> &bull; Iteraciones prom.: <b>{entityData.avgIterations} iter.</b> (Máx: {entityData.maxIterations})
                                                     </p>
                                                 </div>
                                                 <button
@@ -5026,7 +5316,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         Referente: {entityData.countReferente}
                                                     </span>
                                                     <span className="px-2.5 py-1 rounded-md bg-orange-50 text-orange-700 border border-orange-200 font-bold">
-                                                        Control: {entityData.countControl}
+                                                        Control de Gestión: {entityData.countControl}
                                                     </span>
                                                 </div>
 
@@ -5070,6 +5360,25 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                             : 'bg-slate-100 text-slate-700 border-slate-200'
                                                                     }`}>
                                                                         {doc.daysStuck} días en fase
+                                                                    </span>
+                                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                                                                        doc.iterations.total > 2
+                                                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                                            : doc.iterations.total === 2
+                                                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                                    }`}>
+                                                                        <RotateCcw size={10} />
+                                                                        {doc.iterations.total} {doc.iterations.total === 1 ? 'iteración' : 'iteraciones'}
+                                                                    </span>
+                                                                    {doc.iterations.rejectionCount > 0 && (
+                                                                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full border bg-orange-50 text-orange-700 border-orange-200 flex items-center gap-1">
+                                                                            <AlertTriangle size={10} />
+                                                                            {doc.iterations.rejectionCount} {doc.iterations.rejectionCount === 1 ? 'rechazo' : 'rechazos'}
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                                                        v{doc.version || '0.1'}
                                                                     </span>
                                                                 </div>
 
