@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { 
   FolderTree, Search, ChevronRight, ChevronDown, Plus, X, Edit, Users, CheckSquare, Square, Filter, RefreshCw, AlertCircle, Link, Layers, Trash2, Loader2, FileSpreadsheet, Download, RotateCcw,
-  BookOpen, CheckCircle2, Target, ArrowRight, HelpCircle, ChevronUp, FileText, Sparkles, ShieldCheck
+  BookOpen, CheckCircle2, Target, ArrowRight, HelpCircle, ChevronUp, FileText, Sparkles, ShieldCheck, PlayCircle, PauseCircle, Clock, Play, Pause
 } from 'lucide-react';
 
 interface Props {
@@ -17,6 +17,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [regularizing, setRegularizing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -31,9 +32,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
   const [filterProcess, setFilterProcess] = useState('');
   const [filterMicro, setFilterMicro] = useState(''); 
   const [filterAnalyst, setFilterAnalyst] = useState('');
+  const [filterStartOrder, setFilterStartOrder] = useState<'ALL' | 'WITH_ORDER' | 'NO_ORDER'>('ALL');
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({ 'HPC': true, 'HSR': true, 'REU': true });
-  const [showMethodology, setShowMethodology] = useState(true);
 
   // Edit Assignment Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -234,6 +235,8 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                   if (hiddenIds.has(node.docId) || node.active === false) return; 
                   if (filterMicro && !node.name.toLowerCase().includes(filterMicro.toLowerCase())) return;
                   if (filterAnalyst && (!node.assignees || !node.assignees.includes(filterAnalyst))) return;
+                  if (filterStartOrder === 'WITH_ORDER' && node.hasStartOrder === false) return;
+                  if (filterStartOrder === 'NO_ORDER' && node.hasStartOrder !== false) return;
                   rows.push({ macro, proc, node });
               });
           });
@@ -241,7 +244,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       return rows;
   };
 
-  const hasActiveFilters = Boolean(filterProject || filterMacro || filterProcess || filterMicro || filterAnalyst);
+  const hasActiveFilters = Boolean(filterProject || filterMacro || filterProcess || filterMicro || filterAnalyst || filterStartOrder !== 'ALL');
 
   const handleClearFilters = () => {
       setFilterProject('');
@@ -249,6 +252,57 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
       setFilterProcess('');
       setFilterMicro('');
       setFilterAnalyst('');
+      setFilterStartOrder('ALL');
+  };
+
+  const handleToggleStartOrder = async (docId: string, currentVal?: boolean) => {
+      if (!canManageActions) return;
+      const nextVal = currentVal === false ? true : false;
+      try {
+          await HierarchyService.updateStartOrder(docId, nextVal, { id: user.id, name: user.name || user.email });
+          toast.success(nextVal ? "Orden de Inicio: COMENZAR (Habilitado)" : "Orden de Inicio: DETENIDO (Pausado)");
+          await loadData(false);
+      } catch (e: any) {
+          toast.error("Error al actualizar orden de inicio: " + e.message);
+      }
+  };
+
+  const handleBulkStartOrder = async (projectKey: string, enable: boolean) => {
+      if (!canManageActions) return;
+      const rows = getFlattenedRows(projectKey);
+      const targetIds = rows.map(r => r.node.docId).filter(Boolean);
+      if (targetIds.length === 0) {
+          toast.info("No hay microprocesos para actualizar en este proyecto.");
+          return;
+      }
+      const confirmMsg = enable 
+          ? `¿Emitir Orden de Inicio "Comenzar" a los ${targetIds.length} microprocesos visibles del Proyecto ${projectKey}?`
+          : `¿Cambiar a estado "Detenido" a los ${targetIds.length} microprocesos visibles del Proyecto ${projectKey}?`;
+      if (!window.confirm(confirmMsg)) return;
+      try {
+          setLoading(true);
+          await HierarchyService.bulkUpdateStartOrder(targetIds, enable, { id: user.id, name: user.name || user.email });
+          toast.success(enable ? `Orden de inicio "Comenzar" emitida a ${targetIds.length} microprocesos` : `Cambiados a "Detenido" ${targetIds.length} microprocesos`);
+          await loadData(false);
+      } catch (e: any) {
+          toast.error("Error en acción masiva: " + e.message);
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleRegularizeStock = async () => {
+      if (!window.confirm("¿Regularizar todo el stock existente para que todos los microprocesos tengan Orden de Inicio 'Comenzar'?")) return;
+      try {
+          setRegularizing(true);
+          const count = await HierarchyService.regularizeStockStartOrder({ id: user.id, name: user.name || user.email });
+          toast.success(`Stock regularizado exitosamente: ${count} microprocesos confirmados en estado 'Comenzar'`);
+          await loadData(false);
+      } catch (e: any) {
+          toast.error("Error al regularizar stock: " + e.message);
+      } finally {
+          setRegularizing(false);
+      }
   };
 
   const totalFilteredCount = Object.keys(hierarchy).reduce((acc, p) => {
@@ -288,6 +342,7 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
               const macrosData = hierarchy[projKey] || {};
               let projTotal = 0;
               let projAssigned = 0;
+              let projWithStartOrder = 0;
               let projAsIs = 0;
               let projFce = 0;
               let projPm = 0;
@@ -303,8 +358,11 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                           if (hiddenIds.has(node.docId) || node.active === false) return;
                           if (!forceAll && filterMicro && !node.name.toLowerCase().includes(filterMicro.toLowerCase())) return;
                           if (!forceAll && filterAnalyst && (!node.assignees || !node.assignees.includes(filterAnalyst))) return;
+                          if (!forceAll && filterStartOrder === 'WITH_ORDER' && node.hasStartOrder === false) return;
+                          if (!forceAll && filterStartOrder === 'NO_ORDER' && node.hasStartOrder !== false) return;
 
                           projTotal++;
+                          if (node.hasStartOrder !== false) projWithStartOrder++;
                           const hasAssignees = Array.isArray(node.assignees) && node.assignees.length > 0;
                           if (hasAssignees) {
                               projAssigned++;
@@ -344,6 +402,9 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                               'Microproceso': node.name,
                               'ID Matriz': node.docId,
                               'Estado Asignación': hasAssignees ? 'Asignado' : 'Sin asignar',
+                              'Orden de Inicio': node.hasStartOrder !== false ? 'Comenzar' : 'Detenido',
+                              'Fecha Orden': node.startOrderDate ? new Date(node.startOrderDate).toLocaleDateString('es-CL') : '-',
+                              'Autorizado Por': node.startOrderByName || '-',
                               'Analistas Responsables': analystNames,
                               'Correos Analistas': analystEmails,
                               'Cant. Analistas': hasAssignees ? node.assignees.length : 0,
@@ -364,6 +425,8 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                       'Total Microprocesos': projTotal,
                       'Asignados': projAssigned,
                       'Sin Asignar': projTotal - projAssigned,
+                      'Con Orden (Comenzar)': projWithStartOrder,
+                      'Detenido': projTotal - projWithStartOrder,
                       '% Cobertura': `${projTotal > 0 ? ((projAssigned / projTotal) * 100).toFixed(1) : '0.0'}%`,
                       'Requieren AS IS': projAsIs,
                       'Requieren FCE': projFce,
@@ -554,22 +617,11 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                 )}
             </div>
 
-            {/* Botón para Alternar Guía Metodológica */}
-            <button
-                onClick={() => setShowMethodology(!showMethodology)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs ${
-                    showMethodology 
-                        ? 'bg-indigo-700 text-white hover:bg-indigo-800' 
-                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
-                }`}
-                title="Mostrar u ocultar la explicación de la forma de trabajo y documentos requeridos"
-            >
-                <BookOpen size={15} />
-                <span>{showMethodology ? 'Ocultar Metodología' : 'Ver Forma de Trabajo'}</span>
-            </button>
-
             {user.role === UserRole.ADMIN && (
                 <>
+                    <button onClick={handleRegularizeStock} disabled={regularizing} className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xs" title="Regularizar todo el stock existente para que tenga Orden de Inicio Comenzar">
+                        {regularizing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} className="fill-white" />} Regularizar Stock
+                    </button>
                     <button onClick={handleSyncMetadata} disabled={seeding} className="px-3.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xs">
                         {seeding ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Sincronizar Metadatos
                     </button>
@@ -581,219 +633,18 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
         </div>
       </div>
 
-      {/* SECCIÓN INFORMATIVA: FORMA DE TRABAJO Y ENUMERACIÓN DE DOCUMENTOS */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-md border border-indigo-800/40 overflow-hidden transition-all duration-300">
-        <div 
-          onClick={() => setShowMethodology(!showMethodology)}
-          className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-white/5 transition-colors"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/80 border border-indigo-400/40 flex items-center justify-center text-white shadow-inner flex-shrink-0">
-              <BookOpen size={20} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-white tracking-tight">Forma de Trabajo del Analista y Documentos Requeridos</h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                  Metodología SGD
-                </span>
-              </div>
-              <p className="text-xs text-indigo-200/80 font-medium mt-0.5">
-                Flujo metodológico de levantamiento y desglose de los 4 documentos obligatorios que cada analista debe generar por proceso asignado.
-              </p>
-            </div>
-          </div>
-          <button 
-            type="button"
-            className="flex items-center gap-1.5 self-start sm:self-center px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white border border-white/20 transition-all flex-shrink-0"
-          >
-            {showMethodology ? (
-              <>
-                <ChevronUp size={15} />
-                <span>Ocultar Guía</span>
-              </>
-            ) : (
-              <>
-                <ChevronDown size={15} />
-                <span>Ver Explicación Completa</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {showMethodology && (
-          <div className="p-6 pt-2 border-t border-indigo-800/40 space-y-6 text-slate-100 bg-slate-950/40 backdrop-blur-xs">
-            {/* PARTE 1: EXPLICACIÓN DE LA FORMA DE TRABAJO */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-indigo-300 font-black text-xs uppercase tracking-wider">
-                <Sparkles size={14} className="text-indigo-400" />
-                1. Explicación de la Forma de Trabajo del Analista
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Cada analista es asignado a uno o más microprocesos dentro de la estructura institucional (<strong className="text-white">Proyecto → Macroproceso → Proceso → Microproceso</strong>). La labor del analista consiste en conducir el levantamiento integral de la operación actual, detectar brechas o cuellos de botella con los referentes clave de cada servicio, diseñar las propuestas de mejora y formalizar el nuevo modelo de proceso futuro optimizado, gestionando cada informe a través del ciclo formal de revisión y aprobación.
-              </p>
-
-              {/* Fases de la forma de trabajo */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1.5">
-                  <div className="flex items-center justify-between text-indigo-400 font-mono text-[11px] font-bold">
-                    <span>FASE 1</span>
-                    <FolderTree size={14} />
-                  </div>
-                  <h4 className="text-xs font-bold text-white">Asignación & Alcance</h4>
-                  <p className="text-[11px] text-slate-300 leading-normal">
-                    Revisión de los microprocesos asignados, delimitación del alcance técnico y coordinación de reuniones con los referentes institucionales designados.
-                  </p>
-                </div>
-
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1.5">
-                  <div className="flex items-center justify-between text-indigo-400 font-mono text-[11px] font-bold">
-                    <span>FASE 2</span>
-                    <Target size={14} />
-                  </div>
-                  <h4 className="text-xs font-bold text-white">Levantamiento & FCE</h4>
-                  <p className="text-[11px] text-slate-300 leading-normal">
-                    Entrevistas directas, recopilación de normativas, mapeo paso a paso del flujo real vigente e identificación de variables y factores críticos de éxito.
-                  </p>
-                </div>
-
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 space-y-1.5">
-                  <div className="flex items-center justify-between text-indigo-400 font-mono text-[11px] font-bold">
-                    <span>FASE 3</span>
-                    <Sparkles size={14} />
-                  </div>
-                  <h4 className="text-xs font-bold text-white">Optimización & Rediseño</h4>
-                  <p className="text-[11px] text-slate-300 leading-normal">
-                    Detección de puntos de dolor, simplificación de trámites, eliminación de redundancias y formulación del modelo futuro (TO BE) y mejoras (PM).
-                  </p>
-                </div>
-
-                <div className="bg-white/5 border border-emerald-400 font-mono text-[11px] font-bold">
-                  <div className="flex items-center justify-between text-emerald-400 font-mono text-[11px] font-bold">
-                    <span>FASE 4</span>
-                    <ShieldCheck size={14} />
-                  </div>
-                  <h4 className="text-xs font-bold text-white">Validación & Aprobación</h4>
-                  <p className="text-[11px] text-slate-300 leading-normal font-sans">
-                    Tránsito formal: Revisión Interna con Coordinador (v0.n) → Revisión Referente (v1.n) → Control de Gestión (v1.nAR) → Aprobado Definitivo (100%).
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* PARTE 2: ENUMERACIÓN DE DOCUMENTOS POR PROCESO */}
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2 text-indigo-300 font-black text-xs uppercase tracking-wider">
-                  <FileText size={14} className="text-indigo-400" />
-                  2. Enumeración de Documentos Obligatorios que cada Analista debe Generar por Proceso Asignado
-                </div>
-                <span className="text-[11px] text-slate-400 font-medium">
-                  4 Documentos Técnicos Estándar
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                {/* 1. AS IS */}
-                <div className="bg-white/5 border border-indigo-500/30 hover:border-indigo-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-                        1. AS IS
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Estado Actual</span>
-                    </div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
-                      Levantamiento de Proceso Actual
-                    </h4>
-                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
-                      Mapea y diagnostica la situación operativa actual sin juicios previos. Modela las actividades tal y como se ejecutan hoy en la institución.
-                    </p>
-                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
-                      <div><strong className="text-slate-300">Contenido:</strong> Diagrama de flujo actual, actores, tareas, entradas, salidas y puntos de dolor.</div>
-                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-indigo-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - AS IS - v0.1</code></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. FCE */}
-                <div className="bg-white/5 border border-amber-500/30 hover:border-amber-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
-                        2. FCE
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Factores Clave</span>
-                    </div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
-                      Factores Críticos de Éxito
-                    </h4>
-                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
-                      Determina los elementos, condiciones y controles indispensables para garantizar que el proceso opere con seguridad, calidad y continuidad.
-                    </p>
-                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
-                      <div><strong className="text-slate-300">Contenido:</strong> Puntos críticos de control (PCC), variables de riesgo, normativas y tiempos meta.</div>
-                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-amber-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - FCE - v0.1</code></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. PM */}
-                <div className="bg-white/5 border border-emerald-500/30 hover:border-emerald-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                        3. PM
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Optimización</span>
-                    </div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
-                      Propuesta de Mejora
-                    </h4>
-                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
-                      Formula soluciones técnicas fundamentadas para superar los cuellos de botella detectados en el levantamiento AS IS.
-                    </p>
-                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
-                      <div><strong className="text-slate-300">Contenido:</strong> Supresión de duplicidades, automatizaciones propuestas y justificación de impacto.</div>
-                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-emerald-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - PM - v0.1</code></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. TO BE */}
-                <div className="bg-white/5 border border-blue-500/30 hover:border-blue-400/60 rounded-xl p-4 space-y-2.5 transition-all group flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                        4. TO BE
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Estado Futuro</span>
-                    </div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors">
-                      Diseño del Proceso Futuro
-                    </h4>
-                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
-                      Modela formalmente el proceso objetivo que entrará en vigencia, incorporando las mejoras aprobadas y nuevas reglas de negocio.
-                    </p>
-                    <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400 space-y-1">
-                      <div><strong className="text-slate-300">Contenido:</strong> Diagrama de flujo futuro, manual de procedimientos optimizado y catálogo de KPIs.</div>
-                      <div><strong className="text-slate-300">Nomenclatura:</strong> <code className="text-blue-300 font-mono text-[9px]">[PROYECTO] - [Microproceso] - TO BE - v0.1</code></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <select value={filterProject} onChange={(e) => setFilterProject(e.target.value)} className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none"><option value="">Proyecto (Todos)</option>{Object.keys(hierarchy).map(p => <option key={p} value={p}>{p}</option>)}</select>
               <select value={filterMacro} onChange={(e) => setFilterMacro(e.target.value)} className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none"><option value="">Macroproceso (Todos)</option>{getAvailableMacros().map(m => <option key={m} value={m}>{m}</option>)}</select>
               <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none"><option value="">Proceso (Todos)</option>{getAvailableProcesses().map(p => <option key={p} value={p}>{p}</option>)}</select>
               <div className="relative"><Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="Microproceso..." value={filterMicro} onChange={(e) => setFilterMicro(e.target.value)} className="w-full pl-8 p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none" /></div>
               <select value={filterAnalyst} onChange={(e) => setFilterAnalyst(e.target.value)} className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none"><option value="">Analista (Todos)</option>{allUsers.filter(u => u.role === UserRole.ANALYST).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+              <select value={filterStartOrder} onChange={(e) => setFilterStartOrder(e.target.value as any)} className="p-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white outline-none font-medium">
+                  <option value="ALL">Orden de Inicio (Todas)</option>
+                  <option value="WITH_ORDER">▶️ Comenzar (Habilitados)</option>
+                  <option value="NO_ORDER">⏸️ Detenido (En Espera)</option>
+              </select>
           </div>
 
           {hasActiveFilters && (
@@ -821,17 +672,73 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
             if (rows.length === 0) return null;
             return (
                 <div key={projectKey} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div onClick={() => toggleProject(projectKey)} className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors border-b border-slate-200">
-                        <div className="flex items-center gap-2 font-bold text-slate-800 text-lg">{expandedProjects[projectKey] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}<FolderTree size={20} className="text-indigo-600" />Proyecto {projectKey}</div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500 font-medium bg-white px-2.5 py-1 rounded border border-slate-200 shadow-2xs">{rows.length} Microprocesos</span>
+                    <div onClick={() => toggleProject(projectKey)} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors border-b border-slate-200 gap-3">
+                        <div className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                            {expandedProjects[projectKey] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                            <FolderTree size={20} className="text-indigo-600" />
+                            Proyecto {projectKey}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {(() => {
+                                const withOrderCount = rows.filter(r => r.node.hasStartOrder !== false).length;
+                                return (
+                                    <>
+                                        <span className="text-xs text-slate-500 font-medium bg-white px-2.5 py-1 rounded border border-slate-200 shadow-2xs">
+                                            {rows.length} Microprocesos
+                                        </span>
+                                        <span 
+                                            className={`text-xs font-semibold px-2.5 py-1 rounded border shadow-2xs flex items-center gap-1.5 ${
+                                                withOrderCount === rows.length && rows.length > 0
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                    : withOrderCount === 0
+                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                            }`}
+                                            title="Cantidad de microprocesos con orden de inicio habilitada para producción (Comenzar)"
+                                        >
+                                            <Play size={12} className={withOrderCount > 0 ? "fill-emerald-600 text-emerald-600" : "fill-amber-600 text-amber-600"} />
+                                            {withOrderCount} / {rows.length} Comenzar
+                                        </span>
+                                    </>
+                                );
+                            })()}
+
+                            {canManageActions && (
+                                <div className="flex items-center gap-1 border-l border-slate-300 pl-2">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleBulkStartOrder(projectKey, true);
+                                        }}
+                                        disabled={loading}
+                                        className="px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 rounded text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs"
+                                        title="Habilitar orden de inicio (Comenzar) a todos los microprocesos visibles de este proyecto"
+                                    >
+                                        <Play size={12} className="fill-emerald-600 text-emerald-600" />
+                                        <span className="hidden sm:inline">Comenzar (Todos)</span>
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleBulkStartOrder(projectKey, false);
+                                        }}
+                                        disabled={loading}
+                                        className="px-2 py-1 bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border border-amber-300 rounded text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs"
+                                        title="Poner en estado Detenido a todos los microprocesos visibles de este proyecto"
+                                    >
+                                        <Pause size={12} className="fill-amber-600 text-amber-600" />
+                                        <span className="hidden sm:inline">Detener (Todos)</span>
+                                    </button>
+                                </div>
+                            )}
+
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleExport(projectKey, 'xlsx', false);
                                 }}
                                 disabled={exporting}
-                                className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                                className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs ml-1"
                                 title={`Exportar asignaciones de Proyecto ${projectKey} a Excel (.xlsx)`}
                             >
                                 <FileSpreadsheet size={13} className="text-emerald-600" />
@@ -843,19 +750,100 @@ const AdminAssignments: React.FC<Props> = ({ user }) => {
                     {expandedProjects[projectKey] && (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-xs text-slate-500 uppercase bg-slate-50/50"><tr><th className="px-4 py-3 w-1/4">Jerarquía (Macro / Proceso)</th><th className="px-4 py-3 w-1/4">Microproceso</th><th className="px-4 py-3 w-1/5">Documentos Definidos</th><th className="px-4 py-3 w-1/4">Analistas Responsables</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead>
+                                <thead className="text-xs text-slate-500 uppercase bg-slate-50/50">
+                                    <tr>
+                                        <th className="px-4 py-3 w-1/4">Jerarquía (Macro / Proceso)</th>
+                                        <th className="px-4 py-3 w-1/4">Microproceso</th>
+                                        <th className="px-4 py-3 w-1/5">Documentos Definidos</th>
+                                        <th className="px-4 py-3 w-1/4">Analistas Responsables</th>
+                                        <th className="px-4 py-3 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {rows.map((row, idx) => (
                                         <tr key={`${row.node.docId}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-4 py-3 align-top text-slate-600"><div className="font-semibold text-xs text-slate-700 mb-0.5">{row.macro}</div><div className="text-xs text-slate-500 pl-2 border-l-2 border-slate-200">{row.proc}</div></td>
-                                            <td className="px-4 py-3 align-top"><span className="font-medium text-slate-900">{row.node.name}</span></td>
-                                            <td className="px-4 py-3 align-top"><div className="flex items-center gap-2 flex-wrap">{['AS IS', 'FCE', 'PM', 'TO BE'].map((type) => { const isChecked = row.node.requiredTypes?.includes(type as DocType); return (<button key={type} onClick={() => canAssignDocs && handleToggleRequiredType(row.node.docId, type as DocType)} className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all ${isChecked ? 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200' : 'bg-slate-50 text-slate-300 border-slate-200 hover:border-slate-300'} ${!canAssignDocs ? 'cursor-not-allowed opacity-70' : ''}`} title={canAssignDocs ? `Alternar ${type}` : 'Sin permiso'}>{isChecked ? <CheckSquare size={10} /> : <Square size={10} />}{type}</button>); })}</div></td>
+                                            <td className="px-4 py-3 align-top text-slate-600">
+                                                <div className="font-semibold text-xs text-slate-700 mb-0.5">{row.macro}</div>
+                                                <div className="text-xs text-slate-500 pl-2 border-l-2 border-slate-200">{row.proc}</div>
+                                            </td>
                                             <td className="px-4 py-3 align-top">
-                                                {(row.node.assignees?.length > 0) ? (<><div className="flex -space-x-2 overflow-hidden py-1">{row.node.assignees.map((aid: string) => { const u = allUsers.find(user => user.id === aid); if (!u) return <div key={aid} className="inline-flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white bg-slate-200 text-[10px] text-slate-500 font-bold">?</div>; return (<div key={u.id} className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-indigo-100 overflow-hidden" title={u.name}>{u.avatar ? <img src={u.avatar} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-indigo-700">{u.name.charAt(0)}</span>}</div>); })}</div><div className="text-xs text-slate-500 mt-1 truncate">{row.node.assignees.map((aid: string) => { const u = allUsers.find(user => user.id === aid); return u ? u.name : 'Desc.'; }).join(', ')}</div></>) : (<span className="text-xs text-red-400 italic py-1 block">Sin asignar</span>)}
+                                                <span className="font-medium text-slate-900">{row.node.name}</span>
+                                            </td>
+                                            <td className="px-4 py-3 align-top">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {['AS IS', 'FCE', 'PM', 'TO BE'].map((type) => {
+                                                        const isChecked = row.node.requiredTypes?.includes(type as DocType);
+                                                        return (
+                                                            <button 
+                                                                key={type} 
+                                                                onClick={() => canAssignDocs && handleToggleRequiredType(row.node.docId, type as DocType)} 
+                                                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                                                                    isChecked 
+                                                                        ? 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200' 
+                                                                        : 'bg-slate-50 text-slate-300 border-slate-200 hover:border-slate-300'
+                                                                } ${!canAssignDocs ? 'cursor-not-allowed opacity-70' : ''}`} 
+                                                                title={canAssignDocs ? `Alternar ${type}` : 'Sin permiso'}
+                                                            >
+                                                                {isChecked ? <CheckSquare size={10} /> : <Square size={10} />}
+                                                                {type}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 align-top">
+                                                {(row.node.assignees?.length > 0) ? (
+                                                    <>
+                                                        <div className="flex -space-x-2 overflow-hidden py-1">
+                                                            {row.node.assignees.map((aid: string) => {
+                                                                const u = allUsers.find(user => user.id === aid);
+                                                                if (!u) return <div key={aid} className="inline-flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-white bg-slate-200 text-[10px] text-slate-500 font-bold">?</div>;
+                                                                return (
+                                                                    <div key={u.id} className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-indigo-100 overflow-hidden" title={u.name}>
+                                                                        {u.avatar ? <img src={u.avatar} className="h-full w-full object-cover" /> : <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-indigo-700">{u.name.charAt(0)}</span>}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mt-1 truncate">
+                                                            {row.node.assignees.map((aid: string) => {
+                                                                const u = allUsers.find(user => user.id === aid);
+                                                                return u ? u.name : 'Desc.';
+                                                            }).join(', ')}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-xs text-red-400 italic py-1 block">Sin asignar</span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3 align-top text-right">
-                                                <div className="flex justify-end gap-1">
-                                                    {canManageActions && <button onClick={() => handleEditAssignment(projectKey, row.macro, row.proc, row.node)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors" title="Editar Asignación"><Users size={16} /></button>}
+                                                <div className="flex justify-end items-center gap-1.5">
+                                                    {canManageActions && (
+                                                        <button 
+                                                            onClick={() => handleToggleStartOrder(row.node.docId, row.node.hasStartOrder !== false)}
+                                                            className={`p-1.5 rounded transition-all flex items-center justify-center ${
+                                                                row.node.hasStartOrder !== false
+                                                                    ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border border-emerald-200 shadow-2xs active:scale-95'
+                                                                    : 'text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-2xs active:scale-95'
+                                                            }`}
+                                                            title={
+                                                                row.node.hasStartOrder !== false
+                                                                    ? `Orden de Inicio: COMENZAR (Activo en producción${row.node.startOrderDate ? ` desde el ${new Date(row.node.startOrderDate).toLocaleDateString('es-CL')}` : ''}${row.node.startOrderByName ? ` por ${row.node.startOrderByName}` : ''}). Clic para pasar a DETENIDO.`
+                                                                    : 'Orden de Inicio: DETENIDO (Flujo pausado). Clic para COMENZAR producción.'
+                                                            }
+                                                        >
+                                                            {row.node.hasStartOrder !== false ? (
+                                                                <Play size={16} className="fill-emerald-600 text-emerald-600" />
+                                                            ) : (
+                                                                <Pause size={16} className="fill-amber-600 text-amber-600" />
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                    {canManageActions && (
+                                                        <button onClick={() => handleEditAssignment(projectKey, row.macro, row.proc, row.node)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded transition-colors" title="Editar Asignación">
+                                                            <Users size={16} />
+                                                        </button>
+                                                    )}
                                                     {canManageActions && (
                                                         <button 
                                                             onClick={(e) => handleDelete(projectKey, row.macro, row.proc, row.node.docId, row.node.name, e)}

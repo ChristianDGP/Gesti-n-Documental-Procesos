@@ -808,7 +808,11 @@ export const HierarchyService = {
         referentIds: data.referentIds || [], 
         requiredTypes: data.requiredTypes || [], 
         reusableLinks: data.reusableLinks || [],
-        active: data.active !== false 
+        active: data.active !== false,
+        hasStartOrder: data.hasStartOrder !== false,
+        startOrderDate: data.startOrderDate || undefined,
+        startOrderByName: data.startOrderByName || undefined,
+        startOrderById: data.startOrderById || undefined
       };
       if (!hierarchy[data.project]) hierarchy[data.project] = {};
       if (!hierarchy[data.project][data.macroprocess || 'Sin Macro']) hierarchy[data.project][data.macroprocess || 'Sin Macro'] = {};
@@ -856,6 +860,67 @@ export const HierarchyService = {
       } else {
           await updateDoc(processRef, { assignees });
       }
+  },
+  updateStartOrder: async (docId: string, hasStartOrder: boolean, user: { id: string; name: string }) => {
+      const processRef = doc(db, "process_matrix", docId);
+      const processSnap = await getDoc(processRef);
+      const updatePayload = {
+          hasStartOrder,
+          startOrderDate: hasStartOrder ? new Date().toISOString() : null,
+          startOrderByName: hasStartOrder ? user.name : null,
+          startOrderById: hasStartOrder ? user.id : null
+      };
+      if (processSnap.exists()) {
+          const processData = processSnap.data();
+          const project = processData.project;
+          const microprocess = processData.name;
+
+          const batch = writeBatch(db);
+          batch.update(processRef, updatePayload);
+
+          if (project && microprocess) {
+              const qDocs = query(
+                  collection(db, "documents"), 
+                  where("project", "==", project), 
+                  where("microprocess", "==", microprocess)
+              );
+              const docSnaps = await getDocs(qDocs);
+              docSnaps.docs.forEach(d => {
+                  batch.update(d.ref, updatePayload);
+              });
+          }
+          await batch.commit();
+      } else {
+          await updateDoc(processRef, updatePayload);
+      }
+  },
+  bulkUpdateStartOrder: async (docIds: string[], hasStartOrder: boolean, user: { id: string; name: string }) => {
+      for (const id of docIds) {
+          await HierarchyService.updateStartOrder(id, hasStartOrder, user);
+      }
+  },
+  regularizeStockStartOrder: async (user: { id: string; name: string }): Promise<number> => {
+      const q = query(collection(db, "process_matrix"));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      let count = 0;
+      const now = new Date().toISOString();
+      snapshot.docs.forEach(d => {
+          const data = d.data();
+          if (data.hasStartOrder !== false && data.hasStartOrder !== true) {
+              batch.update(d.ref, {
+                  hasStartOrder: true,
+                  startOrderDate: now,
+                  startOrderByName: user.name || 'Regularización de Stock',
+                  startOrderById: user.id || 'system'
+              });
+              count++;
+          }
+      });
+      if (count > 0) {
+          await batch.commit();
+      }
+      return count;
   },
   updateReferentLinks: async (referentId: string, selectedDocIds: string[]) => {
       const q = query(collection(db, "process_matrix"));

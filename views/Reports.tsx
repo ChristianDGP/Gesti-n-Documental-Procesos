@@ -8,7 +8,7 @@ import {
     PieChart, Pie, Cell, BarChart, Bar, LabelList, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ReferenceLine
 } from 'recharts';
 import { 
-    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, ChevronUp, UserCheck, Search, RotateCcw
+    Users, CheckCircle, Clock, FileText, Filter, LayoutDashboard, Briefcase, Loader2, ArrowRight, Target, TrendingUp, AlertTriangle, Activity, ShieldAlert, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, BarChart2, TableProperties, FileSpreadsheet, ZoomIn, ZoomOut, Layers, PlayCircle, PauseCircle, FastForward, Info, ShieldCheck, X, FolderTree, Database, Network, ChevronDown, ChevronUp, UserCheck, Search, RotateCcw
 } from 'lucide-react';
 
 interface Props {
@@ -153,6 +153,9 @@ const Reports: React.FC<Props> = ({ user }) => {
         progress: number;
         isVirtual?: boolean;
         docId?: string;
+        hasStartOrder?: boolean;
+        startOrderDate?: string;
+        startOrderByName?: string;
     } | null>(null);
 
     useEffect(() => {
@@ -287,6 +290,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     process: proc, 
                                     project: proj, 
                                     assignees: (node.assignees && node.assignees.length > 0) ? node.assignees : (realDoc.assignees || []),
+                                    hasStartOrder: realDoc.hasStartOrder !== undefined ? realDoc.hasStartOrder : (node.hasStartOrder !== false),
+                                    startOrderDate: realDoc.startOrderDate || node.startOrderDate,
+                                    startOrderByName: realDoc.startOrderByName || node.startOrderByName,
                                     isVirtual: false 
                                 });
                             } else {
@@ -295,7 +301,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     title: `${node.name} - ${type}`, 
                                     project: proj, 
                                     macroprocess: macro,
-                                    process: proc,
+                                    process: proc, 
                                     microprocess: node.name, 
                                     docType: type as DocType, 
                                     state: DocState.NOT_STARTED, 
@@ -303,6 +309,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     updatedAt: new Date(0).toISOString(), 
                                     createdAt: new Date(0).toISOString(),
                                     assignees: node.assignees || [], 
+                                    hasStartOrder: node.hasStartOrder !== false,
+                                    startOrderDate: node.startOrderDate,
+                                    startOrderByName: node.startOrderByName,
                                     isVirtual: true 
                                 } as any);
                             }
@@ -1133,6 +1142,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                 updatedAt?: string;
                 createdAt?: string;
                 title?: string;
+                hasStartOrder?: boolean;
+                startOrderDate?: string;
+                startOrderByName?: string;
             }>;
         }> = {};
 
@@ -1156,10 +1168,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                     processName: proc,
                     category: cat,
                     docs: {
-                        'AS IS': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'AS IS') },
-                        'FCE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'FCE') },
-                        'PM': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'PM') },
-                        'TO BE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'TO BE') }
+                        'AS IS': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', hasStartOrder: d.hasStartOrder, startOrderDate: d.startOrderDate, startOrderByName: d.startOrderByName, isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'AS IS') },
+                        'FCE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', hasStartOrder: d.hasStartOrder, startOrderDate: d.startOrderDate, startOrderByName: d.startOrderByName, isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'FCE') },
+                        'PM': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', hasStartOrder: d.hasStartOrder, startOrderDate: d.startOrderDate, startOrderByName: d.startOrderByName, isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'PM') },
+                        'TO BE': { state: DocState.NOT_STARTED, isVirtual: true, id: '', version: '0.0', updatedAt: '', createdAt: '', title: '', hasStartOrder: d.hasStartOrder, startOrderDate: d.startOrderDate, startOrderByName: d.startOrderByName, isRequired: isFilteredByAnalyst ? false : isDocTypeRequired(activeMapProject, macro, proc, micro, 'TO BE') }
                     }
                 };
             }
@@ -1174,6 +1186,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                     updatedAt: d.updatedAt,
                     createdAt: d.createdAt,
                     title: d.title,
+                    hasStartOrder: d.hasStartOrder,
+                    startOrderDate: d.startOrderDate,
+                    startOrderByName: d.startOrderByName,
                     isRequired: isDocTypeRequired(activeMapProject, macro, proc, micro, type)
                 };
             }
@@ -1932,6 +1947,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                         title?: string;
                         docId?: string;
                         isVirtual?: boolean;
+                        hasStartOrder?: boolean;
+                        startOrderDate?: string;
+                        startOrderByName?: string;
                     }>;
                     totalRequired: number;
                     totalProgress: number;
@@ -2002,6 +2020,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                 title?: string;
                 docId?: string;
                 isVirtual?: boolean;
+                hasStartOrder?: boolean;
+                startOrderDate?: string;
+                startOrderByName?: string;
             }> = {
                 'AS IS': { isRequired: false, progress: null },
                 'FCE': { isRequired: false, progress: null },
@@ -2025,7 +2046,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                         createdAt: doc.createdAt,
                         title: doc.title,
                         docId: doc.id,
-                        isVirtual: doc.isVirtual
+                        isVirtual: doc.isVirtual,
+                        hasStartOrder: doc.hasStartOrder,
+                        startOrderDate: doc.startOrderDate,
+                        startOrderByName: doc.startOrderByName
                     };
                     microRequiredCount++;
                     microSumProgress += prog;
@@ -3024,6 +3048,9 @@ const Reports: React.FC<Props> = ({ user }) => {
         isVirtual?: boolean;
         docId?: string;
         isRequired?: boolean;
+        hasStartOrder?: boolean;
+        startOrderDate?: string;
+        startOrderByName?: string;
     }
 
     const formatDocVersion = (ver?: string, isVirtual?: boolean, state?: DocState): string => {
@@ -3084,9 +3111,12 @@ const Reports: React.FC<Props> = ({ user }) => {
         const docVersionText = docInfo ? formatDocVersion(docInfo.version, docInfo.isVirtual, docInfo.state) : '';
         const docDateText = docInfo ? formatDocDate(docInfo.updatedAt, docInfo.state) : '';
         const stateLabel = docInfo?.state ? (STATE_CONFIG[docInfo.state]?.label || docInfo.state) : `${val}%`;
+        const startOrderStatus = docInfo 
+            ? (docInfo.hasStartOrder ? '🟢 Con Orden de Inicio (Habilitado)' : '⏸️ En Espera (Sin orden de inicio)')
+            : '';
 
         const nativeTitle = docInfo 
-            ? `Documento: ${docInfo.docType} (${docInfo.microName})\nVersión: ${docVersionText}\nFecha: ${docDateText}\nEstado: ${stateLabel} (${val}%)`
+            ? `Documento: ${docInfo.docType} (${docInfo.microName})\nVersión: ${docVersionText}\nFecha: ${docDateText}\nEstado: ${stateLabel} (${val}%)\nOrden de Inicio: ${docInfo.hasStartOrder ? 'Comenzar' : 'Detenido'}`
             : undefined;
 
         return (
@@ -3105,14 +3135,24 @@ const Reports: React.FC<Props> = ({ user }) => {
                         stateLabel,
                         progress: val,
                         isVirtual: docInfo.isVirtual,
-                        docId: docInfo.docId
+                        docId: docInfo.docId,
+                        hasStartOrder: docInfo.hasStartOrder,
+                        startOrderDate: docInfo.startOrderDate,
+                        startOrderByName: docInfo.startOrderByName
                     });
                 } : undefined}
                 onMouseLeave={docInfo ? () => setDocProgressTooltip(null) : undefined}
                 onClick={docInfo && !docInfo.isVirtual && docInfo.docId ? () => navigate(`/doc/${docInfo.docId}`) : undefined}
             >
-                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md border text-[11px] ${isBold ? 'font-black' : 'font-bold'} ${colorClass}`}>
-                    {val}%
+                <span className={`inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md border text-[11px] ${isBold ? 'font-black' : 'font-bold'} ${colorClass}`}>
+                    {val === 0 && docInfo && (
+                        docInfo.hasStartOrder ? (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Habilitado con Orden de Inicio" />
+                        ) : (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="En Espera (Sin Orden de Inicio)" />
+                        )
+                    )}
+                    <span>{val}%</span>
                 </span>
                 <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
                     <div className={`h-full ${barColor} transition-all duration-300`} style={{ width: `${val}%` }} />
@@ -6973,7 +7013,10 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                                                                 state: micro.docTypes[t].state,
                                                                                                 isVirtual: micro.docTypes[t].isVirtual,
                                                                                                 docId: micro.docTypes[t].docId,
-                                                                                                isRequired: micro.docTypes[t].isRequired
+                                                                                                isRequired: micro.docTypes[t].isRequired,
+                                                                                                hasStartOrder: micro.docTypes[t].hasStartOrder,
+                                                                                                startOrderDate: micro.docTypes[t].startOrderDate,
+                                                                                                startOrderByName: micro.docTypes[t].startOrderByName
                                                                                             })}
                                                                                         </td>
                                                                                     ))}
@@ -7098,6 +7141,32 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         {docProgressTooltip.stateLabel}
                                                     </span>
                                                 </div>
+
+                                                {/* Orden de Inicio */}
+                                                <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-slate-800 text-[11px]">
+                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                        {docProgressTooltip.hasStartOrder ? (
+                                                            <PlayCircle size={13} className="text-emerald-400 shrink-0" />
+                                                        ) : (
+                                                            <PauseCircle size={13} className="text-amber-400 shrink-0" />
+                                                        )}
+                                                        <span>Orden de Inicio:</span>
+                                                    </div>
+                                                    <span className={`font-bold text-[10.5px] px-1.5 py-0.5 rounded ${
+                                                        docProgressTooltip.hasStartOrder 
+                                                            ? 'text-emerald-300 bg-emerald-950/70 border border-emerald-800/60' 
+                                                            : 'text-amber-300 bg-amber-950/70 border border-amber-800/60'
+                                                    }`}>
+                                                        {docProgressTooltip.hasStartOrder ? 'Comenzar' : 'Detenido'}
+                                                    </span>
+                                                </div>
+
+                                                {docProgressTooltip.hasStartOrder && docProgressTooltip.startOrderDate && (
+                                                    <div className="text-[10px] text-slate-400 text-right pt-0.5">
+                                                        Emitida: {new Date(docProgressTooltip.startOrderDate).toLocaleDateString('es-CL')}
+                                                        {docProgressTooltip.startOrderByName ? ` por ${docProgressTooltip.startOrderByName}` : ''}
+                                                    </div>
+                                                )}
 
                                                 {!docProgressTooltip.isVirtual && docProgressTooltip.docId && (
                                                     <div className="mt-2 pt-1.5 border-t border-slate-800/80 text-[9.5px] text-slate-400 text-center flex items-center justify-center gap-1">

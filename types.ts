@@ -121,6 +121,10 @@ export interface Document {
   updatedAt: string;
   expectedEndDate?: string;
   ignoredInconsistency?: string;
+  hasStartOrder?: boolean;
+  startOrderDate?: string;
+  startOrderByName?: string;
+  startOrderById?: string;
 }
 
 export interface ProcessNode {
@@ -131,6 +135,10 @@ export interface ProcessNode {
   requiredTypes: DocType[];
   reusableLinks?: string[];
   active?: boolean;
+  hasStartOrder?: boolean;
+  startOrderDate?: string;
+  startOrderByName?: string;
+  startOrderById?: string;
 }
 
 export interface FullHierarchy {
