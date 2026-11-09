@@ -79,12 +79,13 @@ const Reports: React.FC<Props> = ({ user }) => {
     
     const location = useLocation();
     
-    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE' | 'MAP' | 'BI'>(() => {
+    const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE' | 'MAP' | 'DOC_PROGRESS' | 'BI'>(() => {
         if (location.state?.tab === 'BI' && ((user.role as any) === UserRole.ADMIN || user.canAccessBIQueryBuilder)) return 'BI';
         if (user.canAccessReportGestion !== false) return 'REPORTS';
         if (user.canAccessReportContinuity !== false) return 'SUMMARY';
         if (user.canAccessReportMonthly !== false) return 'CLOSURE';
         if ((user.role as any) === UserRole.ADMIN || user.canAccessReportCoverage) return 'MAP';
+        if ((user.role as any) === UserRole.ADMIN || user.canAccessReportDocProgress !== false) return 'DOC_PROGRESS';
         if ((user.role as any) === UserRole.ADMIN || user.canAccessBIQueryBuilder) return 'BI';
         return 'REPORTS';
     });
@@ -99,24 +100,35 @@ const Reports: React.FC<Props> = ({ user }) => {
              if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
              else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
              else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
+             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
              else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
         if (activeTab === 'SUMMARY' && !isAdmin && user.canAccessReportContinuity === false) {
              if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
              else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
              else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
+             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
              else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
         if (activeTab === 'CLOSURE' && !isAdmin && user.canAccessReportMonthly === false) {
              if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
              else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
              else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
+             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
              else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
         if (activeTab === 'MAP' && !isAdmin && !user.canAccessReportCoverage) {
              if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
              else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
              else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
+             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        }
+        if (activeTab === 'DOC_PROGRESS' && !isAdmin && user.canAccessReportDocProgress === false) {
+             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
+             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
+             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
+             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
              else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
         }
         if (activeTab === 'BI' && !isAdmin && !user.canAccessBIQueryBuilder) {
@@ -124,6 +136,7 @@ const Reports: React.FC<Props> = ({ user }) => {
              else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
              else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
              else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
+             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
         }
     }, [user, activeTab]);
 
@@ -131,7 +144,6 @@ const Reports: React.FC<Props> = ({ user }) => {
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
     const [activeType, setActiveType] = useState<string | null>(null);
     const [mapDocTypeFilter, setMapDocTypeFilter] = useState<'TODOS' | 'AS IS' | 'FCE' | 'PM' | 'TO BE'>('TODOS');
-    const [mapSubTab, setMapSubTab] = useState<'DIAGRAM' | 'REPORTS'>('DIAGRAM');
 
     // Estados para el Monitor de Cuellos de Botella y Envejecimiento (Aging WIP)
     const [bottleneckDimension, setBottleneckDimension] = useState<BottleneckDimension>('MACRO');
@@ -4541,6 +4553,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                 {(user.role === UserRole.ADMIN || user.canAccessReportCoverage) && (
                     <button onClick={() => setActiveTab('MAP')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'MAP' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Network size={18} /> Gestión por Procesos</button>
                 )}
+                {(user.role === UserRole.ADMIN || user.canAccessReportDocProgress !== false) && (
+                    <button onClick={() => setActiveTab('DOC_PROGRESS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'DOC_PROGRESS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><FileSpreadsheet size={18} /> Avance por Documento</button>
+                )}
                 {(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) && (
                     <button onClick={() => setActiveTab('BI')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'BI' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Database size={18} /> Constructor de Consultas (BI)</button>
                 )}
@@ -5614,32 +5629,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                         </div>
 
-                        {/* Sub-tab Navigation for Gestión por Procesos */}
-                        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl border border-slate-200/60 w-fit gap-1">
-                            <button
-                                onClick={() => setMapSubTab('DIAGRAM')}
-                                className={`px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
-                                    mapSubTab === 'DIAGRAM'
-                                        ? 'bg-white text-indigo-600 shadow-sm font-black border border-slate-200/20'
-                                        : 'text-slate-500 hover:text-slate-800'
-                                }`}
-                            >
-                                <Network size={15} /> Mapa de Procesos Interactivo
-                            </button>
-                            <button
-                                onClick={() => setMapSubTab('REPORTS')}
-                                className={`px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
-                                    mapSubTab === 'REPORTS'
-                                        ? 'bg-white text-indigo-600 shadow-sm font-black border border-slate-200/20'
-                                        : 'text-slate-500 hover:text-slate-800'
-                                }`}
-                            >
-                                <BarChart2 size={15} /> Reportería por Documento y Avance
-                            </button>
-                        </div>
-
-                        {mapSubTab === 'DIAGRAM' && (
-                            <div className="space-y-6 animate-fadeIn">
+                        <div className="space-y-6 animate-fadeIn">
                                 {/* Filtros de Proyecto y de Tipo de Documento */}
                                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm">
                                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
@@ -5845,9 +5835,27 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        </section>
+                    )}
 
-                        {mapSubTab === 'REPORTS' && (
+                    {activeTab === 'DOC_PROGRESS' && (
+                        <section className="space-y-6 animate-fadeIn">
+                            {/* Summary Header of Avance por Documento */}
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                        <FileSpreadsheet size={20} className="text-indigo-600" /> Avance por Documento
+                                    </h3>
+                                    <p className="text-xs text-slate-500">
+                                        Matriz consolidada de avance porcentual y desglose de documentos (AS IS, FCE, PM, TO BE) por macro, proceso y microproceso.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 p-3 rounded-lg shadow-sm">
+                                    <span className="text-xs font-black text-indigo-800 uppercase">Avance Total {activeMapProject}:</span>
+                                    <span className="text-sm font-black text-indigo-600 bg-white px-2 py-0.5 rounded shadow-sm border border-indigo-100">{totalProjectProgress}%</span>
+                                </div>
+                            </div>
+
                             <div className="space-y-6 animate-fadeIn">
                                 {/* Action Bar / Project Selection & Export Options */}
                                 <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -7614,8 +7622,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                     </>
                                 )}
                                 </div>
-                    </div>
-                )}
+                            </div>
+                        </section>
+                    )}
 
                 {/* selectedMacroDetail BREAKOUT PANEL/DRAWER */}
                 {selectedMacroDetail && (
@@ -7820,8 +7829,6 @@ const Reports: React.FC<Props> = ({ user }) => {
                             </div>
                         </div>
                     </div>
-                )}
-                </section>
                 )}
 
                 {(activeTab === 'BI' && (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder)) && (

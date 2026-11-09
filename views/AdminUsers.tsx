@@ -23,6 +23,7 @@ const AdminUsers: React.FC = () => {
   const [canAccessReportContinuity, setCanAccessReportContinuity] = useState(false);
   const [canAccessReportMonthly, setCanAccessReportMonthly] = useState(false);
   const [canAccessReportCoverage, setCanAccessReportCoverage] = useState(false);
+  const [canAccessReportDocProgress, setCanAccessReportDocProgress] = useState(false);
   const [canAccessReferents, setCanAccessReferents] = useState(false);
   const [canAccessReferentsByProcess, setCanAccessReferentsByProcess] = useState(false);
   const [canAccessReferentsDirectory, setCanAccessReferentsDirectory] = useState(false);
@@ -54,7 +55,7 @@ const AdminUsers: React.FC = () => {
     setLoading(false);
   };
 
-  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReportCoverage' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessReuseMatrixIntersect' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog' | 'canAccessBIQueryBuilder') => {
+  const handleTogglePermission = async (user: User, field: 'canAccessReports' | 'canAccessReferents' | 'canAccessGantt' | 'canAccessReportGestion' | 'canAccessReportContinuity' | 'canAccessReportMonthly' | 'canAccessReportCoverage' | 'canAccessReportDocProgress' | 'canAccessReuseMatrix' | 'canAccessReferentsByProcess' | 'canAccessReferentsDirectory' | 'canAccessReuseMatrixLink' | 'canAccessReuseMatrixView' | 'canAccessReuseMatrixIntersect' | 'canAccessStructure' | 'canAccessAssignments' | 'canAccessLog' | 'canAccessBIQueryBuilder') => {
       setUpdatingId(`${user.id}-${field}`);
       const newValue = !user[field];
       
@@ -67,6 +68,7 @@ const AdminUsers: React.FC = () => {
               updatePayload.canAccessReportContinuity = newValue;
               updatePayload.canAccessReportMonthly = newValue;
               updatePayload.canAccessReportCoverage = newValue;
+              updatePayload.canAccessReportDocProgress = newValue;
           }
 
           // Lógica de cascada para referentes
@@ -130,6 +132,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportContinuity(user.canAccessReportContinuity || false);
       setCanAccessReportMonthly(user.canAccessReportMonthly || false);
       setCanAccessReportCoverage(user.canAccessReportCoverage || false);
+      setCanAccessReportDocProgress(user.canAccessReportDocProgress || false);
       setCanAccessReferents(user.canAccessReferents || false);
       setCanAccessReferentsByProcess(user.canAccessReferentsByProcess || false);
       setCanAccessReferentsDirectory(user.canAccessReferentsDirectory || false);
@@ -186,6 +189,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
                 canAccessReportCoverage: role === UserRole.ADMIN ? true : canAccessReportCoverage,
+                canAccessReportDocProgress: role === UserRole.ADMIN ? true : canAccessReportDocProgress,
                 canAccessBIQueryBuilder: role === UserRole.ADMIN ? true : canAccessBIQueryBuilder,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
                 canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
@@ -225,6 +229,7 @@ const AdminUsers: React.FC = () => {
                 canAccessReportContinuity: role === UserRole.ADMIN ? true : canAccessReportContinuity,
                 canAccessReportMonthly: role === UserRole.ADMIN ? true : canAccessReportMonthly,
                 canAccessReportCoverage: role === UserRole.ADMIN ? true : canAccessReportCoverage,
+                canAccessReportDocProgress: role === UserRole.ADMIN ? true : canAccessReportDocProgress,
                 canAccessBIQueryBuilder: role === UserRole.ADMIN ? true : canAccessBIQueryBuilder,
                 canAccessReferents: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferents),
                 canAccessReferentsByProcess: role === UserRole.ADMIN ? true : (role === UserRole.GUEST ? false : canAccessReferentsByProcess),
@@ -388,7 +393,11 @@ const AdminUsers: React.FC = () => {
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
                                                 <input type="checkbox" checked={canAccessReportCoverage} onChange={(e) => setCanAccessReportCoverage(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
-                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Cobertura de Procesos</span>
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Gestión por Procesos</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input type="checkbox" checked={canAccessReportDocProgress} onChange={(e) => setCanAccessReportDocProgress(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Avance por Documento</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
                                                 <input type="checkbox" checked={canAccessBIQueryBuilder} onChange={(e) => setCanAccessBIQueryBuilder(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
