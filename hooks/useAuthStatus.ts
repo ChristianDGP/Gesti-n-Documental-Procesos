@@ -42,8 +42,10 @@ export const useAuthStatus = () => {
                             const updatedUser = { ...userData, role: UserRole.ADMIN, organization: 'Administración Sistema' };
                             await updateDoc(userRef, { role: UserRole.ADMIN, organization: 'Administración Sistema' });
                             setUser(updatedUser);
+                            localStorage.setItem('sgd_user_cache', JSON.stringify(updatedUser));
                         } else {
                             setUser(userData);
+                            localStorage.setItem('sgd_user_cache', JSON.stringify(userData));
                         }
                     } else {
                         let existingProfile: User | null = null;
@@ -73,6 +75,7 @@ export const useAuthStatus = () => {
                             await UserService.migrateLegacyReferences(existingProfile.id, firebaseUser.uid);
                             await deleteDoc(oldDocRef);
                             setUser(migratedUser);
+                            localStorage.setItem('sgd_user_cache', JSON.stringify(migratedUser));
                         } else {
                             const newUser: User = {
                                 id: firebaseUser.uid,
@@ -88,6 +91,7 @@ export const useAuthStatus = () => {
                             const safeNewUser = JSON.parse(JSON.stringify(newUser));
                             await setDoc(userRef, safeNewUser);
                             setUser(newUser);
+                            localStorage.setItem('sgd_user_cache', JSON.stringify(newUser));
                         }
                     }
                 } catch (error) {

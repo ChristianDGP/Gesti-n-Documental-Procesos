@@ -101,15 +101,36 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const roleUpper = (user.role || '').toString().toUpperCase();
   const isGuest = roleUpper === 'GUEST';
-  const isAdminOrCoord = roleUpper === 'ADMIN' || roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
+  const isAdmin = roleUpper === 'ADMIN';
+  const isCoordinator = roleUpper === 'COORDINATOR' || roleUpper === 'COORDINADOR';
+  const isAnalyst = roleUpper === 'ANALYST';
   
-  const canAccessReports = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly || user.canAccessReportCoverage || user.canAccessBIQueryBuilder));
-  const canAccessReferents = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReferents || user.canAccessReferentsByProcess || user.canAccessReferentsDirectory));
-  const canAccessGantt = isAdminOrCoord || ((user.role === UserRole.ANALYST || isGuest) && user.canAccessGantt);
-  const canAccessReuseMatrix = isAdminOrCoord || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView || user.canAccessReuseMatrixIntersect));
-  const canAccessStructure = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessStructure);
-  const canAccessAssignments = isAdminOrCoord || (user.role === UserRole.ANALYST && user.canAccessAssignments);
-  const canAccessLog = user.role === UserRole.ADMIN || (user.role === UserRole.ANALYST && user.canAccessLog);
+  const canAccessReports = isAdmin || 
+    (isCoordinator && user.canAccessReports !== false) || 
+    ((isAnalyst || isGuest) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly || user.canAccessReportCoverage || user.canAccessReportDocProgress || user.canAccessBIQueryBuilder));
+
+  const canAccessReferents = isAdmin || 
+    (isCoordinator && user.canAccessReferents !== false) || 
+    (isAnalyst && (user.canAccessReferents || user.canAccessReferentsByProcess || user.canAccessReferentsDirectory));
+
+  const canAccessGantt = isAdmin || 
+    (isCoordinator && user.canAccessGantt !== false) || 
+    ((isAnalyst || isGuest) && user.canAccessGantt);
+
+  const canAccessReuseMatrix = isAdmin || 
+    (isCoordinator && user.canAccessReuseMatrix !== false) || 
+    (isAnalyst && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView || user.canAccessReuseMatrixIntersect));
+
+  const canAccessStructure = isAdmin || 
+    (isCoordinator && user.canAccessStructure !== false) || 
+    (isAnalyst && user.canAccessStructure);
+
+  const canAccessAssignments = isAdmin || 
+    (isCoordinator && user.canAccessAssignments !== false) || 
+    (isAnalyst && user.canAccessAssignments);
+
+  const canAccessLog = isAdmin || 
+    ((isCoordinator || isAnalyst) && user.canAccessLog);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -146,7 +167,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             <div className="pt-6 pb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4">Visualización y Análisis</div>
             <NavItem to="/dashboard" icon={BarChart2} label="Dashboard" />
             
-            {(canAccessReports || canAccessReferents || canAccessGantt || canAccessStructure || canAccessAssignments || canAccessReuseMatrix || canAccessLog || isAdminOrCoord) && (
+            {(canAccessReports || canAccessReferents || canAccessGantt || canAccessStructure || canAccessAssignments || canAccessReuseMatrix || canAccessLog || isAdmin) && (
               <>
                 {canAccessReports && <NavItem to="/admin/reports" icon={PieChart} label="Reportes" />}
                 {canAccessGantt && <NavItem to="/admin/gantt" icon={CalendarRange} label="Diagrama Gantt" />}

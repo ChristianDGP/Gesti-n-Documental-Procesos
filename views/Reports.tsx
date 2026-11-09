@@ -79,66 +79,93 @@ const Reports: React.FC<Props> = ({ user }) => {
     
     const location = useLocation();
     
+    const isAdmin = user.role === UserRole.ADMIN;
+    const isCoordinator = user.role === UserRole.COORDINATOR;
+    const hasReportsAccess = isAdmin || (isCoordinator && user.canAccessReports !== false) || user.canAccessReports === true;
+
+    // Permisos unificados y granulares por cada pestaña de reporte
+    const canViewGestion = isAdmin || 
+        user.canAccessReportGestion === true || 
+        (hasReportsAccess && user.canAccessReportGestion !== false);
+
+    const canViewContinuity = isAdmin || 
+        user.canAccessReportContinuity === true || 
+        (hasReportsAccess && user.canAccessReportContinuity !== false);
+
+    const canViewMonthly = isAdmin || 
+        user.canAccessReportMonthly === true || 
+        (hasReportsAccess && user.canAccessReportMonthly !== false);
+
+    const canViewCoverage = isAdmin || 
+        user.canAccessReportCoverage === true || 
+        (hasReportsAccess && user.canAccessReportCoverage !== false);
+
+    const canViewDocProgress = isAdmin || 
+        user.canAccessReportDocProgress === true || 
+        (hasReportsAccess && user.canAccessReportDocProgress !== false);
+
+    const canViewBI = isAdmin || 
+        user.canAccessBIQueryBuilder === true;
+
     const [activeTab, setActiveTab] = useState<'REPORTS' | 'SUMMARY' | 'CLOSURE' | 'MAP' | 'DOC_PROGRESS' | 'BI'>(() => {
-        if (location.state?.tab === 'BI' && ((user.role as any) === UserRole.ADMIN || user.canAccessBIQueryBuilder)) return 'BI';
-        if (user.canAccessReportGestion !== false) return 'REPORTS';
-        if (user.canAccessReportContinuity !== false) return 'SUMMARY';
-        if (user.canAccessReportMonthly !== false) return 'CLOSURE';
-        if ((user.role as any) === UserRole.ADMIN || user.canAccessReportCoverage) return 'MAP';
-        if ((user.role as any) === UserRole.ADMIN || user.canAccessReportDocProgress !== false) return 'DOC_PROGRESS';
-        if ((user.role as any) === UserRole.ADMIN || user.canAccessBIQueryBuilder) return 'BI';
+        if (location.state?.tab === 'BI' && canViewBI) return 'BI';
+        if (canViewGestion) return 'REPORTS';
+        if (canViewContinuity) return 'SUMMARY';
+        if (canViewMonthly) return 'CLOSURE';
+        if (canViewCoverage) return 'MAP';
+        if (canViewDocProgress) return 'DOC_PROGRESS';
+        if (canViewBI) return 'BI';
         return 'REPORTS';
     });
     const [chartScale, setChartScale] = useState<ChartScale>('MONTHLY');
     const [cfdRange, setCfdRange] = useState<3 | 6 | 12>(6);
     const [selectedChartDocType, setSelectedChartDocType] = useState<'AS IS' | 'FCE' | 'PM' | 'TO BE'>('AS IS');
 
-    // Redirección si no tiene acceso a la pestaña activa (por si acaso)
+    // Redirección si el usuario pierde o no tiene acceso a la pestaña activa
     useEffect(() => {
-        const isAdmin = user.role === UserRole.ADMIN;
-        if (activeTab === 'REPORTS' && !isAdmin && user.canAccessReportGestion === false) {
-             if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
-             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
-             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
-             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
-             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        if (activeTab === 'REPORTS' && !canViewGestion) {
+             if (canViewContinuity) setActiveTab('SUMMARY');
+             else if (canViewMonthly) setActiveTab('CLOSURE');
+             else if (canViewCoverage) setActiveTab('MAP');
+             else if (canViewDocProgress) setActiveTab('DOC_PROGRESS');
+             else if (canViewBI) setActiveTab('BI');
         }
-        if (activeTab === 'SUMMARY' && !isAdmin && user.canAccessReportContinuity === false) {
-             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
-             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
-             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
-             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
-             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        if (activeTab === 'SUMMARY' && !canViewContinuity) {
+             if (canViewGestion) setActiveTab('REPORTS');
+             else if (canViewMonthly) setActiveTab('CLOSURE');
+             else if (canViewCoverage) setActiveTab('MAP');
+             else if (canViewDocProgress) setActiveTab('DOC_PROGRESS');
+             else if (canViewBI) setActiveTab('BI');
         }
-        if (activeTab === 'CLOSURE' && !isAdmin && user.canAccessReportMonthly === false) {
-             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
-             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
-             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
-             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
-             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        if (activeTab === 'CLOSURE' && !canViewMonthly) {
+             if (canViewGestion) setActiveTab('REPORTS');
+             else if (canViewContinuity) setActiveTab('SUMMARY');
+             else if (canViewCoverage) setActiveTab('MAP');
+             else if (canViewDocProgress) setActiveTab('DOC_PROGRESS');
+             else if (canViewBI) setActiveTab('BI');
         }
-        if (activeTab === 'MAP' && !isAdmin && !user.canAccessReportCoverage) {
-             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
-             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
-             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
-             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
-             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        if (activeTab === 'MAP' && !canViewCoverage) {
+             if (canViewGestion) setActiveTab('REPORTS');
+             else if (canViewContinuity) setActiveTab('SUMMARY');
+             else if (canViewMonthly) setActiveTab('CLOSURE');
+             else if (canViewDocProgress) setActiveTab('DOC_PROGRESS');
+             else if (canViewBI) setActiveTab('BI');
         }
-        if (activeTab === 'DOC_PROGRESS' && !isAdmin && user.canAccessReportDocProgress === false) {
-             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
-             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
-             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
-             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
-             else if (isAdmin || user.canAccessBIQueryBuilder) setActiveTab('BI');
+        if (activeTab === 'DOC_PROGRESS' && !canViewDocProgress) {
+             if (canViewGestion) setActiveTab('REPORTS');
+             else if (canViewContinuity) setActiveTab('SUMMARY');
+             else if (canViewMonthly) setActiveTab('CLOSURE');
+             else if (canViewCoverage) setActiveTab('MAP');
+             else if (canViewBI) setActiveTab('BI');
         }
-        if (activeTab === 'BI' && !isAdmin && !user.canAccessBIQueryBuilder) {
-             if (isAdmin || user.canAccessReportGestion !== false) setActiveTab('REPORTS');
-             else if (isAdmin || user.canAccessReportContinuity !== false) setActiveTab('SUMMARY');
-             else if (isAdmin || user.canAccessReportMonthly !== false) setActiveTab('CLOSURE');
-             else if (isAdmin || user.canAccessReportCoverage) setActiveTab('MAP');
-             else if (isAdmin || user.canAccessReportDocProgress !== false) setActiveTab('DOC_PROGRESS');
+        if (activeTab === 'BI' && !canViewBI) {
+             if (canViewGestion) setActiveTab('REPORTS');
+             else if (canViewContinuity) setActiveTab('SUMMARY');
+             else if (canViewMonthly) setActiveTab('CLOSURE');
+             else if (canViewCoverage) setActiveTab('MAP');
+             else if (canViewDocProgress) setActiveTab('DOC_PROGRESS');
         }
-    }, [user, activeTab]);
+    }, [activeTab, canViewGestion, canViewContinuity, canViewMonthly, canViewCoverage, canViewDocProgress, canViewBI]);
 
     const [filterProject, setFilterProject] = useState('');
     const [filterAnalyst, setFilterAnalyst] = useState(isAnalyst ? user.id : '');
@@ -4541,28 +4568,28 @@ const Reports: React.FC<Props> = ({ user }) => {
             </div>
 
             <div className="flex flex-col sm:flex-row bg-slate-100 p-1 rounded-xl w-fit gap-1">
-                {(user.role === UserRole.ADMIN || user.canAccessReportGestion !== false) && (
+                {canViewGestion && (
                     <button onClick={() => setActiveTab('REPORTS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'REPORTS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><BarChart2 size={18} /> Reportes de Gestión</button>
                 )}
-                {(user.role === UserRole.ADMIN || user.canAccessReportContinuity !== false) && (
+                {canViewContinuity && (
                     <button onClick={() => setActiveTab('SUMMARY')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'SUMMARY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><ShieldAlert size={18} /> Monitor de Continuidad</button>
                 )}
-                {(user.role === UserRole.ADMIN || user.canAccessReportMonthly !== false) && (
+                {canViewMonthly && (
                     <button onClick={() => setActiveTab('CLOSURE')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CLOSURE' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><TableProperties size={18} /> Cierre Mensual</button>
                 )}
-                {(user.role === UserRole.ADMIN || user.canAccessReportCoverage) && (
+                {canViewCoverage && (
                     <button onClick={() => setActiveTab('MAP')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'MAP' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Network size={18} /> Gestión por Procesos</button>
                 )}
-                {(user.role === UserRole.ADMIN || user.canAccessReportDocProgress !== false) && (
+                {canViewDocProgress && (
                     <button onClick={() => setActiveTab('DOC_PROGRESS')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'DOC_PROGRESS' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><FileSpreadsheet size={18} /> Avance por Documento</button>
                 )}
-                {(user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder) && (
+                {canViewBI && (
                     <button onClick={() => setActiveTab('BI')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'BI' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Database size={18} /> Constructor de Consultas (BI)</button>
                 )}
             </div>
 
             <div className="animate-fadeIn">
-                {activeTab === 'REPORTS' && (
+                {activeTab === 'REPORTS' && canViewGestion && (
                     <section className="space-y-8">
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 px-1 text-slate-400">
@@ -4735,7 +4762,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     </section>
                 )}
 
-                {activeTab === 'SUMMARY' && (
+                {activeTab === 'SUMMARY' && canViewContinuity && (
                     <section className="space-y-6">
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             <AgileBucket title="No Iniciado" value={agileFlowStats.backlog.count} icon={Layers} color="slate" onClick={() => goToDashboard(agileFlowStats.backlog.ids)} />
@@ -5538,7 +5565,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     </section>
                 )}
 
-                {activeTab === 'CLOSURE' && (
+                {activeTab === 'CLOSURE' && canViewMonthly && (
                     <section className="space-y-6">
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                             <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -5608,7 +5635,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     </section>
                 )}
 
-                {activeTab === 'MAP' && (
+                {activeTab === 'MAP' && canViewCoverage && (
                     <section className="space-y-6 animate-fadeIn">
                         {/* Summary Header of Process Map */}
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -5838,7 +5865,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                         </section>
                     )}
 
-                    {activeTab === 'DOC_PROGRESS' && (
+                    {activeTab === 'DOC_PROGRESS' && canViewDocProgress && (
                         <section className="space-y-6 animate-fadeIn">
                             {/* Summary Header of Avance por Documento */}
                             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -7831,7 +7858,7 @@ const Reports: React.FC<Props> = ({ user }) => {
                     </div>
                 )}
 
-                {(activeTab === 'BI' && (user.role === UserRole.ADMIN || user.canAccessBIQueryBuilder)) && (
+                {(activeTab === 'BI' && canViewBI) && (
                     <section className="animate-fadeIn">
                         <AdminBI hideHeader />
                     </section>

@@ -74,39 +74,46 @@ const App: React.FC = () => {
                                     
                                     <Route 
                                         path="/admin/referents" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessReferents)) 
+                                        element={(user.role === UserRole.ADMIN || (user.role === UserRole.COORDINATOR && user.canAccessReferents !== false) || (user.role === UserRole.ANALYST && (user.canAccessReferents || user.canAccessReferentsByProcess || user.canAccessReferentsDirectory))) 
                                             ? <AdminReferents user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
                                     <Route 
                                         path="/admin/reports" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || ((user.role === UserRole.ANALYST || user.role === UserRole.GUEST) && user.canAccessReports)) 
+                                        element={(user.role === UserRole.ADMIN || (user.role === UserRole.COORDINATOR && user.canAccessReports !== false) || ((user.role === UserRole.ANALYST || user.role === UserRole.GUEST) && (user.canAccessReports || user.canAccessReportGestion || user.canAccessReportContinuity || user.canAccessReportMonthly || user.canAccessReportCoverage || user.canAccessReportDocProgress || user.canAccessBIQueryBuilder))) 
                                             ? <Reports user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
                                     <Route 
                                         path="/admin/gantt" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || ((user.role === UserRole.ANALYST || user.role === UserRole.GUEST) && user.canAccessGantt)) 
+                                        element={(user.role === UserRole.ADMIN || (user.role === UserRole.COORDINATOR && user.canAccessGantt !== false) || ((user.role === UserRole.ANALYST || user.role === UserRole.GUEST) && user.canAccessGantt)) 
                                             ? <AdminGantt user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
 
                                     <Route 
                                         path="/admin/structure" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessStructure)) 
+                                        element={(user.role === UserRole.ADMIN || (user.role === UserRole.COORDINATOR && user.canAccessStructure !== false) || (user.role === UserRole.ANALYST && user.canAccessStructure)) 
                                             ? <AdminHierarchy user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
                                     <Route 
                                         path="/admin/assignments" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && user.canAccessAssignments)) 
+                                        element={(user.role === UserRole.ADMIN || (user.role === UserRole.COORDINATOR && user.canAccessAssignments !== false) || (user.role === UserRole.ANALYST && user.canAccessAssignments)) 
                                             ? <AdminAssignments user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
                                     <Route 
                                         path="/admin/reuse" 
-                                        element={(user.role === UserRole.ADMIN || user.role === UserRole.COORDINATOR || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView || user.canAccessReuseMatrixIntersect))) 
+                                        element={(user.role === UserRole.ADMIN || (user.role === UserRole.COORDINATOR && user.canAccessReuseMatrix !== false) || (user.role === UserRole.ANALYST && (user.canAccessReuseMatrix || user.canAccessReuseMatrixLink || user.canAccessReuseMatrixView || user.canAccessReuseMatrixIntersect))) 
                                             ? <AdminReuseMatrix user={user} /> 
+                                            : <Navigate to="/" />} 
+                                    />
+
+                                    <Route 
+                                        path="/admin/events" 
+                                        element={(user.role === UserRole.ADMIN || ((user.role === UserRole.COORDINATOR || user.role === UserRole.ANALYST) && user.canAccessLog)) 
+                                            ? <AdminEventLog user={user} /> 
                                             : <Navigate to="/" />} 
                                     />
 
@@ -114,7 +121,6 @@ const App: React.FC = () => {
                                         <>
                                             <Route path="/admin/users" element={<AdminUsers />} />
                                             <Route path="/admin/database" element={<AdminDatabase />} />
-                                            <Route path="/admin/events" element={<AdminEventLog user={user} />} />
                                             <Route path="/admin/inbox-manager" element={<AdminInboxManager user={user} />} />
                                         </>
                                     )}

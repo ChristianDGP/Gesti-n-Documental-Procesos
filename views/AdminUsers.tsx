@@ -88,6 +88,16 @@ const AdminUsers: React.FC = () => {
           
           // Actualización optimista local
           setUsers(prev => prev.map(u => u.id === user.id ? { ...u, ...updatePayload } : u));
+
+          const cached = localStorage.getItem('sgd_user_cache');
+          if (cached) {
+              try {
+                  const parsed = JSON.parse(cached);
+                  if (parsed.id === user.id) {
+                      localStorage.setItem('sgd_user_cache', JSON.stringify({ ...parsed, ...updatePayload }));
+                  }
+              } catch(e) {}
+          }
       } catch (error) {
           console.error(error);
           alert('Error al actualizar permisos');
@@ -127,31 +137,40 @@ const AdminUsers: React.FC = () => {
       setRole(user.role);
       setOrganization(user.organization);
       setPassword(''); 
-      setCanAccessReports(user.canAccessReports || false);
-      setCanAccessReportGestion(user.canAccessReportGestion || false);
-      setCanAccessReportContinuity(user.canAccessReportContinuity || false);
-      setCanAccessReportMonthly(user.canAccessReportMonthly || false);
-      setCanAccessReportCoverage(user.canAccessReportCoverage || false);
-      setCanAccessReportDocProgress(user.canAccessReportDocProgress || false);
-      setCanAccessReferents(user.canAccessReferents || false);
-      setCanAccessReferentsByProcess(user.canAccessReferentsByProcess || false);
-      setCanAccessReferentsDirectory(user.canAccessReferentsDirectory || false);
-      setCanAccessGantt(user.canAccessGantt || false);
-      setCanAccessReuseMatrix(user.canAccessReuseMatrix || false);
-      setCanAccessReuseMatrixLink(user.canAccessReuseMatrixLink || false);
-      setCanAccessReuseMatrixView(user.canAccessReuseMatrixView || false);
-      setCanAccessReuseMatrixIntersect(user.canAccessReuseMatrixIntersect || false);
-      setCanAccessStructure(user.canAccessStructure || false);
-      setCanAccessAssignments(user.canAccessAssignments || false);
+      const hasReports = user.canAccessReports || false;
+      setCanAccessReports(hasReports);
+      setCanAccessReportGestion(user.canAccessReportGestion !== undefined ? !!user.canAccessReportGestion : hasReports);
+      setCanAccessReportContinuity(user.canAccessReportContinuity !== undefined ? !!user.canAccessReportContinuity : hasReports);
+      setCanAccessReportMonthly(user.canAccessReportMonthly !== undefined ? !!user.canAccessReportMonthly : hasReports);
+      setCanAccessReportCoverage(user.canAccessReportCoverage !== undefined ? !!user.canAccessReportCoverage : hasReports);
+      setCanAccessReportDocProgress(user.canAccessReportDocProgress !== undefined ? !!user.canAccessReportDocProgress : hasReports);
       setCanAccessBIQueryBuilder(user.canAccessBIQueryBuilder || false);
-      setCanAssignDefinedDocs(user.canAssignDefinedDocs || false);
-      setCanManageAssignments(user.canManageAssignments || false);
-      setCanAccessLog(user.canAccessLog || false);
-      setCanAuditEvents(user.canAuditEvents || false);
+
+      const hasReferents = user.canAccessReferents || false;
+      setCanAccessReferents(hasReferents);
+      setCanAccessReferentsByProcess(user.canAccessReferentsByProcess !== undefined ? !!user.canAccessReferentsByProcess : hasReferents);
+      setCanAccessReferentsDirectory(user.canAccessReferentsDirectory !== undefined ? !!user.canAccessReferentsDirectory : hasReferents);
+
+      setCanAccessGantt(user.canAccessGantt || false);
       setCanEditGanttDate(user.canEditGanttDate || false);
+
+      const hasReuse = user.canAccessReuseMatrix || false;
+      setCanAccessReuseMatrix(hasReuse);
+      setCanAccessReuseMatrixLink(user.canAccessReuseMatrixLink !== undefined ? !!user.canAccessReuseMatrixLink : hasReuse);
+      setCanAccessReuseMatrixView(user.canAccessReuseMatrixView !== undefined ? !!user.canAccessReuseMatrixView : hasReuse);
+      setCanAccessReuseMatrixIntersect(user.canAccessReuseMatrixIntersect !== undefined ? !!user.canAccessReuseMatrixIntersect : hasReuse);
+
+      setCanAccessStructure(user.canAccessStructure || false);
       setCanAddStructure(user.canAddStructure || false);
       setCanEditStructure(user.canEditStructure || false);
       setCanEditMasterData(user.canEditMasterData || false);
+
+      setCanAccessAssignments(user.canAccessAssignments || false);
+      setCanAssignDefinedDocs(user.canAssignDefinedDocs || false);
+      setCanManageAssignments(user.canManageAssignments || false);
+
+      setCanAccessLog(user.canAccessLog || false);
+      setCanAuditEvents(user.canAuditEvents || false);
       setShowForm(true);
   };
 
@@ -214,6 +233,15 @@ const AdminUsers: React.FC = () => {
                 updatePayload.password = password;
             }
             await UserService.update(editingUserId, updatePayload);
+            const cached = localStorage.getItem('sgd_user_cache');
+            if (cached) {
+                try {
+                    const parsed = JSON.parse(cached);
+                    if (parsed.id === editingUserId) {
+                        localStorage.setItem('sgd_user_cache', JSON.stringify({ ...parsed, ...updatePayload }));
+                    }
+                } catch(e) {}
+            }
         } else {
             await UserService.create({
                 id: `user-${Date.now()}`,
@@ -273,6 +301,7 @@ const AdminUsers: React.FC = () => {
       setCanAccessReportContinuity(false);
       setCanAccessReportMonthly(false);
       setCanAccessReportCoverage(false);
+      setCanAccessReportDocProgress(false);
       setCanAccessBIQueryBuilder(false);
       setCanAccessReferents(false);
       setCanAccessReferentsByProcess(false);
@@ -357,18 +386,14 @@ const AdminUsers: React.FC = () => {
                                             type="checkbox" 
                                             checked={canAccessReports}
                                             onChange={(e) => {
-                                                setCanAccessReports(e.target.checked);
-                                                if (e.target.checked) {
-                                                    setCanAccessReportGestion(true);
-                                                    setCanAccessReportContinuity(true);
-                                                    setCanAccessReportMonthly(true);
-                                                    setCanAccessBIQueryBuilder(true);
-                                                } else {
-                                                    setCanAccessReportGestion(false);
-                                                    setCanAccessReportContinuity(false);
-                                                    setCanAccessReportMonthly(false);
-                                                    setCanAccessBIQueryBuilder(false);
-                                                }
+                                                const val = e.target.checked;
+                                                setCanAccessReports(val);
+                                                setCanAccessReportGestion(val);
+                                                setCanAccessReportContinuity(val);
+                                                setCanAccessReportMonthly(val);
+                                                setCanAccessReportCoverage(val);
+                                                setCanAccessReportDocProgress(val);
+                                                setCanAccessBIQueryBuilder(val);
                                             }}
                                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                                         />
@@ -380,27 +405,87 @@ const AdminUsers: React.FC = () => {
                                     {canAccessReports && (
                                         <div className="ml-7 space-y-1.5 border-l-2 border-indigo-200 pl-3 py-1">
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <input type="checkbox" checked={canAccessReportGestion} onChange={(e) => setCanAccessReportGestion(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={canAccessReportGestion} 
+                                                    onChange={(e) => {
+                                                        const val = e.target.checked;
+                                                        setCanAccessReportGestion(val);
+                                                        if (val) setCanAccessReports(true);
+                                                        else if (!canAccessReportContinuity && !canAccessReportMonthly && !canAccessReportCoverage && !canAccessReportDocProgress && !canAccessBIQueryBuilder) setCanAccessReports(false);
+                                                    }} 
+                                                    className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" 
+                                                />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Reportes de Gestión</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <input type="checkbox" checked={canAccessReportContinuity} onChange={(e) => setCanAccessReportContinuity(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={canAccessReportContinuity} 
+                                                    onChange={(e) => {
+                                                        const val = e.target.checked;
+                                                        setCanAccessReportContinuity(val);
+                                                        if (val) setCanAccessReports(true);
+                                                        else if (!canAccessReportGestion && !canAccessReportMonthly && !canAccessReportCoverage && !canAccessReportDocProgress && !canAccessBIQueryBuilder) setCanAccessReports(false);
+                                                    }} 
+                                                    className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" 
+                                                />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Monitor de Continuidad</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <input type="checkbox" checked={canAccessReportMonthly} onChange={(e) => setCanAccessReportMonthly(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={canAccessReportMonthly} 
+                                                    onChange={(e) => {
+                                                        const val = e.target.checked;
+                                                        setCanAccessReportMonthly(val);
+                                                        if (val) setCanAccessReports(true);
+                                                        else if (!canAccessReportGestion && !canAccessReportContinuity && !canAccessReportCoverage && !canAccessReportDocProgress && !canAccessBIQueryBuilder) setCanAccessReports(false);
+                                                    }} 
+                                                    className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" 
+                                                />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Cierre Mensual</span>
-                                            </label>
+                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <input type="checkbox" checked={canAccessReportCoverage} onChange={(e) => setCanAccessReportCoverage(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={canAccessReportCoverage} 
+                                                    onChange={(e) => {
+                                                        const val = e.target.checked;
+                                                        setCanAccessReportCoverage(val);
+                                                        if (val) setCanAccessReports(true);
+                                                        else if (!canAccessReportGestion && !canAccessReportContinuity && !canAccessReportMonthly && !canAccessReportDocProgress && !canAccessBIQueryBuilder) setCanAccessReports(false);
+                                                    }} 
+                                                    className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" 
+                                                />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Gestión por Procesos</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <input type="checkbox" checked={canAccessReportDocProgress} onChange={(e) => setCanAccessReportDocProgress(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={canAccessReportDocProgress} 
+                                                    onChange={(e) => {
+                                                        const val = e.target.checked;
+                                                        setCanAccessReportDocProgress(val);
+                                                        if (val) setCanAccessReports(true);
+                                                        else if (!canAccessReportGestion && !canAccessReportContinuity && !canAccessReportMonthly && !canAccessReportCoverage && !canAccessBIQueryBuilder) setCanAccessReports(false);
+                                                    }} 
+                                                    className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" 
+                                                />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Avance por Documento</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <input type="checkbox" checked={canAccessBIQueryBuilder} onChange={(e) => setCanAccessBIQueryBuilder(e.target.checked)} className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={canAccessBIQueryBuilder} 
+                                                    onChange={(e) => {
+                                                        const val = e.target.checked;
+                                                        setCanAccessBIQueryBuilder(val);
+                                                        if (val) setCanAccessReports(true);
+                                                        else if (!canAccessReportGestion && !canAccessReportContinuity && !canAccessReportMonthly && !canAccessReportCoverage && !canAccessReportDocProgress) setCanAccessReports(false);
+                                                    }} 
+                                                    className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300" 
+                                                />
                                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Constructor de Consultas (BI)</span>
                                             </label>
                                         </div>
