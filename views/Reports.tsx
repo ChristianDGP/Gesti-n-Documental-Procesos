@@ -7090,9 +7090,9 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                     : 'translate(-50%, -100%)'
                                             }}
                                         >
-                                            <div className="bg-slate-900/95 text-white backdrop-blur-md rounded-xl p-3 shadow-2xl border border-slate-700/80 min-w-[240px] max-w-[300px]">
+                                            <div className="bg-white/95 text-slate-900 backdrop-blur-md rounded-xl p-3.5 shadow-xl shadow-slate-900/10 border border-slate-200/90 min-w-[250px] max-w-[310px]">
                                                 {/* Header: Document Type & Title */}
-                                                <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-800">
+                                                <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-100">
                                                     <div className="flex items-center gap-1.5 min-w-0">
                                                         <span 
                                                             className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase text-white tracking-wide shrink-0 shadow-2xs"
@@ -7100,62 +7100,62 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                         >
                                                             {docProgressTooltip.docType}
                                                         </span>
-                                                        <span className="text-[11px] font-bold text-slate-200 truncate" title={docProgressTooltip.microName}>
+                                                        <span className="text-[11.5px] font-bold text-slate-900 truncate" title={docProgressTooltip.microName}>
                                                             {docProgressTooltip.microName}
                                                         </span>
                                                     </div>
-                                                    <span className="text-[11px] font-extrabold text-indigo-400 bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-800/60 shrink-0">
+                                                    <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/80 shrink-0">
                                                         {docProgressTooltip.progress}%
                                                     </span>
                                                 </div>
 
                                                 {/* Versión */}
                                                 <div className="flex items-center justify-between gap-2 py-1 text-[11px]">
-                                                    <div className="flex items-center gap-1.5 text-slate-400">
-                                                        <Layers size={13} className="text-indigo-400 shrink-0" />
+                                                    <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                                                        <Layers size={13} className="text-indigo-500 shrink-0" />
                                                         <span>Versión:</span>
                                                     </div>
-                                                    <span className="font-bold text-white font-mono bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-[10.5px]">
+                                                    <span className="font-bold text-slate-800 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/80 text-[10.5px]">
                                                         {docProgressTooltip.version}
                                                     </span>
                                                 </div>
 
                                                 {/* Fecha */}
                                                 <div className="flex items-center justify-between gap-2 py-1 text-[11px]">
-                                                    <div className="flex items-center gap-1.5 text-slate-400">
-                                                        <CalendarDays size={13} className="text-emerald-400 shrink-0" />
+                                                    <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                                                        <CalendarDays size={13} className="text-emerald-500 shrink-0" />
                                                         <span>Fecha:</span>
                                                     </div>
-                                                    <span className="font-semibold text-slate-100 text-[10.5px]">
+                                                    <span className="font-semibold text-slate-800 text-[10.5px]">
                                                         {docProgressTooltip.date}
                                                     </span>
                                                 </div>
 
                                                 {/* Estado */}
-                                                <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
-                                                    <div className="flex items-center gap-1.5 text-slate-400">
-                                                        <Activity size={13} className="text-amber-400 shrink-0" />
+                                                <div className="flex items-center justify-between gap-2 py-1 text-[11px]">
+                                                    <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                                                        <Activity size={13} className="text-amber-500 shrink-0" />
                                                         <span>Estado:</span>
                                                     </div>
-                                                    <span className="font-semibold text-slate-200 text-[10.5px]">
+                                                    <span className="font-semibold text-slate-800 text-[10.5px]">
                                                         {docProgressTooltip.stateLabel}
                                                     </span>
                                                 </div>
 
                                                 {/* Orden de Inicio */}
-                                                <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-slate-800 text-[11px]">
-                                                    <div className="flex items-center gap-1.5 text-slate-400">
+                                                <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-slate-100 text-[11px]">
+                                                    <div className="flex items-center gap-1.5 text-slate-500 font-medium">
                                                         {docProgressTooltip.hasStartOrder ? (
-                                                            <PlayCircle size={13} className="text-emerald-400 shrink-0" />
+                                                            <PlayCircle size={13} className="text-emerald-500 shrink-0" />
                                                         ) : (
-                                                            <PauseCircle size={13} className="text-amber-400 shrink-0" />
+                                                            <PauseCircle size={13} className="text-amber-500 shrink-0" />
                                                         )}
                                                         <span>Orden de Inicio:</span>
                                                     </div>
-                                                    <span className={`font-bold text-[10.5px] px-1.5 py-0.5 rounded ${
+                                                    <span className={`font-bold text-[10.5px] px-1.5 py-0.5 rounded border ${
                                                         docProgressTooltip.hasStartOrder 
-                                                            ? 'text-emerald-300 bg-emerald-950/70 border border-emerald-800/60' 
-                                                            : 'text-amber-300 bg-amber-950/70 border border-amber-800/60'
+                                                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200' 
+                                                            : 'text-amber-700 bg-amber-50 border-amber-200'
                                                     }`}>
                                                         {docProgressTooltip.hasStartOrder ? 'Comenzar' : 'Detenido'}
                                                     </span>
@@ -7169,18 +7169,18 @@ const Reports: React.FC<Props> = ({ user }) => {
                                                 )}
 
                                                 {!docProgressTooltip.isVirtual && docProgressTooltip.docId && (
-                                                    <div className="mt-2 pt-1.5 border-t border-slate-800/80 text-[9.5px] text-slate-400 text-center flex items-center justify-center gap-1">
+                                                    <div className="mt-2 pt-1.5 border-t border-slate-100 text-[9.5px] font-medium text-indigo-600 hover:text-indigo-800 text-center flex items-center justify-center gap-1 transition-colors">
                                                         <span>Click para abrir documento</span>
-                                                        <ExternalLink size={10} className="text-slate-400" />
+                                                        <ExternalLink size={10} className="text-indigo-500" />
                                                     </div>
                                                 )}
 
                                                 {/* Flecha indicadora */}
                                                 <div 
-                                                    className={`absolute left-1/2 -translate-x-1/2 w-0 h-0 border-x-[5px] border-x-transparent ${
+                                                    className={`absolute left-1/2 -translate-x-1/2 w-0 h-0 border-x-[6px] border-x-transparent ${
                                                         docProgressTooltip.y < 170 
-                                                            ? '-top-[5px] border-b-[5px] border-b-slate-900' 
-                                                            : '-bottom-[5px] border-t-[5px] border-t-slate-900'
+                                                            ? '-top-[6px] border-b-[6px] border-b-white' 
+                                                            : '-bottom-[6px] border-t-[6px] border-t-white'
                                                     }`}
                                                 />
                                             </div>
