@@ -95,24 +95,31 @@ const WorkList: React.FC<Props> = ({ user }) => {
 
                         requiredTypes.forEach(type => {
                             const key = `${normalize(proj)}|${normalize(node.name)}|${normalize(type)}`;
+                            const nodeHasStartOrder = node.hasStartOrder !== false;
                             
                             if (realDocMap.has(key)) {
                                 const realDoc = realDocMap.get(key)!;
-                                const isAssigned = node.assignees && node.assignees.includes(user.id);
+                                const isAssigned = !!(node.assignees && node.assignees.includes(user.id));
                                 const isPendingRequest = isCoordOrAdmin && realDoc.hasPendingRequest;
+                                const docHasStartOrder = realDoc.hasStartOrder !== undefined ? realDoc.hasStartOrder : nodeHasStartOrder;
 
-                                if (((isAssigned && !isCoordOrAdmin) || isPendingRequest) && realDoc.state !== DocState.APPROVED) {
+                                // Para el analista: debe estar asignado, NO tener solicitud activa (está en manos de coordinación) y TENER orden de inicio
+                                const isAnalystActiveWork = !isCoordOrAdmin && isAssigned && !realDoc.hasPendingRequest && docHasStartOrder;
+
+                                if ((isAnalystActiveWork || isPendingRequest) && realDoc.state !== DocState.APPROVED) {
                                     myWorkList.push({
                                         ...realDoc,
                                         macroprocess: macro,
                                         process: proc,
                                         project: proj,
-                                        assignees: node.assignees
+                                        assignees: node.assignees,
+                                        hasStartOrder: docHasStartOrder
                                     });
                                 }
                             } else {
-                                const isAssigned = node.assignees && node.assignees.includes(user.id);
-                                if (isAssigned && !isCoordOrAdmin) {
+                                const isAssigned = !!(node.assignees && node.assignees.includes(user.id));
+                                // Para el analista: documento virtual solo si está asignado y TIENE orden de inicio ("Comenzar")
+                                if (isAssigned && !isCoordOrAdmin && nodeHasStartOrder) {
                                     myWorkList.push({
                                         id: `virtual-${key}-${Date.now()}`,
                                         title: `${node.name} - ${type}`,
@@ -132,7 +139,8 @@ const WorkList: React.FC<Props> = ({ user }) => {
                                         files: [],
                                         createdAt: new Date().toISOString(),
                                         updatedAt: new Date(0).toISOString(), 
-                                        hasPendingRequest: false
+                                        hasPendingRequest: false,
+                                        hasStartOrder: true
                                     });
                                 }
                             }

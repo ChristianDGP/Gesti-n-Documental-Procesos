@@ -827,6 +827,8 @@ export const HierarchyService = {
       const hierarchy: UserHierarchy = {};
       snapshot.docs.forEach(doc => {
           const data = doc.data();
+          if (data.active === false) return;
+          if (data.hasStartOrder === false) return;
           if (!hierarchy[data.project]) hierarchy[data.project] = {};
           if (!hierarchy[data.project][data.macroprocess || 'Sin Macro']) hierarchy[data.project][data.macroprocess || 'Sin Macro'] = {};
           if (!hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process]) hierarchy[data.project][data.macroprocess || 'Sin Macro'][data.process] = [];
