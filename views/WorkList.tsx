@@ -3,8 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   DocumentService, HierarchyService, 
-  formatVersionForDisplay, getStatusInfo, DEFAULT_EXECUTIVE_DEADLINE,
-  isEvenVersion
+  formatVersionForDisplay, getStatusInfo, DEFAULT_EXECUTIVE_DEADLINE 
 } from '../services/firebaseBackend';
 import { Document, User, DocState, UserRole, DocType } from '../types';
 import { STATE_CONFIG } from '../constants';
@@ -20,13 +19,6 @@ interface Props {
 }
 
 type SortOption = 'microprocess' | 'state' | 'updatedAt' | 'default';
-
-const DOC_TYPE_ORDER: Record<string, number> = {
-    'AS IS': 1,
-    'FCE': 2,
-    'PM': 3,
-    'TO BE': 4
-};
 
 const reviewStates = [
     DocState.INTERNAL_REVIEW, 
@@ -195,58 +187,30 @@ const WorkList: React.FC<Props> = ({ user }) => {
       }
       return filtered.sort((a, b) => {
           if (sortConfig.key === 'default') {
-              // Jerarquía de grupos de atención:
-              // Grupo 0: Solicitudes Pendientes (coordinadores/administración)
-              // Grupo 1: Corrección Urgente / Devueltos con Observaciones (versión par)
-              // Grupo 2: Elaboración Activa (iniciados/en proceso)
-              // Grupo 3: Pendientes no iniciados autorizados (NOT_STARTED con orden de inicio)
-              const getPriorityGroup = (d: Document): number => {
-                  if (d.hasPendingRequest) return 0;
-                  if (isEvenVersion(d.version) && d.state !== DocState.NOT_STARTED) return 1;
-                  if (d.state !== DocState.NOT_STARTED) return 2;
-                  return 3;
-              };
-
-              const groupA = getPriorityGroup(a);
-              const groupB = getPriorityGroup(b);
-
-              if (groupA !== groupB) {
-                  return groupA - groupB;
+              // 1. Prioridad Máxima: Solicitudes Pendientes (Coordinación/Admin)
+              if (a.hasPendingRequest !== b.hasPendingRequest) {
+                  return a.hasPendingRequest ? -1 : 1;
               }
 
-              // Grupo 0 y 1 (Solicitudes o Devoluciones para corrección):
-              // Más antiguo primero (FIFO: ASC) para atender lo rezagado y evitar cuellos de botella
-              if (groupA === 0 || groupA === 1) {
-                  const timeA = new Date(a.updatedAt).getTime() || 0;
-                  const timeB = new Date(b.updatedAt).getTime() || 0;
-                  return timeA - timeB;
+              // 2. Prioridad Media: Estados de Revisión/Seguimiento
+              const aIsReview = reviewStates.includes(a.state);
+              const bIsReview = reviewStates.includes(b.state);
+              if (aIsReview !== bIsReview) {
+                  return aIsReview ? -1 : 1;
               }
 
-              // Grupo 2 (En elaboración activa):
-              // Más reciente primero (LIFO: DESC) para retomar el trabajo reciente
-              if (groupA === 2) {
-                  const timeA = new Date(a.updatedAt).getTime() || 0;
-                  const timeB = new Date(b.updatedAt).getTime() || 0;
-                  return timeB - timeA;
+              // 3. Nivel Final: Documentos No Iniciados (virtuales sin fecha) al final de la lista
+              const aIsNotStarted = a.state === DocState.NOT_STARTED;
+              const bIsNotStarted = b.state === DocState.NOT_STARTED;
+              if (aIsNotStarted !== bIsNotStarted) {
+                  return aIsNotStarted ? 1 : -1;
               }
+              
+              // 4. Dentro de cada nivel: siempre del más antiguo al más reciente (ASC)
+              const dateDiff = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+              if (dateDiff !== 0) return dateDiff;
 
-              // Grupo 3 (No iniciados autorizados):
-              // 1. Proyecto -> 2. Macroproceso -> 3. Proceso -> 4. Microproceso -> 5. Secuencia SGD (AS IS -> FCE -> PM -> TO BE)
-              const projComp = (a.project || '').localeCompare(b.project || '');
-              if (projComp !== 0) return projComp;
-
-              const macroComp = (a.macroprocess || '').localeCompare(b.macroprocess || '');
-              if (macroComp !== 0) return macroComp;
-
-              const procComp = (a.process || '').localeCompare(b.process || '');
-              if (procComp !== 0) return procComp;
-
-              const microComp = (a.microprocess || '').localeCompare(b.microprocess || '');
-              if (microComp !== 0) return microComp;
-
-              const orderA = DOC_TYPE_ORDER[a.docType || 'AS IS'] || 99;
-              const orderB = DOC_TYPE_ORDER[b.docType || 'AS IS'] || 99;
-              return orderA - orderB;
+              return (a.microprocess || '').localeCompare(b.microprocess || '');
           }
 
           const modifier = sortConfig.direction === 'asc' ? 1 : -1;
@@ -608,11 +572,6 @@ const WorkList: React.FC<Props> = ({ user }) => {
                             {doc.hasPendingRequest && (
                               <span className="flex items-center gap-1 text-[9px] font-black text-red-600 px-2 py-0.5 rounded border border-red-200 bg-red-50 animate-pulse">
                                 <AlertTriangle size={10} /> SOLICITUD
-                              </span>
-                            )}
-                            {isEvenVersion(doc.version) && doc.state !== DocState.NOT_STARTED && !doc.hasPendingRequest && (
-                              <span className="flex items-center gap-1 text-[9px] font-black text-amber-700 px-2 py-0.5 rounded border border-amber-300 bg-amber-50">
-                                <AlertTriangle size={10} /> CORRECCIÓN
                               </span>
                             )}
                           </div>
